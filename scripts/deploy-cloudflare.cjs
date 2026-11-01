@@ -25,6 +25,13 @@ env.CLOUDFLARE_ACCOUNT_ID = accountId
 
 async function deploy() {
   try {
+    console.log('[PROTEIN_FOOD] Building production bundle (vite build)...')
+    execSync('npm run build', {
+      stdio: 'inherit',
+      cwd: rootDir,
+      env,
+    })
+
     console.log('[PROTEIN_FOOD] Deploying to Cloudflare Pages (protein-food)...')
     execSync('npx wrangler pages deploy dist --project-name protein-food --branch main --commit-dirty=true', {
       stdio: 'inherit',

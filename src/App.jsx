@@ -264,7 +264,7 @@ export default function App() {
                 className="text-[10px] font-mono font-black text-primary bg-primary/10 hover:bg-primary/20 border border-primary/20 px-2.5 py-0.5 rounded-full cursor-pointer transition-all active:scale-95"
                 title="فحص وجود تحديثات جديدة للمنظومة"
               >
-                v1.6.2
+                v{import.meta.env.VITE_APP_VERSION || '1.7.0'}
               </button>
             </div>
             <a

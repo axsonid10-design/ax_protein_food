@@ -112,6 +112,6 @@ describe('AX_Toast Notification System Unit & Integration Tests', () => {
     const appPath = path.resolve('src/App.jsx')
     const appContent = fs.readFileSync(appPath, 'utf8')
     assert.ok(appContent.includes('<AX_ToastContainer />') || appContent.includes('<AX_ToastContainer/>'), 'App.jsx must mount AX_ToastContainer')
-    assert.ok(appContent.includes('v1.5.') || appContent.includes('v1.6.'), 'App.jsx must display current version')
+    assert.ok(appContent.includes('v1.5.') || appContent.includes('v1.6.') || appContent.includes('v1.7.') || appContent.includes('VITE_APP_VERSION'), 'App.jsx must display current version')
   })
 })
