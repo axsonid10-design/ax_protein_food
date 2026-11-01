@@ -1,0 +1,47 @@
+project:
+  name: AX_FROZEN_FOODS
+  title: منظومة إدارة المجمدات والتوزيع
+  domain: Cold Storage Warehousing, Frozen Goods Ingestion & Van Sales
+  type: Standalone PWA Web Application (Hybrid Online/Offline)
+  framework: React 18 + Vite 6 + Tailwind CSS
+  node_modules_mode: Linked Local Junction
+  constitution: AX_RULES_2610
+  status: Foundation Complete (Ready for Handover)
+
+design_system:
+  theme: Cold Chain Arctic Precision (DESIGN.md)
+  colors:
+    primary: "#0284c7"
+    primary_container: "#0c4a6e"
+    secondary: "#0891b2"
+    secondary_container: "#cffafe"
+    surface: "#f8fafc"
+  fonts:
+    arabic: Cairo, Tajawal
+    mono: JetBrains Mono
+  watermark: /site-bg-watermark.png
+
+offline_engine:
+  storage: IndexedDB (ax_frozen_foods_db)
+  stores:
+    - offline_queue
+    - cache_store
+  auto_sync: true
+
+pwa:
+  standalone: true
+  auto_update: quad-lock
+  version_tracker: public/version.json
+  icons:
+    - /pwa-192x192.png
+    - /pwa-512x512.png
+    - /icon-512.png
+
+core_components:
+  header: src/components/navigation/AX_Header.jsx
+  pwa_installer: src/components/common/AX_InstallPwaButton.jsx
+  update_notifier: src/components/common/AppUpdateNotifier.jsx
+  skeleton_loader: src/components/common/AX_SkeletonLoader.jsx
+  confirm_modal: src/components/common/AX_ConfirmModal.jsx
+  company_calendar: src/components/common/AX_CompanyDatePicker.jsx
+  mandatory_push: src/components/notifications/AX_MandatoryPushModal.jsx
