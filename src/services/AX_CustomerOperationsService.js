@@ -1,5 +1,5 @@
-import { supabase, isSupabaseConfigured } from './supabaseClient'
-import { generateUUID } from '../utils/AX_UUID'
+import { supabase, isSupabaseConfigured } from './supabaseClient.js'
+import { generateUUID } from '../utils/AX_UUID.js'
 
 export const AX_CustomerOperationsService = {
   addCustomerInDB: async (customer, userProfile = null) => {

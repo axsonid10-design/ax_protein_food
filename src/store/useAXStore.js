@@ -400,16 +400,19 @@ export const useAXStore = create((set, get) => ({
   },
 
   confirmCashTransfer: (id) => {
-    const pct = get().pendingCashTransfers.find((p) => p.id === id)
+    const list = Array.isArray(get().pendingCashTransfers) ? get().pendingCashTransfers : []
+    const pct = list.find((p) => p && p.id === id)
     if (pct) AX_OperationsService.confirmCashTransferInDB(pct, get().profile)
     set((state) => {
-      const target = state.pendingCashTransfers.find((p) => p.id === id)
+      const currentList = Array.isArray(state.pendingCashTransfers) ? state.pendingCashTransfers : []
+      const target = currentList.find((p) => p && p.id === id)
       if (!target || target.status === 'confirmed') return state
-      const newTransfers = state.pendingCashTransfers.map((p) => p.id === id ? { ...p, status: 'confirmed', confirmedAt: new Date().toISOString() } : p)
-      const updatedTreasuries = state.treasuryAccounts.map((t) => {
-        if (t.id === target.fromTreasuryId) return { ...t, balance: Math.max(0, t.balance - target.amount) }
-        if (t.id === target.toTreasuryId) return { ...t, balance: t.balance + target.amount }
-        return t
+      const newTransfers = currentList.map((p) => (p && p.id === id ? { ...p, status: 'confirmed', confirmedAt: new Date().toISOString() } : p))
+      const updatedTreasuries = (state.treasuryAccounts || []).map((t) => {
+        let bal = Number(t.balance) || 0
+        if (t.id === target.fromTreasuryId) bal = Math.max(0, bal - Number(target.amount || 0))
+        if (t.id === target.toTreasuryId) bal = bal + Number(target.amount || 0)
+        return { ...t, balance: bal }
       })
       updateLocalCachePayload('pendingCashTransfers', newTransfers)
       updateLocalCachePayload('treasuryAccounts', updatedTreasuries)
@@ -418,9 +421,10 @@ export const useAXStore = create((set, get) => ({
   },
 
   addPendingCashTransfer: (pct) => {
-    AX_OperationsService.addCashTransferInDB(pct, get().profile)
+    try { AX_OperationsService.addCashTransferInDB(pct, get().profile) } catch {}
     set((state) => {
-      const nextP = [pct, ...state.pendingCashTransfers]
+      const currentList = Array.isArray(state.pendingCashTransfers) ? state.pendingCashTransfers : []
+      const nextP = [pct, ...currentList]
       updateLocalCachePayload('pendingCashTransfers', nextP)
       return { pendingCashTransfers: nextP }
     })

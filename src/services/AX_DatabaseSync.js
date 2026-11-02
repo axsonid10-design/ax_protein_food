@@ -1,5 +1,5 @@
-import { supabase, isSupabaseConfigured } from './supabaseClient'
-import { offlineDB } from './offlineDB'
+import { supabase, isSupabaseConfigured } from './supabaseClient.js'
+import { offlineDB } from './offlineDB.js'
 
 export const AX_DatabaseSync = {
   fetchFullDatabase: async () => {

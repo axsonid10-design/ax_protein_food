@@ -21,10 +21,13 @@ export function AX_VanDistribution() {
 
   const vanWarehouses = (distributors && distributors.length > 0)
     ? distributors.map((d) => ({ id: d.id, name: d.name, manager: d.vanNumber || 'المندوب' }))
-    : (warehouses || []).filter((w) => w.type === 'van')
+    : (warehouses || []).filter((w) => w.type === 'van').length > 0
+      ? warehouses.filter((w) => w.type === 'van')
+      : [{ id: 'b0000000-0000-0000-0000-000000000010', name: 'سيارة التوزيع الميداني (1)', manager: 'مندوب التوزيع' }]
 
-  const [selectedVanId, setSelectedVanId] = useState(vanWarehouses[0]?.id || 'dst-1')
+  const [selectedVanId, setSelectedVanId] = useState(vanWarehouses[0]?.id || 'b0000000-0000-0000-0000-000000000010')
   const [remitAmount, setRemitAmount] = useState('')
+  const [remitToTreasuryId, setRemitToTreasuryId] = useState('')
   const [showRemitModal, setShowRemitModal] = useState(false)
   const [showLoadModal, setShowLoadModal] = useState(false)
   const [showSaleModal, setShowSaleModal] = useState(false)
@@ -43,30 +46,41 @@ export function AX_VanDistribution() {
   })
 
   const getVanCashAccount = (vanId) => {
-    return (treasuryAccounts || []).find((t) => t.type === 'van_cash') || treasuryAccounts?.[0] || { balance: 0, id: 'c0000000-0000-0000-0000-000000000001' }
+    return (treasuryAccounts || []).find((t) => t.type === 'van_cash') || { balance: 0, id: 'c0000000-0000-0000-0000-000000000005', name: 'عهدة سيارة التوزيع', type: 'van_cash' }
   }
 
   const getItemName = (id) => (items || []).find((i) => i.id === id)?.compositeName || id
   const getItemObj = (id) => (items || []).find((i) => i.id === id)
 
-  const currentVan = vanWarehouses.find((w) => w.id === selectedVanId) || vanWarehouses[0] || { id: 'dst-1', name: 'سيارة التوزيع', manager: 'المندوب' }
+  const currentVan = vanWarehouses.find((w) => w.id === selectedVanId) || vanWarehouses[0] || { id: 'b0000000-0000-0000-0000-000000000010', name: 'سيارة التوزيع', manager: 'المندوب' }
   const currentVanStock = (inventoryStock || []).filter((s) => s.warehouseId === currentVan?.id)
   const currentVanCash = getVanCashAccount(currentVan?.id)
 
+  const targetTreasuryOptions = (treasuryAccounts || [])
+    .filter((t) => t.id !== currentVanCash.id)
+    .map((t) => ({ value: t.id, label: t.name, badge: `${(Number(t.balance) || 0).toLocaleString('en-US')} ج.م` }))
+
   const handleRemitCash = (e) => {
     e.preventDefault()
-    if (!remitAmount || Number(remitAmount) <= 0) return
+    const amt = Number(remitAmount)
+    if (!amt || amt <= 0) return
+
+    const destId = remitToTreasuryId || targetTreasuryOptions[0]?.value || 'c0000000-0000-0000-0000-000000000001'
+    if (currentVanCash.id === destId) {
+      showToast('لا يمكن التصفية لنفس حساب عهدة السيارة، يرجى اختيار خزينة استلام مختلفة', 'warning')
+      return
+    }
 
     try {
       const newPct = {
         id: generateUUID(),
         code: `REMIT-${Date.now().toString().slice(-4)}`,
         fromTreasuryId: currentVanCash.id,
-        toTreasuryId: treasuryAccounts[0]?.id || 'c0000000-0000-0000-0000-000000000001',
-        amount: Number(remitAmount),
+        toTreasuryId: destId,
+        amount: amt,
         status: 'pending',
         date: new Date().toISOString().split('T')[0],
-        senderName: currentVan.manager,
+        senderName: currentVan.manager || 'مندوب التوزيع',
         notes: `توريد وتصفية نقدية من ${currentVan.name}`,
       }
 
@@ -117,16 +131,7 @@ export function AX_VanDistribution() {
       partyName: saleForm.clientName.trim(),
       date: new Date().toISOString().split('T')[0],
       warehouseId: currentVan.id,
-      items: [
-        {
-          itemId: saleForm.itemId,
-          compositeName: itObj?.compositeName || '',
-          quantity: qty,
-          unit: itObj?.unitType || 'كرتونة',
-          price: unitPrice,
-          total: tot,
-        },
-      ],
+      items: [{ itemId: saleForm.itemId, compositeName: itObj?.compositeName || '', quantity: qty, unit: itObj?.unitType || 'كرتونة', price: unitPrice, total: tot }],
       transportCost: 0,
       loadingCost: 0,
       subtotal: tot,
@@ -198,23 +203,13 @@ export function AX_VanDistribution() {
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
-              <button
-                type="button"
-                onClick={() => setShowSaleModal(true)}
-                disabled={currentVanStock.length === 0}
-                className="py-2 px-3 rounded-full bg-secondary hover:bg-secondary-hover text-white text-xs font-black shadow-sm transition-all flex items-center justify-center gap-1.5 disabled:opacity-40 cursor-pointer"
-              >
+              <button type="button" onClick={() => setShowSaleModal(true)} disabled={currentVanStock.length === 0} className="py-2 px-3 rounded-full bg-secondary hover:bg-secondary-hover text-white text-xs font-black shadow-sm transition-all flex items-center justify-center gap-1.5 disabled:opacity-40 cursor-pointer">
                 <ShoppingCart className="w-3.5 h-3.5" />
                 <span>تسجيل بيع</span>
               </button>
-
-              <button
-                type="button"
-                onClick={() => setShowRemitModal(true)}
-                className="py-2 px-3 rounded-full bg-primary hover:bg-primary-dark text-white text-xs font-black shadow-sm transition-all flex items-center justify-center gap-1.5 cursor-pointer"
-              >
+              <button type="button" onClick={() => setShowRemitModal(true)} className="py-2 px-3 rounded-full bg-primary hover:bg-primary-dark text-white text-xs font-black shadow-sm transition-all flex items-center justify-center gap-1.5 cursor-pointer">
                 <ArrowUpRight className="w-3.5 h-3.5" />
-                <span>توريد نقدية</span>
+                <span>تصفية وتوريد نقدية</span>
               </button>
             </div>
           </div>
@@ -440,16 +435,23 @@ export function AX_VanDistribution() {
       )}
 
       {showRemitModal && (
-        <form
-          onSubmit={handleRemitCash}
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in"
-        >
+        <form onSubmit={handleRemitCash} className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in">
           <div className="bg-surface-lowest border-2 border-primary/30 rounded-3xl p-6 shadow-level3 max-w-md w-full space-y-4">
             <div className="flex items-center justify-between border-b border-surface-container pb-3">
               <span className="text-sm font-black text-on-surface flex items-center gap-2">
                 <ArrowUpRight className="w-4 h-4 text-primary" />
-                توريد نقدية السيارة للخزينة
+                تصفية وتوريد نقدية السيارة للخزينة
               </span>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-on-surface-variant">الخزينة المستلمة للتوريد</label>
+              <AX_SearchableSelect
+                value={remitToTreasuryId || targetTreasuryOptions[0]?.value || ''}
+                onChange={setRemitToTreasuryId}
+                options={targetTreasuryOptions}
+                searchable={false}
+              />
             </div>
 
             <div className="space-y-2">
@@ -470,18 +472,11 @@ export function AX_VanDistribution() {
             </div>
 
             <div className="flex justify-end gap-3 pt-2 border-t border-surface-container">
-              <button
-                type="button"
-                onClick={() => setShowRemitModal(false)}
-                className="px-5 py-2 rounded-full bg-surface-container text-on-surface-variant text-xs font-bold cursor-pointer"
-              >
+              <button type="button" onClick={() => setShowRemitModal(false)} className="px-5 py-2 rounded-full bg-surface-container text-on-surface-variant text-xs font-bold cursor-pointer">
                 إلغاء
               </button>
-              <button
-                type="submit"
-                className="px-6 py-2 rounded-full bg-primary text-white text-xs font-extrabold shadow-sm hover:bg-primary-dark cursor-pointer"
-              >
-                إرسال إشعار التوريد
+              <button type="submit" className="px-6 py-2 rounded-full bg-primary text-white text-xs font-extrabold shadow-sm hover:bg-primary-dark cursor-pointer">
+                إرسال إشعار التصفية والتوريد
               </button>
             </div>
           </div>

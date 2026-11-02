@@ -163,25 +163,27 @@ export const AX_OperationsService = {
 
   addCashTransferInDB: async (transfer, userProfile = null) => {
     if (!supabase || typeof supabase.from !== 'function' || !transfer) return { success: false }
+    const trfId = transfer.id || generateUUID()
+    const trfRow = {
+      id: trfId,
+      code: transfer.code || `CTRF-${Date.now().toString().slice(-4)}`,
+      from_treasury_id: transfer.fromTreasuryId || transfer.from_treasury_id || null,
+      to_treasury_id: transfer.toTreasuryId || transfer.to_treasury_id || null,
+      amount: Number(transfer.amount || 0),
+      status: 'pending',
+      sender_name: transfer.senderName || transfer.sender_name || userProfile?.name || 'أمين الخزينة',
+      date: transfer.date || new Date().toISOString().split('T')[0],
+      notes: transfer.notes || null,
+      created_at: new Date().toISOString(),
+    }
     try {
-      const trfId = transfer.id || generateUUID()
-      const trfRow = {
-        id: trfId,
-        code: transfer.code || `CTRF-${Date.now().toString().slice(-4)}`,
-        from_treasury_id: transfer.fromTreasuryId || transfer.from_treasury_id || null,
-        to_treasury_id: transfer.toTreasuryId || transfer.to_treasury_id || null,
-        amount: Number(transfer.amount || 0),
-        status: 'pending',
-        sender_name: transfer.senderName || transfer.sender_name || userProfile?.name || 'أمين الخزينة',
-        date: transfer.date || new Date().toISOString().split('T')[0],
-        notes: transfer.notes || null,
-        created_at: new Date().toISOString(),
-      }
       const { error } = await supabase.from('ax_cash_transfers').insert(trfRow)
       if (error) throw error
+      try { await supabase.from('ax_activity_logs').insert({ id: generateUUID(), table_name: 'ax_cash_transfers', action: 'INSERT', record_id: trfId, new_data: trfRow, user_id: userProfile?.id || null }) } catch {}
       return { success: true }
     } catch (err) {
-      return { success: false, error: err.message }
+      try { await offlineDB.enqueue('ax_cash_transfers', 'insert', trfRow) } catch {}
+      return { success: false, error: err.message, enqueued: true }
     }
   },
 

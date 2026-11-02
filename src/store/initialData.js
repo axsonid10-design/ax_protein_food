@@ -44,6 +44,7 @@ export const initialTreasuryAccounts = [
   { id: 'c0000000-0000-0000-0000-000000000002', name: 'الحساب البنكي (الأهلي المصري)', balance: 0, type: 'bank' },
   { id: 'c0000000-0000-0000-0000-000000000003', name: 'فودافون كاش الشركات', balance: 0, type: 'wallet' },
   { id: 'c0000000-0000-0000-0000-000000000004', name: 'إنستا باي التجاري', balance: 0, type: 'instapay' },
+  { id: 'c0000000-0000-0000-0000-000000000005', name: 'عهدة سيارة التوزيع (الكاش الميداني)', balance: 0, type: 'van_cash' },
 ]
 
 export const initialCashTransactions = []

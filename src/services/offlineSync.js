@@ -1,5 +1,5 @@
-import { offlineDB } from './offlineDB'
-import { supabase, isSupabaseConfigured } from './supabaseClient'
+import { offlineDB } from './offlineDB.js'
+import { supabase, isSupabaseConfigured } from './supabaseClient.js'
 
 let isSyncing = false
 
