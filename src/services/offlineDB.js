@@ -105,4 +105,37 @@ export const offlineDB = {
       req.onerror = () => reject(req.error)
     })
   },
+
+  async cacheSet(key, data) {
+    return this.cacheData(key, data)
+  },
+
+  async cacheGet(key) {
+    return this.getCachedData(key)
+  },
+
+  async cacheGetByField(key, field, value) {
+    const list = (await this.getCachedData(key)) || []
+    if (!Array.isArray(list)) return null
+    return list.find((item) => item && String(item[field]) === String(value)) || null
+  },
+
+  async cacheAppend(key, item) {
+    const list = (await this.getCachedData(key)) || []
+    await this.cacheData(key, [item, ...(Array.isArray(list) ? list : [])])
+  },
+
+  async cacheUpdateItem(key, id, updates) {
+    const list = (await this.getCachedData(key)) || []
+    if (!Array.isArray(list)) return
+    const updated = list.map((item) => (item.id === id ? { ...item, ...updates } : item))
+    await this.cacheData(key, updated)
+  },
+
+  async cacheDeleteItem(key, id) {
+    const list = (await this.getCachedData(key)) || []
+    if (!Array.isArray(list)) return
+    const filtered = list.filter((item) => item.id !== id)
+    await this.cacheData(key, filtered)
+  },
 }

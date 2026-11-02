@@ -1,19 +1,9 @@
 import React, { useState } from 'react'
-import {
-  Truck,
-  Wallet,
-  Boxes,
-  MapPin,
-  CheckCircle2,
-  Clock,
-  ArrowUpRight,
-  Plus,
-  ShoppingCart,
-  PackagePlus,
-} from 'lucide-react'
+import { Truck, Wallet, Boxes, MapPin, CheckCircle2, Clock, ArrowUpRight, Plus, ShoppingCart, PackagePlus } from 'lucide-react'
 import { useAXStore } from '../../store/useAXStore'
 import { AX_SearchableSelect } from '../common/AX_SearchableSelect'
 import { generateUUID } from '../../utils/AX_UUID'
+import { showToast } from '../common/AX_Toast'
 
 export function AX_VanDistribution() {
   const {
@@ -67,21 +57,26 @@ export function AX_VanDistribution() {
     e.preventDefault()
     if (!remitAmount || Number(remitAmount) <= 0) return
 
-    const newPct = {
-      id: generateUUID(),
-      code: `REMIT-${Date.now().toString().slice(-4)}`,
-      fromTreasuryId: currentVanCash.id,
-      toTreasuryId: treasuryAccounts[0]?.id || 'c0000000-0000-0000-0000-000000000001',
-      amount: Number(remitAmount),
-      status: 'pending',
-      date: new Date().toISOString().split('T')[0],
-      senderName: currentVan.manager,
-      notes: `توريد وتصفية نقدية من ${currentVan.name}`,
-    }
+    try {
+      const newPct = {
+        id: generateUUID(),
+        code: `REMIT-${Date.now().toString().slice(-4)}`,
+        fromTreasuryId: currentVanCash.id,
+        toTreasuryId: treasuryAccounts[0]?.id || 'c0000000-0000-0000-0000-000000000001',
+        amount: Number(remitAmount),
+        status: 'pending',
+        date: new Date().toISOString().split('T')[0],
+        senderName: currentVan.manager,
+        notes: `توريد وتصفية نقدية من ${currentVan.name}`,
+      }
 
-    addPendingCashTransfer(newPct)
-    setRemitAmount('')
-    setShowRemitModal(false)
+      addPendingCashTransfer(newPct)
+      setRemitAmount('')
+      setShowRemitModal(false)
+      showToast('تم إرسال إشعار توريد وتصفية النقدية بنجاح', 'success')
+    } catch (err) {
+      showToast(err?.message || 'حدث خطأ أثناء إرسال إشعار التوريد', 'error')
+    }
   }
 
   const handleLoadStock = (e) => {
