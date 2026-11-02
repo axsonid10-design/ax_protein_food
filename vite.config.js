@@ -16,6 +16,7 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
+      injectRegister: null,
       includeAssets: [
         'sw-push-handler.js',
         'pwa-192x192.png',
