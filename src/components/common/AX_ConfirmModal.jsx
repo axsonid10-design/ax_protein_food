@@ -14,7 +14,7 @@ export function AX_ConfirmModal({
   onConfirm,
   onCancel,
 }) {
-  useBodyScrollLock(isOpen)
+  useBodyScrollLock(isOpen, onCancel)
   const [progress, setProgress] = useState(0)
   const timerRef = useRef(null)
   const startTimeRef = useRef(null)

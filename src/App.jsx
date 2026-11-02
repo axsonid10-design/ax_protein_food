@@ -32,9 +32,15 @@ import { AX_ReportsManager } from './components/reports/AX_ReportsManager'
 import { AX_StaffManager } from './components/staff/AX_StaffManager'
 import { AX_StaffOnboardingScreen } from './components/staff/AX_StaffOnboardingScreen'
 import { AX_LoginScreen } from './components/auth/AX_LoginScreen'
+import { AX_BackNavigation } from './utils/AX_BackNavigation'
 
 export default function App() {
   const { profile, setProfile, activeTab, setActiveTab, hydrateFromSupabase } = useAXStore()
+
+  useEffect(() => {
+    AX_BackNavigation.init()
+  }, [])
+
   const [showWelcome, setShowWelcome] = useState(() => {
     if (typeof window !== 'undefined') {
       return !sessionStorage.getItem('ax_welcome_seen')

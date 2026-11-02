@@ -116,12 +116,17 @@ export const useAXStore = create((set, get) => ({
   setIsSyncing: (isSyncing) => set({ isSyncing }),
   setLastSyncTime: (lastSyncTime) => set({ lastSyncTime }),
   setActiveTab: (activeTab) => {
+    const prevTab = get().activeTab
     try {
       localStorage.setItem('ax_active_tab', activeTab)
       if (typeof window !== 'undefined') {
         const url = new URL(window.location.href)
         url.searchParams.set('tab', activeTab)
-        window.history.replaceState({}, '', url.toString())
+        if (prevTab !== activeTab) {
+          window.history.pushState({ tab: activeTab, type: 'ax_tab' }, '', url.toString())
+        } else {
+          window.history.replaceState({ tab: activeTab, type: 'ax_tab' }, '', url.toString())
+        }
       }
     } catch {}
     set({ activeTab })

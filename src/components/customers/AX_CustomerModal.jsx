@@ -16,7 +16,7 @@ import { DEFAULT_CATEGORIES } from './customerConstants'
 import { AX_CustomerFormFields } from './AX_CustomerFormFields'
 
 export function AX_CustomerModal({ isOpen, onClose, customer = null, onSuccess }) {
-  useBodyScrollLock(isOpen)
+  useBodyScrollLock(isOpen, onClose)
   const { addClient, updateClient, profile } = useAXStore()
 
   const [name, setName] = useState('')

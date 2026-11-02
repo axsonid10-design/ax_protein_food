@@ -36,7 +36,7 @@ export function AX_AddItemModal({
   editSecondaryCategory,
   deleteSecondaryCategory,
 }) {
-  useBodyScrollLock(isOpen)
+  useBodyScrollLock(isOpen, onClose)
 
   const storeWarehouses = useAXStore((s) => s.warehouses) || []
   const storeAddWarehouse = useAXStore((s) => s.addWarehouse)

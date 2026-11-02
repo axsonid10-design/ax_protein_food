@@ -20,7 +20,7 @@ import { SUPPLY_TYPES, SUPPLIER_CATEGORIES } from './supplierConstants'
 import { AX_CompanyDatePicker } from '../common/AX_CompanyDatePicker'
 
 export function AX_SupplierModal({ isOpen, onClose, supplier = null, onSuccess }) {
-  useBodyScrollLock(isOpen)
+  useBodyScrollLock(isOpen, onClose)
   const { addSupplier, updateSupplier, profile } = useAXStore()
 
   const [companyName, setCompanyName] = useState('')

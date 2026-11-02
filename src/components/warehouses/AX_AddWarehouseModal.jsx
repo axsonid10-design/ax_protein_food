@@ -14,7 +14,7 @@ export const WAREHOUSE_TYPES = [
 ]
 
 export function AX_AddWarehouseModal({ isOpen, onClose }) {
-  useBodyScrollLock(isOpen)
+  useBodyScrollLock(isOpen, onClose)
   const addWarehouse = useAXStore((state) => state.addWarehouse)
   const employees = useAXStore((state) => state.employees) || []
   const profile = useAXStore((state) => state.profile)

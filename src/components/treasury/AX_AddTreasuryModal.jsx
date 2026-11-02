@@ -6,7 +6,7 @@ import { useBodyScrollLock } from '../../hooks/useBodyScrollLock'
 import { generateUUID } from '../../utils/AX_UUID'
 
 export function AX_AddTreasuryModal({ isOpen, onClose, onSave, editingAccount = null }) {
-  useBodyScrollLock(isOpen)
+  useBodyScrollLock(isOpen, onClose)
   const [name, setName] = useState('')
   const [type, setType] = useState('cash')
   const [balance, setBalance] = useState('')

@@ -22,7 +22,7 @@ export function AX_CreateInvoiceModal({
   inventoryStock: propInventoryStock,
   onSave,
 }) {
-  useBodyScrollLock(isOpen)
+  useBodyScrollLock(isOpen, onClose)
 
   const storeInventoryStock = useAXStore((s) => s.inventoryStock) || []
   const inventoryStock = propInventoryStock || storeInventoryStock

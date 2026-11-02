@@ -4,6 +4,7 @@ import { useAXStore } from '../../store/useAXStore'
 import { AX_SearchableSelect } from '../common/AX_SearchableSelect'
 import { generateUUID } from '../../utils/AX_UUID'
 import { showToast } from '../common/AX_Toast'
+import { useBodyScrollLock } from '../../hooks/useBodyScrollLock'
 
 export function AX_VanDistribution() {
   const {
@@ -31,6 +32,10 @@ export function AX_VanDistribution() {
   const [showRemitModal, setShowRemitModal] = useState(false)
   const [showLoadModal, setShowLoadModal] = useState(false)
   const [showSaleModal, setShowSaleModal] = useState(false)
+
+  useBodyScrollLock(showRemitModal, () => setShowRemitModal(false))
+  useBodyScrollLock(showLoadModal, () => setShowLoadModal(false))
+  useBodyScrollLock(showSaleModal, () => setShowSaleModal(false))
 
   const [loadForm, setLoadForm] = useState({
     fromWarehouseId: warehouses.find((w) => w.type !== 'van')?.id || warehouses[0]?.id || '',
