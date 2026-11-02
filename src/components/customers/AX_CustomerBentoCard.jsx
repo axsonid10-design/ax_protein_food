@@ -59,8 +59,8 @@ export function AX_CustomerBentoCard({
               <Building className="w-4 h-4" />
             </div>
           )}
-          <div className="min-w-0">
-            <h4 className="text-xs sm:text-sm font-black text-on-surface truncate">{customer.name}</h4>
+          <div className="min-w-0 cursor-pointer" onClick={handleOpenDetails} title="عرض الملف التفصيلي 360°">
+            <h4 className="text-xs sm:text-sm font-black text-on-surface hover:text-primary transition-colors truncate">{customer.name}</h4>
             <div className="flex items-center gap-2 text-[11px] text-on-surface-variant font-medium">
               {customer.phone ? (
                 <a

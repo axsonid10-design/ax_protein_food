@@ -1,18 +1,33 @@
-import React, { useState } from 'react'
-import { Landmark, Plus, X, Wallet, Building2, Smartphone, CreditCard } from 'lucide-react'
+import React, { useState, useEffect } from 'react'
+import { Landmark, Plus, X, Check } from 'lucide-react'
 import { AX_SearchableSelect } from '../common/AX_SearchableSelect'
 import { axToast } from '../common/AX_Toast'
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock'
 import { generateUUID } from '../../utils/AX_UUID'
 
-export function AX_AddTreasuryModal({ isOpen, onClose, onSave }) {
+export function AX_AddTreasuryModal({ isOpen, onClose, onSave, editingAccount = null }) {
   useBodyScrollLock(isOpen)
   const [name, setName] = useState('')
   const [type, setType] = useState('cash')
   const [balance, setBalance] = useState('')
   const [errorMsg, setErrorMsg] = useState(null)
 
+  useEffect(() => {
+    if (editingAccount) {
+      setName(editingAccount.name || '')
+      setType(editingAccount.type || 'cash')
+      setBalance(editingAccount.balance !== undefined ? String(editingAccount.balance) : '')
+    } else {
+      setName('')
+      setType('cash')
+      setBalance('')
+    }
+    setErrorMsg(null)
+  }, [editingAccount, isOpen])
+
   if (!isOpen) return null
+
+  const isEdit = Boolean(editingAccount)
 
   const handleSubmit = (e) => {
     e.preventDefault()
@@ -21,19 +36,26 @@ export function AX_AddTreasuryModal({ isOpen, onClose, onSave }) {
       return
     }
 
-    const newAcc = {
-      id: generateUUID(),
-      name: name.trim(),
-      type,
-      balance: Number(balance) || 0,
+    if (isEdit) {
+      const updated = {
+        ...editingAccount,
+        name: name.trim(),
+        type,
+        balance: Number(balance) || 0,
+      }
+      onSave(updated)
+      axToast.success('تم تعديل بيانات الحساب بنجاح')
+    } else {
+      const newAcc = {
+        id: generateUUID(),
+        name: name.trim(),
+        type,
+        balance: Number(balance) || 0,
+      }
+      onSave(newAcc)
+      axToast.success('تمت إضافة الحساب المالي بنجاح')
     }
 
-    onSave(newAcc)
-    axToast.success('تمت إضافة الحساب المالي بنجاح')
-    setName('')
-    setType('cash')
-    setBalance('')
-    setErrorMsg(null)
     onClose()
   }
 
@@ -45,7 +67,9 @@ export function AX_AddTreasuryModal({ isOpen, onClose, onSave }) {
             <span className="p-2 rounded-2xl bg-primary/10 text-primary">
               <Landmark className="w-5 h-5" />
             </span>
-            <h3 className="text-base font-black text-on-surface">إضافة خزينة / حساب مالي جديد</h3>
+            <h3 className="text-base font-black text-on-surface">
+              {isEdit ? 'تعديل بيانات الخزينة / الحساب' : 'إضافة خزينة / حساب مالي جديد'}
+            </h3>
           </div>
           <button
             type="button"
@@ -94,7 +118,9 @@ export function AX_AddTreasuryModal({ isOpen, onClose, onSave }) {
           </div>
 
           <div>
-            <label className="block text-xs font-bold text-on-surface-variant mb-1">الرصيد الافتتاحي (ج.م)</label>
+            <label className="block text-xs font-bold text-on-surface-variant mb-1">
+              {isEdit ? 'الرصيد المالي الحالي (ج.م)' : 'الرصيد الافتتاحي (ج.م)'}
+            </label>
             <input
               type="number"
               placeholder="0"
@@ -116,8 +142,8 @@ export function AX_AddTreasuryModal({ isOpen, onClose, onSave }) {
               type="submit"
               className="flex-1 py-2.5 px-4 rounded-full bg-primary hover:bg-primary-dark text-white text-xs font-black shadow-level1 transition-all active:scale-95 cursor-pointer flex items-center justify-center gap-1.5"
             >
-              <Plus className="w-4 h-4" />
-              <span>إضافة الحساب</span>
+              {isEdit ? <Check className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
+              <span>{isEdit ? 'حفظ التعديلات' : 'إضافة الحساب'}</span>
             </button>
           </div>
         </form>

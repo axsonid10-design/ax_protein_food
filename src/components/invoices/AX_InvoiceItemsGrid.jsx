@@ -1,11 +1,15 @@
 import React, { useState, useMemo } from 'react'
 import { Search, Plus, Minus, Check, Layers } from 'lucide-react'
 import { getItemDisplayName } from '../../utils/AX_ItemNameHelper'
+import { axToast } from '../common/AX_Toast'
 
 export function AX_InvoiceItemsGrid({
   items = [],
   invoiceItems = [],
   invType = 'sale',
+  warehouseId,
+  inventoryStock = [],
+  getItemStock,
   onAddItem,
   onUpdateQuantity,
   onRemoveItem,
@@ -65,8 +69,26 @@ export function AX_InvoiceItemsGrid({
 
   const isSale = invType === 'sale' || invType === 'sale_return'
 
+  const getStock = (itemId) => {
+    if (typeof getItemStock === 'function') return getItemStock(itemId, warehouseId)
+    if (!warehouseId || !itemId) return 0
+    const row = (inventoryStock || []).find((s) => s.warehouseId === warehouseId && s.itemId === itemId)
+    return Number(row?.quantity) || 0
+  }
+
   const handleCardClick = (item) => {
     const existing = invoiceItemsMap.get(item.id)
+    const avail = getStock(item.id)
+    if (invType === 'sale') {
+      if (avail <= 0) {
+        axToast.error('رصيد الصنف غير متاح في المخزن المحدد')
+        return
+      }
+      if (existing && existing.quantity + 1 > avail) {
+        axToast.error('رصيد الصنف غير متاح في المخزن المحدد')
+        return
+      }
+    }
     if (existing) {
       onUpdateQuantity(existing.index, existing.quantity + 1)
     } else {
@@ -93,6 +115,13 @@ export function AX_InvoiceItemsGrid({
   const handlePlusClick = (e, item) => {
     e.stopPropagation()
     const existing = invoiceItemsMap.get(item.id)
+    const avail = getStock(item.id)
+    if (invType === 'sale') {
+      if (avail <= 0 || (existing && existing.quantity + 1 > avail)) {
+        axToast.error('رصيد الصنف غير متاح في المخزن المحدد')
+        return
+      }
+    }
     if (existing) {
       onUpdateQuantity(existing.index, existing.quantity + 1)
     } else {
@@ -163,13 +192,17 @@ export function AX_InvoiceItemsGrid({
                   const added = invoiceItemsMap.get(item.id)
                   const price = isSale ? (item.sellPrice ?? 0) : (item.buyPrice ?? 0)
                   const isAdded = Boolean(added)
+                  const avail = getStock(item.id)
+                  const isOutOfStock = invType === 'sale' && avail <= 0
 
                   return (
                     <div
                       key={item.id}
                       onClick={() => handleCardClick(item)}
                       className={`p-2.5 rounded-2xl border transition-all text-right flex flex-col justify-between select-none cursor-pointer group ${
-                        isAdded
+                        isOutOfStock
+                          ? 'bg-surface-low/50 border-rose-500/30 opacity-80'
+                          : isAdded
                           ? 'bg-primary/10 border-primary/40 shadow-xs'
                           : 'bg-surface-low/70 hover:bg-surface-low border-outline-variant/30 hover:border-primary/30'
                       }`}
@@ -178,6 +211,13 @@ export function AX_InvoiceItemsGrid({
                         <div className="flex items-start justify-between gap-1 mb-1">
                           <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-md bg-surface-lowest text-on-surface-variant border border-outline-variant/20 shrink-0">
                             {item.unitType || 'كرتونة'}
+                          </span>
+                          <span className={`text-[10px] font-mono font-bold px-1.5 py-0.5 rounded-md border shrink-0 ${
+                            avail > 0
+                              ? 'bg-emerald-500/10 text-emerald-700 border-emerald-500/20'
+                              : 'bg-rose-500/10 text-rose-700 border-rose-500/20'
+                          }`}>
+                            {avail > 0 ? `متاح: ${avail}` : 'رصيد 0'}
                           </span>
                           {isAdded && (
                             <span className="w-4 h-4 rounded-full bg-primary text-white flex items-center justify-center shrink-0">

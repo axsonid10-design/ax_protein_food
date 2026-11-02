@@ -12,7 +12,7 @@ import { AX_CreateInvoiceModal } from './AX_CreateInvoiceModal'
 import { AX_SearchableSelect } from '../common/AX_SearchableSelect'
 
 export function AX_InvoicesManager() {
-  const { invoices, items, warehouses, clients, suppliers, treasuryAccounts, addInvoice } = useAXStore()
+  const { invoices, items, warehouses, clients, suppliers, treasuryAccounts, inventoryStock, addInvoice } = useAXStore()
 
   const [activeSubView, setActiveSubView] = useState('invoices')
   const [typeFilter, setTypeFilter] = useState('all')
@@ -469,6 +469,7 @@ export function AX_InvoicesManager() {
         clients={clients}
         suppliers={suppliers}
         treasuryAccounts={treasuryAccounts}
+        inventoryStock={inventoryStock}
         onSave={addInvoice}
       />
     </div>

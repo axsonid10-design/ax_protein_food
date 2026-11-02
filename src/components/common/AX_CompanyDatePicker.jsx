@@ -8,17 +8,28 @@ const MONTH_NAMES = [
 
 const DAY_NAMES = ['ح', 'ن', 'ث', 'ر', 'خ', 'ج', 'س']
 
+const parseSafeDate = (val) => {
+  if (!val) return new Date()
+  if (typeof val === 'string' && val.includes('-')) {
+    const [y, m, d] = val.split('-').map(Number)
+    if (!isNaN(y) && !isNaN(m) && !isNaN(d)) {
+      return new Date(y, m - 1, d)
+    }
+  }
+  return new Date(val)
+}
+
 export function AX_CompanyDatePicker({ value, onChange, placeholder = 'اختر التاريخ', label }) {
   const [isOpen, setIsOpen] = useState(false)
   const [viewMode, setViewMode] = useState('days')
-  const [selectedDate, setSelectedDate] = useState(() => value ? new Date(value) : new Date())
+  const [selectedDate, setSelectedDate] = useState(() => (value ? parseSafeDate(value) : new Date()))
   const [currentMonth, setCurrentMonth] = useState(() => selectedDate.getMonth())
   const [currentYear, setCurrentYear] = useState(() => selectedDate.getFullYear())
   const containerRef = useRef(null)
 
   useEffect(() => {
     if (value) {
-      const d = new Date(value)
+      const d = parseSafeDate(value)
       setSelectedDate(d)
       setCurrentMonth(d.getMonth())
       setCurrentYear(d.getFullYear())
@@ -42,7 +53,10 @@ export function AX_CompanyDatePicker({ value, onChange, placeholder = 'اختر 
 
   const handleSelectDay = (day) => {
     const d = new Date(currentYear, currentMonth, day)
-    const formatted = d.toISOString().split('T')[0]
+    const yearStr = String(currentYear)
+    const monthStr = String(currentMonth + 1).padStart(2, '0')
+    const dayStr = String(day).padStart(2, '0')
+    const formatted = `${yearStr}-${monthStr}-${dayStr}`
     onChange?.(formatted)
     setSelectedDate(d)
     setIsOpen(false)
@@ -50,7 +64,7 @@ export function AX_CompanyDatePicker({ value, onChange, placeholder = 'اختر 
 
   const formatDisplay = (val) => {
     if (!val) return ''
-    const d = new Date(val)
+    const d = parseSafeDate(val)
     return `${d.getDate()} ${MONTH_NAMES[d.getMonth()]} ${d.getFullYear()}`
   }
 

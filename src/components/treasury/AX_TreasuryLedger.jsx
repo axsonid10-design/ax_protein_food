@@ -10,12 +10,15 @@ import {
   CheckCircle2,
   ArrowLeftRight,
   Landmark,
+  Edit2,
+  Trash2,
 } from 'lucide-react'
 import { useAXStore } from '../../store/useAXStore'
 import { AX_SearchableSelect } from '../common/AX_SearchableSelect'
 import { AX_TreasuryTransactionsTable } from './AX_TreasuryTransactionsTable'
 import { AX_AddTreasuryModal } from './AX_AddTreasuryModal'
 import { AX_TreasuryTransactionModal } from './AX_TreasuryTransactionModal'
+import { AX_ConfirmModal } from '../common/AX_ConfirmModal'
 import { generateUUID } from '../../utils/AX_UUID'
 
 export function AX_TreasuryLedger() {
@@ -23,6 +26,7 @@ export function AX_TreasuryLedger() {
     treasuryAccounts = [],
     cashTransactions = [],
     pendingCashTransfers = [],
+    invoices = [],
     clients = [],
     suppliers = [],
     employees = [],
@@ -32,12 +36,17 @@ export function AX_TreasuryLedger() {
     addPendingCashTransfer,
     confirmCashTransfer,
     addTreasuryAccount,
+    updateTreasuryAccount,
+    deleteTreasuryAccount,
   } = useAXStore()
 
   const [activeSubTab, setActiveSubTab] = useState('transactions')
   const [showTransactionModal, setShowTransactionModal] = useState(false)
   const [showTransferModal, setShowTransferModal] = useState(false)
   const [showAddTreasuryModal, setShowAddTreasuryModal] = useState(false)
+  const [editingAccount, setEditingAccount] = useState(null)
+  const [deletingAccount, setDeletingAccount] = useState(null)
+  const [blockedNotice, setBlockedNotice] = useState(null)
   const [currentPage, setCurrentPage] = useState(1)
   const PAGE_SIZE = 15
 
@@ -84,6 +93,18 @@ export function AX_TreasuryLedger() {
   }
 
   const getTreasuryName = (id) => treasuryAccounts.find((t) => t.id === id)?.name || id
+
+  const handleDeleteAccountClick = (account) => {
+    const relatedTx = (cashTransactions || []).filter((tx) => tx.treasuryId === account.id).length
+    const relatedInv = (invoices || []).filter((inv) => inv.treasuryId === account.id).length
+    const relatedTrf = (pendingCashTransfers || []).filter((p) => p.fromTreasuryId === account.id || p.toTreasuryId === account.id).length
+    const total = relatedTx + relatedInv + relatedTrf
+    if (total > 0) {
+      setBlockedNotice({ account, count: total })
+    } else {
+      setDeletingAccount(account)
+    }
+  }
 
   const handleCreateCashTransfer = (e) => {
     e.preventDefault()
@@ -171,9 +192,27 @@ export function AX_TreasuryLedger() {
                 <span className="p-2 rounded-xl bg-surface-low border border-outline-variant/20">
                   {getTreasuryIcon(account.type)}
                 </span>
-                <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-surface-low text-on-surface-variant border border-outline-variant/20">
-                  {account.type === 'bank' ? 'بنكي' : account.type === 'wallet' ? 'محفظة' : account.type === 'instapay' ? 'إنستاباي' : account.type === 'van_cash' ? 'عهدة سيارة' : 'كاش'}
-                </span>
+                <div className="flex items-center gap-1">
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-surface-low text-on-surface-variant border border-outline-variant/20">
+                    {account.type === 'bank' ? 'بنكي' : account.type === 'wallet' ? 'محفظة' : account.type === 'instapay' ? 'إنستاباي' : account.type === 'van_cash' ? 'عهدة سيارة' : 'كاش'}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setEditingAccount(account)}
+                    className="p-1 rounded-full text-on-surface-variant hover:text-primary hover:bg-surface-container transition-colors cursor-pointer"
+                    title="تعديل الحساب"
+                  >
+                    <Edit2 className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleDeleteAccountClick(account)}
+                    className="p-1 rounded-full text-on-surface-variant hover:text-error hover:bg-error-container/20 transition-colors cursor-pointer"
+                    title="حذف الحساب"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
               </div>
               <div>
                 <span className="text-xs font-bold text-on-surface-variant block truncate" title={account.name}>{account.name}</span>
@@ -357,6 +396,41 @@ export function AX_TreasuryLedger() {
         isOpen={showAddTreasuryModal}
         onClose={() => setShowAddTreasuryModal(false)}
         onSave={addTreasuryAccount}
+      />
+
+      <AX_AddTreasuryModal
+        isOpen={Boolean(editingAccount)}
+        onClose={() => setEditingAccount(null)}
+        editingAccount={editingAccount}
+        onSave={(updated) => {
+          updateTreasuryAccount(updated)
+          setEditingAccount(null)
+        }}
+      />
+
+      <AX_ConfirmModal
+        isOpen={Boolean(blockedNotice)}
+        title="حماية السجلات المالية"
+        message={`لا يمكن حذف الحساب (${blockedNotice?.account?.name}) لوجود (${blockedNotice?.count}) حركة مالية وسندات مرتبطة به. لحفظ سلامة القيود والأرصدة المحاسبية، يرجى تعديل الحساب بدلاً من حذفه.`}
+        confirmText="فهمت ذلك"
+        cancelText="إغلاق"
+        onConfirm={() => setBlockedNotice(null)}
+        onCancel={() => setBlockedNotice(null)}
+      />
+
+      <AX_ConfirmModal
+        isOpen={Boolean(deletingAccount)}
+        title="حذف الحساب المالي"
+        message={`هل أنت متأكد من حذف الحساب / الخزينة (${deletingAccount?.name}) نهائياً؟`}
+        confirmText="تأكيد الحذف النهائي"
+        cancelText="إلغاء"
+        isDestructive={true}
+        requireHold={true}
+        onConfirm={() => {
+          deleteTreasuryAccount(deletingAccount.id)
+          setDeletingAccount(null)
+        }}
+        onCancel={() => setDeletingAccount(null)}
       />
     </div>
   )

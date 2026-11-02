@@ -28,8 +28,8 @@ export function AX_SupplierBentoCard({
           <div className="w-8 h-8 rounded-full bg-primary/10 text-primary flex items-center justify-center flex-shrink-0">
             <Building2 className="w-4 h-4" />
           </div>
-          <div className="min-w-0">
-            <h4 className="text-xs font-black text-on-surface truncate">
+          <div className="min-w-0 cursor-pointer" onClick={() => onOpenDetails && onOpenDetails(supplier)} title="عرض الملف التفصيلي 360°">
+            <h4 className="text-xs font-black text-on-surface hover:text-primary transition-colors truncate">
               {supplier.companyName || supplier.name}
             </h4>
             <div className="flex items-center gap-1.5 text-[11px] text-on-surface-variant">

@@ -9,6 +9,9 @@ export function AX_InvoiceItemsEditor({
   availableItems = [],
   invoiceItems = [],
   invType = 'sale',
+  warehouseId,
+  inventoryStock = [],
+  getItemStock,
   draftItem,
   onDraftItemChange,
   onCommitDraftItem,
@@ -19,6 +22,13 @@ export function AX_InvoiceItemsEditor({
   setExpandedRowIndex,
 }) {
   const [inputMode, setInputMode] = useState('grid')
+
+  const getStock = (itemId) => {
+    if (typeof getItemStock === 'function') return getItemStock(itemId, warehouseId)
+    if (!warehouseId || !itemId) return 0
+    const row = (inventoryStock || []).find((s) => s.warehouseId === warehouseId && s.itemId === itemId)
+    return Number(row?.quantity) || 0
+  }
 
   const handleGridAddItem = (newItem) => {
     if (onAddItem) {
@@ -68,6 +78,9 @@ export function AX_InvoiceItemsEditor({
           items={items}
           invoiceItems={invoiceItems}
           invType={invType}
+          warehouseId={warehouseId}
+          inventoryStock={inventoryStock}
+          getItemStock={getItemStock}
           onAddItem={handleGridAddItem}
           onUpdateQuantity={(idx, q) => onItemRowChange(idx, 'quantity', q)}
           onRemoveItem={onRemoveItem}
@@ -86,7 +99,7 @@ export function AX_InvoiceItemsEditor({
                 options={availableItems.map((it) => ({
                   value: it.id,
                   label: getItemDisplayName(it),
-                  sublabel: `${it.primaryCategory || ''} • ${it.unitType || 'كرتونة'}`,
+                  sublabel: `${it.primaryCategory || ''} • ${it.unitType || 'كرتونة'}${invType === 'sale' ? ` • متاح: ${getStock(it.id)}` : ''}`,
                 }))}
                 placeholder="اختر الصنف المراد إضافته..."
               />
@@ -116,7 +129,17 @@ export function AX_InvoiceItemsEditor({
             </div>
           </div>
 
-          <div className="flex justify-end">
+          <div className="flex items-center justify-between pt-1">
+            {invType === 'sale' && draftItem?.itemId ? (
+              <span className={`text-[11px] font-mono font-bold px-2 py-0.5 rounded-full border ${
+                getStock(draftItem.itemId) > 0
+                  ? 'bg-emerald-500/10 text-emerald-700 border-emerald-500/30'
+                  : 'bg-rose-500/10 text-rose-700 border-rose-500/30'
+              }`}>
+                المتاح بالمخزن: {getStock(draftItem.itemId)} {items.find((i) => i.id === draftItem.itemId)?.unitType || 'كرتونة'}
+              </span>
+            ) : <span />}
+
             <button
               type="button"
               onClick={onCommitDraftItem}
@@ -150,7 +173,7 @@ export function AX_InvoiceItemsEditor({
                 className="bg-surface-low border border-outline-variant/30 rounded-xl p-2.5 space-y-2 transition-all"
               >
                 <div className="flex items-center justify-between text-xs">
-                  <div className="flex items-center gap-2 min-w-0">
+                  <div className="flex items-center gap-2 min-w-0 flex-wrap">
                     <span className="font-mono text-[11px] text-primary font-black bg-primary/10 px-2 py-0.5 rounded-full shrink-0">
                       #{idx + 1}
                     </span>
@@ -160,6 +183,15 @@ export function AX_InvoiceItemsEditor({
                     <span className="text-on-surface-variant text-[11px] font-mono">
                       ({row.quantity} {itObj?.unitType || row.unit || 'كرتونة'} × {row.price} ج.م)
                     </span>
+                    {invType === 'sale' && (
+                      <span className={`text-[10px] font-mono font-bold px-1.5 py-0.5 rounded border shrink-0 ${
+                        getStock(row.itemId) >= Number(row.quantity)
+                          ? 'bg-emerald-500/10 text-emerald-700 border-emerald-500/20'
+                          : 'bg-rose-500/10 text-rose-700 border-rose-500/30'
+                      }`}>
+                        متاح: {getStock(row.itemId)}
+                      </span>
+                    )}
                   </div>
 
                   <div className="flex items-center gap-2 shrink-0">

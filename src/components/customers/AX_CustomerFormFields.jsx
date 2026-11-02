@@ -12,6 +12,7 @@ import {
 } from 'lucide-react'
 import { GOVERNORATES, DEFAULT_CATEGORIES } from './customerConstants'
 import { getTransformedUrl } from '../../services/imageKitService'
+import { AX_CompanyDatePicker } from '../common/AX_CompanyDatePicker'
 
 export function AX_CustomerFormFields({
   name, setName,
@@ -30,6 +31,7 @@ export function AX_CustomerFormFields({
   isAddingCustomSub, setIsAddingCustomSub,
   openingBalance, setOpeningBalance,
   openingBalanceType, setOpeningBalanceType,
+  openingBalanceDate, setOpeningBalanceDate,
   currentBalance, setCurrentBalance,
   isEditMode,
   attachments, isUploading, handleFileUpload, handleRemoveAttachment,
@@ -214,7 +216,7 @@ export function AX_CustomerFormFields({
         </div>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-surface-low/50 p-2.5 rounded-2xl border border-outline-variant/30">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-surface-low/50 p-2.5 rounded-2xl border border-outline-variant/30">
         <div className="space-y-1">
           <label className="text-xs font-bold text-on-surface flex items-center gap-1.5">
             <DollarSign className="w-3.5 h-3.5 text-primary" />
@@ -256,6 +258,13 @@ export function AX_CustomerFormFields({
               دائن (له)
             </button>
           </div>
+        </div>
+        <div className="space-y-1">
+          <label className="text-xs font-bold text-on-surface">تاريخ رصيد أول المدة</label>
+          <AX_CompanyDatePicker
+            value={openingBalanceDate}
+            onChange={setOpeningBalanceDate}
+          />
         </div>
       </div>
 

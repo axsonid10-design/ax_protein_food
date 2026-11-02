@@ -46,11 +46,15 @@ export function AX_SuppliersTable({
                   className="h-12 hover:bg-surface-container/30 transition-colors duration-150"
                 >
                   <td className="px-4 font-black text-on-surface whitespace-nowrap">
-                    <div className="flex items-center gap-2">
-                      <div className="w-7 h-7 rounded-full bg-primary/10 text-primary flex items-center justify-center flex-shrink-0">
+                    <div
+                      className="flex items-center gap-2 cursor-pointer group"
+                      onClick={() => onOpenDetails && onOpenDetails(s)}
+                      title="عرض الملف المالي والتفصيلي 360°"
+                    >
+                      <div className="w-7 h-7 rounded-full bg-primary/10 text-primary flex items-center justify-center flex-shrink-0 group-hover:bg-primary group-hover:text-white transition-colors">
                         <Building2 className="w-3.5 h-3.5" />
                       </div>
-                      <span className="truncate max-w-[200px]" title={s.companyName || s.name}>
+                      <span className="truncate max-w-[200px] group-hover:text-primary transition-colors font-black" title={s.companyName || s.name}>
                         {s.companyName || s.name}
                       </span>
                     </div>

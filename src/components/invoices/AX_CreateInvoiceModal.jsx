@@ -1,9 +1,12 @@
 import React, { useState, useEffect } from 'react'
 import { Plus, AlertTriangle, RotateCcw } from 'lucide-react'
 import { AX_SearchableSelect } from '../common/AX_SearchableSelect'
+import { AX_CompanyDatePicker } from '../common/AX_CompanyDatePicker'
 import { AX_InvoiceItemsEditor } from './AX_InvoiceItemsEditor'
 import { AX_CustomerModal } from '../customers/AX_CustomerModal'
 import { AX_SupplierModal } from '../suppliers/AX_SupplierModal'
+import { axToast } from '../common/AX_Toast'
+import { useAXStore } from '../../store/useAXStore'
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock'
 import { generateUUID } from '../../utils/AX_UUID'
 import { getItemDisplayName } from '../../utils/AX_ItemNameHelper'
@@ -16,9 +19,13 @@ export function AX_CreateInvoiceModal({
   clients = [],
   suppliers = [],
   treasuryAccounts = [],
+  inventoryStock: propInventoryStock,
   onSave,
 }) {
   useBodyScrollLock(isOpen)
+
+  const storeInventoryStock = useAXStore((s) => s.inventoryStock) || []
+  const inventoryStock = propInventoryStock || storeInventoryStock
 
   const [invForm, setInvForm] = useState({
     type: 'sale',
@@ -37,33 +44,28 @@ export function AX_CreateInvoiceModal({
   const [showCustomerModal, setShowCustomerModal] = useState(false)
   const [showSupplierModal, setShowSupplierModal] = useState(false)
 
-  const [draftItem, setDraftItem] = useState({
-    itemId: '',
-    quantity: 1,
-    price: 0,
-  })
-
+  const [draftItem, setDraftItem] = useState({ itemId: '', quantity: 1, price: 0 })
   const [expandedRowIndex, setExpandedRowIndex] = useState(null)
 
   const isSaleType = invForm.type === 'sale' || invForm.type === 'sale_return'
   const partyList = isSaleType ? clients : suppliers
-
   const selectedItemIds = new Set(invForm.items.map((row) => row.itemId))
   const availableItems = items.filter((it) => !selectedItemIds.has(it.id))
+
+  const getItemStock = (itemId, whId = invForm.warehouseId) => {
+    if (!whId || !itemId) return 0
+    const row = (inventoryStock || []).find((s) => s.warehouseId === whId && s.itemId === itemId)
+    return Number(row?.quantity) || 0
+  }
 
   useEffect(() => {
     if (isOpen) {
       const initialWarehouseId = warehouses[0]?.id || ''
       const initialPartyName = clients[0]?.name || ''
       setInvForm({
-        type: 'sale',
-        partyName: initialPartyName,
-        isCustomParty: false,
-        warehouseId: initialWarehouseId,
-        date: new Date().toISOString().split('T')[0],
-        transportCost: '',
-        loadingCost: '',
-        items: [],
+        type: 'sale', partyName: initialPartyName, isCustomParty: false,
+        warehouseId: initialWarehouseId, date: new Date().toISOString().split('T')[0],
+        transportCost: '', loadingCost: '', items: [],
       })
       setPaymentStatus('unpaid')
       setPaidInput('')
@@ -117,6 +119,13 @@ export function AX_CreateInvoiceModal({
 
   const handleCommitDraftItem = () => {
     if (!draftItem.itemId || Number(draftItem.quantity) <= 0) return
+    if (invForm.type === 'sale') {
+      const avail = getItemStock(draftItem.itemId, invForm.warehouseId)
+      if (avail <= 0 || Number(draftItem.quantity) > avail) {
+        axToast.error('رصيد الصنف غير متاح في المخزن المحدد')
+        return
+      }
+    }
     const newItems = [draftItem, ...invForm.items]
     setInvForm({ ...invForm, items: newItems })
     const newSelected = new Set(newItems.map((r) => r.itemId))
@@ -130,6 +139,13 @@ export function AX_CreateInvoiceModal({
   }
 
   const handleDirectAddItem = (newItem) => {
+    if (invForm.type === 'sale') {
+      const avail = getItemStock(newItem.itemId, invForm.warehouseId)
+      if (avail <= 0 || Number(newItem.quantity) > avail) {
+        axToast.error('رصيد الصنف غير متاح في المخزن المحدد')
+        return
+      }
+    }
     setInvForm((prev) => ({
       ...prev,
       items: [newItem, ...prev.items],
@@ -143,6 +159,16 @@ export function AX_CreateInvoiceModal({
   }
 
   const handleItemRowChange = (idx, field, value) => {
+    if (field === 'quantity' && invForm.type === 'sale') {
+      const row = invForm.items[idx]
+      if (row) {
+        const avail = getItemStock(row.itemId, invForm.warehouseId)
+        if (Number(value) > avail) {
+          axToast.error('رصيد الصنف غير متاح في المخزن المحدد')
+          return
+        }
+      }
+    }
     const updated = [...invForm.items]
     updated[idx] = { ...updated[idx], [field]: value }
     setInvForm({ ...invForm, items: updated })
@@ -160,6 +186,16 @@ export function AX_CreateInvoiceModal({
     e.preventDefault()
     if (invForm.items.length === 0) return
 
+    if (invForm.type === 'sale') {
+      for (const it of invForm.items) {
+        const avail = getItemStock(it.itemId, invForm.warehouseId)
+        if (avail <= 0 || Number(it.quantity) > avail) {
+          axToast.error('رصيد الصنف غير متاح في المخزن المحدد')
+          return
+        }
+      }
+    }
+
     const sub = computeSubtotal()
     const tot = computeTotal()
     const partyName = invForm.partyName.trim()
@@ -173,13 +209,7 @@ export function AX_CreateInvoiceModal({
     if (invForm.type === 'sale_return') paymentTerms = 'مردود مبيعات'
     if (invForm.type === 'purchase_return') paymentTerms = 'مردود مشتريات'
 
-    const codePrefix = invForm.type === 'sale_return'
-      ? 'RET-SALE'
-      : invForm.type === 'purchase_return'
-      ? 'RET-PUR'
-      : invForm.type === 'purchase'
-      ? 'PUR'
-      : 'INV'
+    const codePrefix = { sale_return: 'RET-SALE', purchase_return: 'RET-PUR', purchase: 'PUR' }[invForm.type] || 'INV'
 
     const newInv = {
       id: generateUUID(),
@@ -191,13 +221,14 @@ export function AX_CreateInvoiceModal({
       warehouseId: invForm.warehouseId,
       items: invForm.items.map((it) => {
         const itemObj = items.find((i) => i.id === it.itemId)
+        const q = Number(it.quantity) || 0, p = Number(it.price) || 0
         return {
           itemId: it.itemId,
           compositeName: getItemDisplayName(itemObj || it),
-          quantity: Number(it.quantity) || 0,
+          quantity: q,
           unit: itemObj?.unitType || it.unit || 'كرتونة',
-          price: Number(it.price) || 0,
-          total: (Number(it.quantity) || 0) * (Number(it.price) || 0),
+          price: p,
+          total: q * p,
         }
       }),
       transportCost: Number(invForm.transportCost) || 0,
@@ -233,26 +264,26 @@ export function AX_CreateInvoiceModal({
           </span>
           <div className="grid grid-cols-2 sm:flex gap-1.5 w-full sm:w-auto">
             {[
-              { id: 'sale', label: 'فاتورة مبيعات', activeBg: 'bg-primary text-white shadow-xs' },
-              { id: 'purchase', label: 'فاتورة مشتريات', activeBg: 'bg-secondary text-white shadow-xs' },
-              { id: 'sale_return', label: 'مردود مبيعات', activeBg: 'bg-purple-700 text-white shadow-xs' },
-              { id: 'purchase_return', label: 'مردود مشتريات', activeBg: 'bg-amber-600 text-white shadow-xs' },
-            ].map((tab) => (
+              ['sale', 'فاتورة مبيعات', 'bg-primary text-white shadow-xs'],
+              ['purchase', 'فاتورة مشتريات', 'bg-secondary text-white shadow-xs'],
+              ['sale_return', 'مردود مبيعات', 'bg-purple-700 text-white shadow-xs'],
+              ['purchase_return', 'مردود مشتريات', 'bg-amber-600 text-white shadow-xs'],
+            ].map(([id, label, activeBg]) => (
               <button
-                key={tab.id}
+                key={id}
                 type="button"
-                onClick={() => handleTypeChange(tab.id)}
+                onClick={() => handleTypeChange(id)}
                 className={`px-3 py-1.5 rounded-full text-[11px] font-black transition-all cursor-pointer text-center ${
-                  invForm.type === tab.id ? tab.activeBg : 'bg-surface-low text-on-surface'
+                  invForm.type === id ? activeBg : 'bg-surface-low text-on-surface'
                 }`}
               >
-                {tab.label}
+                {label}
               </button>
             ))}
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           <div className="space-y-1">
             <div className="flex items-center justify-between">
               <label className="text-xs font-bold text-on-surface-variant">
@@ -307,6 +338,14 @@ export function AX_CreateInvoiceModal({
               placeholder="اختر المخزن..."
             />
           </div>
+
+          <div className="space-y-1">
+            <label className="text-xs font-bold text-on-surface-variant block">تاريخ الفاتورة</label>
+            <AX_CompanyDatePicker
+              value={invForm.date}
+              onChange={(val) => setInvForm((prev) => ({ ...prev, date: val }))}
+            />
+          </div>
         </div>
 
         <AX_InvoiceItemsEditor
@@ -314,6 +353,9 @@ export function AX_CreateInvoiceModal({
           availableItems={availableItems}
           invoiceItems={invForm.items}
           invType={invForm.type}
+          warehouseId={invForm.warehouseId}
+          inventoryStock={inventoryStock}
+          getItemStock={getItemStock}
           draftItem={draftItem}
           onDraftItemChange={handleDraftItemChange}
           onCommitDraftItem={handleCommitDraftItem}
@@ -327,23 +369,11 @@ export function AX_CreateInvoiceModal({
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2 border-t border-surface-container">
           <div>
             <label className="text-[11px] font-bold text-on-surface-variant block">مصاريف نقل وشحن</label>
-            <input
-              type="number"
-              placeholder="0"
-              value={invForm.transportCost}
-              onChange={(e) => setInvForm({ ...invForm, transportCost: e.target.value })}
-              className="w-full px-3 py-1.5 rounded-xl bg-surface-low border border-outline-variant/30 text-xs font-bold text-on-surface font-mono"
-            />
+            <input type="number" placeholder="0" value={invForm.transportCost} onChange={(e) => setInvForm({ ...invForm, transportCost: e.target.value })} className="w-full px-3 py-1.5 rounded-xl bg-surface-low border border-outline-variant/30 text-xs font-bold text-on-surface font-mono" />
           </div>
           <div>
             <label className="text-[11px] font-bold text-on-surface-variant block">مصاريف شيالة وعمالة</label>
-            <input
-              type="number"
-              placeholder="0"
-              value={invForm.loadingCost}
-              onChange={(e) => setInvForm({ ...invForm, loadingCost: e.target.value })}
-              className="w-full px-3 py-1.5 rounded-xl bg-surface-low border border-outline-variant/30 text-xs font-bold text-on-surface font-mono"
-            />
+            <input type="number" placeholder="0" value={invForm.loadingCost} onChange={(e) => setInvForm({ ...invForm, loadingCost: e.target.value })} className="w-full px-3 py-1.5 rounded-xl bg-surface-low border border-outline-variant/30 text-xs font-bold text-on-surface font-mono" />
           </div>
         </div>
 
@@ -351,33 +381,22 @@ export function AX_CreateInvoiceModal({
           <div className="flex items-center justify-between">
             <label className="text-xs font-bold text-on-surface-variant">حالة وسداد الفاتورة:</label>
             <div className="flex items-center gap-1.5">
-              <button
-                type="button"
-                onClick={() => setPaymentStatus('unpaid')}
-                className={`px-3 py-1 rounded-full text-xs font-bold transition-all cursor-pointer ${
-                  paymentStatus === 'unpaid' ? 'bg-secondary text-white shadow-xs' : 'bg-surface-low text-on-surface'
-                }`}
-              >
-                غير مدفوع
-              </button>
-              <button
-                type="button"
-                onClick={() => setPaymentStatus('partial')}
-                className={`px-3 py-1 rounded-full text-xs font-bold transition-all cursor-pointer ${
-                  paymentStatus === 'partial' ? 'bg-amber-600 text-white shadow-xs' : 'bg-surface-low text-on-surface'
-                }`}
-              >
-                مدفوع جزئي
-              </button>
-              <button
-                type="button"
-                onClick={() => setPaymentStatus('paid')}
-                className={`px-3 py-1 rounded-full text-xs font-bold transition-all cursor-pointer ${
-                  paymentStatus === 'paid' ? 'bg-primary text-white shadow-xs' : 'bg-surface-low text-on-surface'
-                }`}
-              >
-                مدفوع كلي
-              </button>
+              {[
+                ['unpaid', 'غير مدفوع', 'bg-secondary text-white shadow-xs'],
+                ['partial', 'مدفوع جزئي', 'bg-amber-600 text-white shadow-xs'],
+                ['paid', 'مدفوع كلي', 'bg-primary text-white shadow-xs'],
+              ].map(([st, label, activeBg]) => (
+                <button
+                  key={st}
+                  type="button"
+                  onClick={() => setPaymentStatus(st)}
+                  className={`px-3 py-1 rounded-full text-xs font-bold transition-all cursor-pointer ${
+                    paymentStatus === st ? activeBg : 'bg-surface-low text-on-surface'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
             </div>
           </div>
 
@@ -455,23 +474,8 @@ export function AX_CreateInvoiceModal({
         </div>
       </form>
 
-      <AX_CustomerModal
-        isOpen={showCustomerModal}
-        onClose={() => setShowCustomerModal(false)}
-        onSuccess={(c) => {
-          setInvForm((prev) => ({ ...prev, partyName: c.name }))
-          setShowCustomerModal(false)
-        }}
-      />
-
-      <AX_SupplierModal
-        isOpen={showSupplierModal}
-        onClose={() => setShowSupplierModal(false)}
-        onSuccess={(s) => {
-          setInvForm((prev) => ({ ...prev, partyName: s.companyName || s.name }))
-          setShowSupplierModal(false)
-        }}
-      />
+      <AX_CustomerModal isOpen={showCustomerModal} onClose={() => setShowCustomerModal(false)} onSuccess={(c) => { setInvForm((prev) => ({ ...prev, partyName: c.name })); setShowCustomerModal(false) }} />
+      <AX_SupplierModal isOpen={showSupplierModal} onClose={() => setShowSupplierModal(false)} onSuccess={(s) => { setInvForm((prev) => ({ ...prev, partyName: s.companyName || s.name })); setShowSupplierModal(false) }} />
     </div>
   )
 }

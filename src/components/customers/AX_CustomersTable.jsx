@@ -49,11 +49,17 @@ export function AX_CustomersTable({
                   className="h-12 hover:bg-surface-container/30 transition-colors duration-150"
                 >
                   <td className="px-4 font-black text-on-surface whitespace-nowrap">
-                    <div className="flex items-center gap-2">
-                      <div className="w-7 h-7 rounded-full bg-primary/10 text-primary flex items-center justify-center flex-shrink-0">
+                    <div
+                      className="flex items-center gap-2 cursor-pointer group"
+                      onClick={() => handleDetailsClick(c)}
+                      title="عرض الملف المالي والتفصيلي 360°"
+                    >
+                      <div className="w-7 h-7 rounded-full bg-primary/10 text-primary flex items-center justify-center flex-shrink-0 group-hover:bg-primary group-hover:text-white transition-colors">
                         <Building className="w-3.5 h-3.5" />
                       </div>
-                      <span className="truncate max-w-[180px]" title={c.name}>{c.name}</span>
+                      <span className="truncate max-w-[180px] group-hover:text-primary transition-colors font-black" title={c.name}>
+                        {c.name}
+                      </span>
                     </div>
                   </td>
 

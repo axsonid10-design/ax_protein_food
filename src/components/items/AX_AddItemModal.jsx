@@ -12,6 +12,7 @@ import { generateUUID } from '../../utils/AX_UUID'
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock'
 import { AX_CategorySelect } from './AX_CategorySelect'
 import { AX_SearchableSelect } from '../common/AX_SearchableSelect'
+import { AX_CompanyDatePicker } from '../common/AX_CompanyDatePicker'
 import { AX_ItemPackagingFields } from './AX_ItemPackagingFields'
 import { axToast } from '../common/AX_Toast'
 import { useAXStore } from '../../store/useAXStore'
@@ -50,6 +51,7 @@ export function AX_AddItemModal({
   const [isScanning, setIsScanning] = useState(false)
   const [unitType, setUnitType] = useState('كرتونة')
   const [openingQty, setOpeningQty] = useState('')
+  const [openingStockDate, setOpeningStockDate] = useState(() => new Date().toISOString().split('T')[0])
   const [weightPerCarton, setWeightPerCarton] = useState('10')
   const [piecesPerCarton, setPiecesPerCarton] = useState('')
   const [grainsPerPiece, setGrainsPerPiece] = useState('')
@@ -71,30 +73,13 @@ export function AX_AddItemModal({
 
   useEffect(() => {
     if (isOpen) {
-      setPrimaryCategory(categories[0] || 'الكبده')
-      setSubCategory('')
-      setSecondaryCategory('')
-      setCompositeName('')
-      setCode(`PF-${Math.floor(1000 + Math.random() * 9000)}`)
-      setUnitType('كرتونة')
-      setOpeningQty('')
-      setWeightPerCarton('10')
-      setPiecesPerCarton('')
-      setGrainsPerPiece('')
-      setPieceWeight('')
-      setGrainWeight('')
+      setPrimaryCategory(categories[0] || 'الكبده'); setSubCategory(''); setSecondaryCategory(''); setCompositeName('')
+      setCode(`PF-${Math.floor(1000 + Math.random() * 9000)}`); setUnitType('كرتونة'); setOpeningQty('')
+      setOpeningStockDate(new Date().toISOString().split('T')[0]); setWeightPerCarton('10')
+      setPiecesPerCarton(''); setGrainsPerPiece(''); setPieceWeight(''); setGrainWeight('')
       setTargetWarehouseId(warehouses[0]?.id || '')
-      setBuyPrice('')
-      setSellPrice('')
-      setPieceBuyPrice('')
-      setPieceSellPrice('')
-      setGrainBuyPrice('')
-      setGrainSellPrice('')
-      setErrorMsg(null)
-      setIsQuickWarehouseOpen(false)
-      setQuickWhName('')
-      setQuickWhType('cold_store')
-      setQuickWhManager('')
+      setBuyPrice(''); setSellPrice(''); setPieceBuyPrice(''); setPieceSellPrice(''); setGrainBuyPrice(''); setGrainSellPrice('')
+      setErrorMsg(null); setIsQuickWarehouseOpen(false); setQuickWhName(''); setQuickWhType('cold_store'); setQuickWhManager('')
     }
   }, [isOpen])
 
@@ -177,6 +162,7 @@ export function AX_AddItemModal({
             quantity: Number(openingQty),
             warehouseId: targetWarehouseId,
             unit: unitType,
+            date: openingStockDate,
           }
         : null
 
@@ -303,7 +289,7 @@ export function AX_AddItemModal({
               <span>إيداع رصيد بداية المدة (افتتاح رصيد):</span>
             </span>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div className="space-y-1.5">
                 <label className="text-on-surface block text-right">الكمية الافتتاحية:</label>
                 <input
@@ -338,6 +324,14 @@ export function AX_AddItemModal({
                     badge: w.type === 'main' ? 'رئيسي' : w.type === 'cold_store' ? 'تبريد' : 'فرع',
                   }))}
                   searchable={false}
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-on-surface block text-right">تاريخ رصيد أول المدة:</label>
+                <AX_CompanyDatePicker
+                  value={openingStockDate}
+                  onChange={setOpeningStockDate}
                 />
               </div>
             </div>

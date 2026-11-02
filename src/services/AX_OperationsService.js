@@ -232,6 +232,35 @@ export const AX_OperationsService = {
     }
   },
 
+  updateTreasuryAccountInDB: async (account, userProfile = null) => {
+    if (!supabase || typeof supabase.from !== 'function' || !account?.id) return { success: false }
+    const VALID_TYPES = ['cash', 'bank', 'wallet', 'instapay', 'van_cash']
+    const accType = VALID_TYPES.includes(account.type) ? account.type : 'cash'
+    const row = { name: account.name?.trim(), type: accType, balance: Number(account.balance || 0), updated_at: new Date().toISOString() }
+    try {
+      const { error } = await supabase.from('ax_treasuries').update(row).eq('id', account.id)
+      if (error) throw error
+      try { await supabase.from('ax_activity_logs').insert({ id: generateUUID(), table_name: 'ax_treasuries', action: 'UPDATE', record_id: account.id, new_data: row, user_id: userProfile?.id || null }) } catch {}
+      return { success: true }
+    } catch (err) {
+      try { await offlineDB.enqueue('ax_treasuries', 'update', { ...row, id: account.id }) } catch {}
+      return { success: false, error: err.message, enqueued: true }
+    }
+  },
+
+  deleteTreasuryAccountInDB: async (accountId, userProfile = null) => {
+    if (!supabase || typeof supabase.from !== 'function' || !accountId) return { success: false }
+    try {
+      const { error } = await supabase.from('ax_treasuries').delete().eq('id', accountId)
+      if (error) throw error
+      try { await supabase.from('ax_activity_logs').insert({ id: generateUUID(), table_name: 'ax_treasuries', action: 'DELETE', record_id: accountId, user_id: userProfile?.id || null }) } catch {}
+      return { success: true }
+    } catch (err) {
+      try { await offlineDB.enqueue('ax_treasuries', 'delete', { id: accountId }) } catch {}
+      return { success: false, error: err.message, enqueued: true }
+    }
+  },
+
   addWarehouseInDB: async (warehouse, userProfile = null) => {
     if (!supabase || typeof supabase.from !== 'function' || !warehouse?.name) return { success: false }
     const VALID_WH_TYPES = ['cold_store', 'raw_materials', 'processing', 'finished_goods', 'van']
@@ -343,6 +372,32 @@ export const AX_OperationsService = {
     } catch (err) {
       return { success: false, error: err.message }
     }
+  },
+
+  updateManufacturingOrderInDB: async (order, userProfile = null) => {
+    if (!supabase || typeof supabase.from !== 'function' || !order?.id) return { success: false }
+    const row = {
+      raw_item_id: order.rawItemId || order.raw_item_id || null,
+      raw_warehouse_id: order.rawWarehouseId || order.raw_warehouse_id || null,
+      consumed_quantity: Number(order.consumedQuantity || order.consumed_quantity || 0),
+      consumed_unit: order.consumedUnit || order.consumed_unit || 'كرتونة',
+      produced_items: order.producedItems || order.produced_items || [],
+      operator: order.operator || null, notes: order.notes || null,
+    }
+    try {
+      await supabase.from('ax_manufacturing_orders').update(row).eq('id', order.id)
+      try { await supabase.from('ax_activity_logs').insert({ id: generateUUID(), table_name: 'ax_manufacturing_orders', action: 'UPDATE', record_id: order.id, new_data: row, user_id: userProfile?.id || null }) } catch {}
+      return { success: true }
+    } catch (err) { return { success: false, error: err.message } }
+  },
+
+  deleteManufacturingOrderInDB: async (orderId, userProfile = null) => {
+    if (!supabase || typeof supabase.from !== 'function' || !orderId) return { success: false }
+    try {
+      await supabase.from('ax_manufacturing_orders').delete().eq('id', orderId)
+      try { await supabase.from('ax_activity_logs').insert({ id: generateUUID(), table_name: 'ax_manufacturing_orders', action: 'DELETE', record_id: orderId, user_id: userProfile?.id || null }) } catch {}
+      return { success: true }
+    } catch (err) { return { success: false, error: err.message } }
   },
 
   confirmTransferInDB: async (trf, updatedStock = [], userName = '') => {

@@ -4,20 +4,35 @@ import {
   Scissors,
   Plus,
   Trash2,
+  Edit2,
   CheckCircle2,
   Layers,
   ArrowDownCircle,
   ArrowUpCircle,
   FileSpreadsheet,
   AlertCircle,
+  Check,
 } from 'lucide-react'
 import { useAXStore } from '../../store/useAXStore'
 import { AX_SearchableSelect } from '../common/AX_SearchableSelect'
+import { AX_ConfirmModal } from '../common/AX_ConfirmModal'
+import { axToast } from '../common/AX_Toast'
 import { generateUUID } from '../../utils/AX_UUID'
 
 export function AX_ManufacturingDisassembly() {
-  const { items = [], warehouses = [], manufacturingOrders = [], addManufacturingOrder } = useAXStore()
+  const {
+    items = [],
+    warehouses = [],
+    manufacturingOrders = [],
+    addManufacturingOrder,
+    updateManufacturingOrder,
+    deleteManufacturingOrder,
+    profile,
+  } = useAXStore()
+
   const [isCreating, setIsCreating] = useState(false)
+  const [editingOrder, setEditingOrder] = useState(null)
+  const [deletingOrder, setDeletingOrder] = useState(null)
 
   const [rawItemId, setRawItemId] = useState(() => items[0]?.id || '')
   const [rawWarehouseId, setRawWarehouseId] = useState(() => warehouses[0]?.id || '')
@@ -66,30 +81,69 @@ export function AX_ManufacturingDisassembly() {
     setProducedItems(updated)
   }
 
+  const handleStartEdit = (order) => {
+    setEditingOrder(order)
+    setRawItemId(order.rawItemId)
+    setRawWarehouseId(order.rawWarehouseId)
+    setConsumedQuantity(order.consumedQuantity)
+    setConsumedUnit(order.consumedUnit || 'كرتونة')
+    setNotes(order.notes || '')
+    setProducedItems(
+      order.producedItems && order.producedItems.length > 0
+        ? order.producedItems.map((p) => ({ ...p }))
+        : [{ itemId: items[0]?.id || '', quantity: 10, unit: 'كيلو', targetWarehouseId: warehouses[0]?.id || '' }]
+    )
+    setIsCreating(true)
+  }
+
+  const handleCancelForm = () => {
+    setIsCreating(false)
+    setEditingOrder(null)
+  }
+
   const handleSubmitOrder = (e) => {
     e.preventDefault()
     if (consumedQuantity <= 0 || producedItems.length === 0) return
 
-    const newOrder = {
-      id: generateUUID(),
-      code: `MFG-${Date.now().toString().slice(-5)}`,
-      date: new Date().toISOString().split('T')[0],
-      rawItemId,
-      rawWarehouseId,
-      consumedQuantity: Number(consumedQuantity),
-      consumedUnit,
-      producedItems: producedItems.map((p) => ({
-        ...p,
-        quantity: Number(p.quantity),
-      })),
-      wastePercentage: 1.8,
-      status: 'completed',
-      operator: 'مشرف خط التقطيع والتصنيع',
-      notes: notes || 'أمر تشغيل وتفكيك قياسي',
+    if (editingOrder) {
+      const updatedOrder = {
+        ...editingOrder,
+        rawItemId,
+        rawWarehouseId,
+        consumedQuantity: Number(consumedQuantity),
+        consumedUnit,
+        producedItems: producedItems.map((p) => ({
+          ...p,
+          quantity: Number(p.quantity),
+        })),
+        notes: notes || 'أمر تشغيل وتفكيك قياسي',
+      }
+      updateManufacturingOrder(updatedOrder)
+      axToast.success('تم حفظ تعديلات إذن التشغيل بنجاح')
+    } else {
+      const newOrder = {
+        id: generateUUID(),
+        code: `MFG-${Date.now().toString().slice(-5)}`,
+        date: new Date().toISOString().split('T')[0],
+        rawItemId,
+        rawWarehouseId,
+        consumedQuantity: Number(consumedQuantity),
+        consumedUnit,
+        producedItems: producedItems.map((p) => ({
+          ...p,
+          quantity: Number(p.quantity),
+        })),
+        wastePercentage: 1.8,
+        status: 'completed',
+        operator: 'مشرف خط التقطيع والتصنيع',
+        notes: notes || 'أمر تشغيل وتفكيك قياسي',
+      }
+      addManufacturingOrder(newOrder)
+      axToast.success('تم اعتماد إذن التشغيل والتفكيك بنجاح')
     }
 
-    addManufacturingOrder(newOrder)
     setIsCreating(false)
+    setEditingOrder(null)
   }
 
   return (
@@ -117,7 +171,7 @@ export function AX_ManufacturingDisassembly() {
           <div className="flex items-center justify-between border-b border-surface-container pb-3">
             <span className="text-sm font-black text-on-surface flex items-center gap-2">
               <Scissors className="w-4 h-4 text-primary" />
-              إذن تشغيل وتفكيك
+              {editingOrder ? 'تعديل إذن تشغيل وتفكيك' : 'إذن تشغيل وتفكيك جديد'}
             </span>
           </div>
 
@@ -288,16 +342,17 @@ export function AX_ManufacturingDisassembly() {
           <div className="flex justify-end gap-3 pt-2">
             <button
               type="button"
-              onClick={() => setIsCreating(false)}
-              className="px-5 py-2 rounded-full bg-surface-container text-on-surface-variant text-xs font-bold"
+              onClick={handleCancelForm}
+              className="px-5 py-2 rounded-full bg-surface-container text-on-surface-variant text-xs font-bold hover:bg-surface-high transition-colors cursor-pointer"
             >
               إلغاء
             </button>
             <button
               type="submit"
-              className="px-6 py-2 rounded-full bg-primary text-white text-xs font-extrabold shadow-sm hover:bg-primary-dark"
+              className="px-6 py-2 rounded-full bg-primary text-white text-xs font-extrabold shadow-sm hover:bg-primary-dark transition-all cursor-pointer flex items-center gap-1.5"
             >
-              اعتماد أمر التشغيل
+              {editingOrder ? <Check className="w-4 h-4" /> : <Scissors className="w-4 h-4" />}
+              <span>{editingOrder ? 'حفظ التعديلات' : 'اعتماد أمر التشغيل'}</span>
             </button>
           </div>
         </form>
@@ -322,9 +377,27 @@ export function AX_ManufacturingDisassembly() {
                   </span>
                   <span className="text-xs text-on-surface-variant font-medium">{order.date}</span>
                 </div>
-                <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-secondary-container text-secondary-on-container">
-                  <CheckCircle2 className="w-3.5 h-3.5" /> تم التنفيذ واعتماد الأرصدة
-                </span>
+                <div className="flex items-center gap-2">
+                  <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-secondary-container text-secondary-on-container">
+                    <CheckCircle2 className="w-3.5 h-3.5" /> تم التنفيذ واعتماد الأرصدة
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => handleStartEdit(order)}
+                    className="p-1 rounded-full text-on-surface-variant hover:text-primary hover:bg-surface-lowest border border-outline-variant/30 transition-colors cursor-pointer"
+                    title="تعديل إذن التشغيل"
+                  >
+                    <Edit2 className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDeletingOrder(order)}
+                    className="p-1 rounded-full text-on-surface-variant hover:text-error hover:bg-error-container/20 border border-outline-variant/30 transition-colors cursor-pointer"
+                    title="حذف إذن التشغيل"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs pt-2 border-t border-surface-container">
@@ -340,8 +413,13 @@ export function AX_ManufacturingDisassembly() {
                   <span className="text-on-surface-variant text-[11px] block font-bold">المخرجات التامة:</span>
                   <div className="space-y-1">
                     {(order.producedItems || []).map((p, pIdx) => (
-                      <div key={pIdx} className="flex items-center justify-between bg-surface-lowest p-1.5 rounded-xl">
-                        <span className="font-bold text-on-surface">{getItemName(p.itemId)}</span>
+                      <div key={pIdx} className="flex items-center justify-between bg-surface-lowest p-2 rounded-xl border border-outline-variant/20">
+                        <div>
+                          <span className="font-bold text-on-surface block">{getItemName(p.itemId)}</span>
+                          <span className="text-[10px] text-on-surface-variant font-medium">
+                            المستودع: {getWarehouseName(p.targetWarehouseId || order.rawWarehouseId)}
+                          </span>
+                        </div>
                         <span className="font-mono font-black text-primary">
                           {p.quantity} {p.unit}
                         </span>
@@ -354,6 +432,22 @@ export function AX_ManufacturingDisassembly() {
           ))}
         </div>
       </div>
+
+      <AX_ConfirmModal
+        isOpen={Boolean(deletingOrder)}
+        title="حذف إذن التشغيل والتفكيك"
+        message={`هل أنت متأكد من حذف إذن التشغيل (${deletingOrder?.code})؟ سيتم إلغاء قيد العملية من السجلات.`}
+        confirmText="تأكيد حذف الإذن"
+        cancelText="إلغاء"
+        isDestructive={true}
+        requireHold={true}
+        onConfirm={() => {
+          deleteManufacturingOrder(deletingOrder.id)
+          axToast.success('تم حذف إذن التشغيل بنجاح')
+          setDeletingOrder(null)
+        }}
+        onCancel={() => setDeletingOrder(null)}
+      />
     </div>
   )
 }

@@ -17,6 +17,7 @@ import { AX_SupplierOperationsService } from '../../services/AX_SupplierOperatio
 import { showToast } from '../common/AX_Toast'
 import { generateUUID } from '../../utils/AX_UUID'
 import { SUPPLY_TYPES, SUPPLIER_CATEGORIES } from './supplierConstants'
+import { AX_CompanyDatePicker } from '../common/AX_CompanyDatePicker'
 
 export function AX_SupplierModal({ isOpen, onClose, supplier = null, onSuccess }) {
   useBodyScrollLock(isOpen)
@@ -33,6 +34,7 @@ export function AX_SupplierModal({ isOpen, onClose, supplier = null, onSuccess }
   const [commercialRegistration, setCommercialRegistration] = useState('')
   const [openingBalance, setOpeningBalance] = useState('')
   const [openingBalanceType, setOpeningBalanceType] = useState('payable')
+  const [openingBalanceDate, setOpeningBalanceDate] = useState(() => new Date().toISOString().split('T')[0])
   const [currentBalance, setCurrentBalance] = useState('')
   const [notes, setNotes] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -52,6 +54,7 @@ export function AX_SupplierModal({ isOpen, onClose, supplier = null, onSuccess }
       setCommercialRegistration(supplier.commercialRegistration || supplier.commercialRegister || '')
       setOpeningBalance(supplier.openingBalance !== undefined ? String(supplier.openingBalance) : '')
       setOpeningBalanceType(supplier.openingBalanceType || 'payable')
+      setOpeningBalanceDate(supplier.openingBalanceDate || supplier.createdAt?.split('T')[0] || new Date().toISOString().split('T')[0])
       setCurrentBalance(supplier.balance !== undefined ? String(supplier.balance) : '0')
       setNotes(supplier.notes || '')
     } else {
@@ -66,6 +69,7 @@ export function AX_SupplierModal({ isOpen, onClose, supplier = null, onSuccess }
       setCommercialRegistration('')
       setOpeningBalance('')
       setOpeningBalanceType('payable')
+      setOpeningBalanceDate(new Date().toISOString().split('T')[0])
       setCurrentBalance('')
       setNotes('')
     }
@@ -103,6 +107,7 @@ export function AX_SupplierModal({ isOpen, onClose, supplier = null, onSuccess }
           commercialRegistration: commercialRegistration.trim(),
           openingBalance: normalizedOpening,
           openingBalanceType,
+          openingBalanceDate,
           balance: finalBal,
           notes: notes.trim(),
           updatedAt: new Date().toISOString(),
@@ -126,6 +131,7 @@ export function AX_SupplierModal({ isOpen, onClose, supplier = null, onSuccess }
           commercialRegistration: commercialRegistration.trim(),
           openingBalance: normalizedOpening,
           openingBalanceType,
+          openingBalanceDate,
           balance: signedOpening,
           notes: notes.trim(),
           createdAt: new Date().toISOString(),
@@ -320,8 +326,9 @@ export function AX_SupplierModal({ isOpen, onClose, supplier = null, onSuccess }
               الرصيد الافتتاحي والمعاملة المالية
             </label>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div>
+                <label className="text-[11px] font-bold text-on-surface-variant block mb-1">المبلغ الافتتاحي</label>
                 <input
                   type="number"
                   min="0"
@@ -333,29 +340,40 @@ export function AX_SupplierModal({ isOpen, onClose, supplier = null, onSuccess }
                 />
               </div>
 
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => setOpeningBalanceType('payable')}
-                  className={`flex-1 py-2 px-3 rounded-full text-xs font-black transition-all ${
-                    openingBalanceType === 'payable'
-                      ? 'bg-red-800 text-white shadow-xs'
-                      : 'bg-surface-lowest border border-outline-variant/40 text-on-surface-variant'
-                  }`}
-                >
-                  دائن (مستحق له)
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setOpeningBalanceType('receivable')}
-                  className={`flex-1 py-2 px-3 rounded-full text-xs font-black transition-all ${
-                    openingBalanceType === 'receivable'
-                      ? 'bg-emerald-700 text-white shadow-xs'
-                      : 'bg-surface-lowest border border-outline-variant/40 text-on-surface-variant'
-                  }`}
-                >
-                  مدين (مقدم له)
-                </button>
+              <div>
+                <label className="text-[11px] font-bold text-on-surface-variant block mb-1">طبيعة الحساب</label>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setOpeningBalanceType('payable')}
+                    className={`flex-1 py-2 px-3 rounded-full text-xs font-black transition-all ${
+                      openingBalanceType === 'payable'
+                        ? 'bg-red-800 text-white shadow-xs'
+                        : 'bg-surface-lowest border border-outline-variant/40 text-on-surface-variant'
+                    }`}
+                  >
+                    دائن (له)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setOpeningBalanceType('receivable')}
+                    className={`flex-1 py-2 px-3 rounded-full text-xs font-black transition-all ${
+                      openingBalanceType === 'receivable'
+                        ? 'bg-emerald-700 text-white shadow-xs'
+                        : 'bg-surface-lowest border border-outline-variant/40 text-on-surface-variant'
+                    }`}
+                  >
+                    مدين (عليه)
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label className="text-[11px] font-bold text-on-surface-variant block mb-1">تاريخ رصيد أول المدة</label>
+                <AX_CompanyDatePicker
+                  value={openingBalanceDate}
+                  onChange={setOpeningBalanceDate}
+                />
               </div>
             </div>
 

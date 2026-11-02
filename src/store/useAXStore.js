@@ -65,21 +65,13 @@ export const useAXStore = create((set, get) => ({
       if (s) c = JSON.parse(s)
     } catch {}
     return {
-      items: c?.items || initialItems,
-      warehouses: c?.warehouses || initialWarehouses,
-      distributors: c?.distributors || initialDistributors,
-      inventoryStock: c?.inventoryStock || initialInventoryStock,
-      transfers: c?.transfers || initialTransfers,
-      stockAudits: c?.stockAudits || initialStockAudits,
-      treasuryAccounts: c?.treasuryAccounts || initialTreasuryAccounts,
-      cashTransactions: c?.cashTransactions || initialCashTransactions,
-      pendingCashTransfers: c?.pendingCashTransfers || initialPendingCashTransfers,
-      manufacturingOrders: c?.manufacturingOrders || initialManufacturingOrders,
-      invoices: c?.invoices || initialInvoices,
-      clients: c?.clients || initialClients,
-      suppliers: c?.suppliers || initialSuppliers,
-      salesReps: c?.salesReps || initialSalesReps,
-      salesRepLedger: c?.salesRepLedger || initialSalesRepLedger,
+      items: c?.items || initialItems, warehouses: c?.warehouses || initialWarehouses,
+      distributors: c?.distributors || initialDistributors, inventoryStock: c?.inventoryStock || initialInventoryStock,
+      transfers: c?.transfers || initialTransfers, stockAudits: c?.stockAudits || initialStockAudits,
+      treasuryAccounts: c?.treasuryAccounts || initialTreasuryAccounts, cashTransactions: c?.cashTransactions || initialCashTransactions,
+      pendingCashTransfers: c?.pendingCashTransfers || initialPendingCashTransfers, manufacturingOrders: c?.manufacturingOrders || initialManufacturingOrders,
+      invoices: c?.invoices || initialInvoices, clients: c?.clients || initialClients, suppliers: c?.suppliers || initialSuppliers,
+      salesReps: c?.salesReps || initialSalesReps, salesRepLedger: c?.salesRepLedger || initialSalesRepLedger,
       notifications: c?.notifications || initialNotifications,
     }
   })(),
@@ -94,18 +86,7 @@ export const useAXStore = create((set, get) => ({
     set((state) => ({
       ...state,
       ...payload,
-      ...(payload?.clients ? { clients: payload.clients } : {}),
-      ...(payload?.suppliers ? { suppliers: payload.suppliers } : {}),
-      ...(payload?.salesReps ? { salesReps: payload.salesReps } : {}),
-      ...(payload?.salesRepLedger ? { salesRepLedger: payload.salesRepLedger } : {}),
-      ...(payload?.manufacturingOrders ? { manufacturingOrders: payload.manufacturingOrders } : {}),
-      ...(payload?.pendingCashTransfers || payload?.cashTransfers
-        ? { pendingCashTransfers: payload.pendingCashTransfers || payload.cashTransfers }
-        : {}),
-      ...(payload?.staffInvites ? { staffInvites: payload.staffInvites } : {}),
-      ...(payload?.categories ? { categories: payload.categories } : {}),
-      ...(payload?.subCategories ? { subCategories: payload.subCategories } : {}),
-      ...(payload?.secondaryCategories ? { secondaryCategories: payload.secondaryCategories } : {}),
+      ...(payload?.cashTransfers && !payload?.pendingCashTransfers ? { pendingCashTransfers: payload.cashTransfers } : {}),
     })),
 
   markAllNotificationsRead: () => {
@@ -311,6 +292,22 @@ export const useAXStore = create((set, get) => ({
       return { treasuryAccounts: nextTr }
     })
   },
+  updateTreasuryAccount: (account) => {
+    AX_OperationsService.updateTreasuryAccountInDB(account, get().profile)
+    set((state) => {
+      const nextTr = state.treasuryAccounts.map((t) => (t.id === account.id ? { ...t, ...account } : t))
+      updateLocalCachePayload('treasuryAccounts', nextTr)
+      return { treasuryAccounts: nextTr }
+    })
+  },
+  deleteTreasuryAccount: (id) => {
+    AX_OperationsService.deleteTreasuryAccountInDB(id, get().profile)
+    set((state) => {
+      const nextTr = state.treasuryAccounts.filter((t) => t.id !== id)
+      updateLocalCachePayload('treasuryAccounts', nextTr)
+      return { treasuryAccounts: nextTr }
+    })
+  },
 
   confirmTransfer: (transferId) => set((state) => {
     const trf = state.transfers.find((t) => t.id === transferId)
@@ -375,6 +372,16 @@ export const useAXStore = create((set, get) => ({
         inventoryStock: updatedStock,
       }
     })
+  },
+
+  updateManufacturingOrder: (order) => {
+    AX_OperationsService.updateManufacturingOrderInDB(order, get().profile)
+    set((state) => ({ manufacturingOrders: state.manufacturingOrders.map((m) => (m.id === order.id ? { ...m, ...order } : m)) }))
+  },
+
+  deleteManufacturingOrder: (orderId) => {
+    AX_OperationsService.deleteManufacturingOrderInDB(orderId, get().profile)
+    set((state) => ({ manufacturingOrders: state.manufacturingOrders.filter((m) => m.id !== orderId) }))
   },
 
   addCashTransaction: (tx) => {
@@ -454,7 +461,6 @@ export const useAXStore = create((set, get) => ({
     try { localStorage.setItem('ax_staff_employees', JSON.stringify(updated)) } catch {}
     return { employees: updated }
   }),
-
   addStaffInvite: async (invite) => {
     const res = await AX_StaffOperationsService.addStaffInviteInDB(invite)
     const saved = res?.data || invite
@@ -465,7 +471,6 @@ export const useAXStore = create((set, get) => ({
     })
     return res
   },
-
   revokeStaffInvite: async (inviteId) => {
     await AX_StaffOperationsService.revokeStaffInviteInDB(inviteId)
     set((state) => {
@@ -474,7 +479,6 @@ export const useAXStore = create((set, get) => ({
       return { staffInvites: updated }
     })
   },
-
   updateStaffPermissions: async (userId, updates) => {
     await AX_StaffOperationsService.updateStaffPermissionsInDB(userId, updates)
     set((state) => {

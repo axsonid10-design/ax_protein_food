@@ -35,6 +35,7 @@ export function AX_CustomerModal({ isOpen, onClose, customer = null, onSuccess }
   const [isAddingCustomSub, setIsAddingCustomSub] = useState(false)
   const [openingBalance, setOpeningBalance] = useState('')
   const [openingBalanceType, setOpeningBalanceType] = useState('debit')
+  const [openingBalanceDate, setOpeningBalanceDate] = useState(() => new Date().toISOString().split('T')[0])
   const [currentBalance, setCurrentBalance] = useState('')
   const [notes, setNotes] = useState('')
   const [attachments, setAttachments] = useState([])
@@ -59,6 +60,7 @@ export function AX_CustomerModal({ isOpen, onClose, customer = null, onSuccess }
       setSubCategory(customer.subCategory || 'مشويات وكباب')
       setOpeningBalance(customer.openingBalance !== undefined ? String(customer.openingBalance) : '')
       setOpeningBalanceType(customer.openingBalanceType || 'debit')
+      setOpeningBalanceDate(customer.openingBalanceDate || customer.createdAt?.split('T')[0] || new Date().toISOString().split('T')[0])
       setCurrentBalance(customer.balance !== undefined ? String(customer.balance) : '0')
       setNotes(customer.notes || '')
       setAttachments(customer.attachments || [])
@@ -79,6 +81,7 @@ export function AX_CustomerModal({ isOpen, onClose, customer = null, onSuccess }
       setIsAddingCustomSub(false)
       setOpeningBalance('')
       setOpeningBalanceType('debit')
+      setOpeningBalanceDate(new Date().toISOString().split('T')[0])
       setCurrentBalance('')
       setNotes('')
       setAttachments([])
@@ -149,6 +152,7 @@ export function AX_CustomerModal({ isOpen, onClose, customer = null, onSuccess }
           subCategory: finalSub || '',
           openingBalance: normalizedOpening,
           openingBalanceType,
+          openingBalanceDate,
           balance: finalBal,
           notes: notes.trim(),
           attachments,
@@ -175,6 +179,7 @@ export function AX_CustomerModal({ isOpen, onClose, customer = null, onSuccess }
           subCategory: finalSub || '',
           openingBalance: normalizedOpening,
           openingBalanceType,
+          openingBalanceDate,
           balance: signedOpening,
           notes: notes.trim(),
           attachments,
@@ -244,6 +249,7 @@ export function AX_CustomerModal({ isOpen, onClose, customer = null, onSuccess }
             isAddingCustomSub={isAddingCustomSub} setIsAddingCustomSub={setIsAddingCustomSub}
             openingBalance={openingBalance} setOpeningBalance={setOpeningBalance}
             openingBalanceType={openingBalanceType} setOpeningBalanceType={setOpeningBalanceType}
+            openingBalanceDate={openingBalanceDate} setOpeningBalanceDate={setOpeningBalanceDate}
             currentBalance={currentBalance} setCurrentBalance={setCurrentBalance}
             isEditMode={isEditMode}
             attachments={attachments} isUploading={isUploading} handleFileUpload={handleFileUpload} handleRemoveAttachment={handleRemoveAttachment}
