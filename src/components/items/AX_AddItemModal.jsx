@@ -93,16 +93,16 @@ export function AX_AddItemModal({
       setErrorMsg(null)
       setIsQuickWarehouseOpen(false)
       setQuickWhName('')
-      setQuickWhType('main')
+      setQuickWhType('cold_store')
       setQuickWhManager('')
     }
   }, [isOpen])
 
   useEffect(() => {
-    const parts = [subCategory, secondaryCategory].filter(Boolean)
+    const parts = [primaryCategory, subCategory, secondaryCategory].filter(Boolean)
     const suggested = parts.join(' ').trim()
     if (suggested) setCompositeName(suggested)
-  }, [subCategory, secondaryCategory])
+  }, [primaryCategory, subCategory, secondaryCategory])
 
   const availableSubs = subCategories[primaryCategory] || []
 
@@ -117,16 +117,17 @@ export function AX_AddItemModal({
   const handleSaveQuickWarehouse = () => {
     const trimmed = quickWhName.trim()
     if (!trimmed) return
+    const VALID_WH_TYPES = ['cold_store', 'raw_materials', 'processing', 'finished_goods', 'van']
     const newWh = {
       id: generateUUID(),
       name: trimmed,
-      type: quickWhType,
+      type: VALID_WH_TYPES.includes(quickWhType) ? quickWhType : 'cold_store',
       manager: quickWhManager.trim() || 'المشرف المسؤول',
     }
     addWarehouse?.(newWh)
     setTargetWarehouseId(newWh.id)
     setQuickWhName('')
-    setQuickWhType('main')
+    setQuickWhType('cold_store')
     setQuickWhManager('')
     setIsQuickWarehouseOpen(false)
   }
@@ -145,12 +146,7 @@ export function AX_AddItemModal({
       return
     }
 
-    if (Number(grainsPerPiece) > 0 && !grainSellPrice && Number(grainSellPrice) !== 0) {
-      setErrorMsg('يرجى تحديد سعر بيع الحبة')
-      return
-    }
-
-    const finalName = compositeName.trim() || [subCategory.trim(), secondaryCategory?.trim()].filter(Boolean).join(' ')
+    const finalName = compositeName.trim() || [primaryCategory, subCategory.trim(), secondaryCategory?.trim()].filter(Boolean).join(' ')
     const generatedId = generateUUID()
 
     const newItem = {
@@ -160,7 +156,7 @@ export function AX_AddItemModal({
       secondaryCategory: secondaryCategory?.trim() || null,
       compositeName: finalName,
       unitType,
-      units: [unitType, Number(piecesPerCarton) > 0 ? 'قطعة' : null, Number(grainsPerPiece) > 0 ? 'حبة' : null, 'كيلو'].filter(Boolean),
+      units: [unitType, Number(piecesPerCarton) > 0 ? 'قطعة' : null, 'كيلو'].filter(Boolean),
       weightPerCarton: unitType === 'كرتونة' ? Number(weightPerCarton) || 10 : 1,
       piecesPerCarton: Number(piecesPerCarton) || null,
       grainsPerPiece: Number(grainsPerPiece) || null,
@@ -428,9 +424,9 @@ export function AX_AddItemModal({
                 <label className="block text-on-surface-variant mb-1">نوع المخزن:</label>
                 <div className="grid grid-cols-3 gap-1.5">
                   {[
-                    { id: 'main', label: 'رئيسي' },
-                    { id: 'cold_store', label: 'تبريد' },
-                    { id: 'branch', label: 'فرع' },
+                    { id: 'cold_store', label: 'تجميد وحفظ' },
+                    { id: 'raw_materials', label: 'خامات' },
+                    { id: 'finished_goods', label: 'مصنعات' },
                   ].map((t) => (
                     <button
                       key={t.id}

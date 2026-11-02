@@ -1,5 +1,6 @@
 import React from 'react'
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock'
+import { getItemDisplayName } from '../../utils/AX_ItemNameHelper'
 
 export function AX_InvoiceDetailsModal({ invoice, onClose }) {
   useBodyScrollLock(Boolean(invoice))
@@ -15,6 +16,32 @@ export function AX_InvoiceDetailsModal({ invoice, onClose }) {
   const status = invoice.status || (remainingAmount > 0 ? (paidAmount > 0 ? 'partial' : 'unpaid') : 'paid')
   const paymentTerms = invoice.paymentTerms || (status === 'paid' ? 'مدفوع كلي' : status === 'partial' ? 'مدفوع جزئي' : 'غير مدفوع')
 
+  const getTypeLabel = (type) => {
+    switch (type) {
+      case 'sale_return':
+        return 'مردود مبيعات'
+      case 'purchase_return':
+        return 'مردود مشتريات'
+      case 'purchase':
+        return 'فاتورة مشتريات'
+      default:
+        return 'فاتورة بيع'
+    }
+  }
+
+  const getTypeStyle = (type) => {
+    switch (type) {
+      case 'sale_return':
+        return 'bg-purple-500/10 text-purple-700 border-purple-500/30'
+      case 'purchase_return':
+        return 'bg-amber-500/10 text-amber-700 border-amber-500/30'
+      case 'purchase':
+        return 'bg-secondary/10 text-secondary border-secondary/30'
+      default:
+        return 'bg-primary/10 text-primary border-primary/30'
+    }
+  }
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in overscroll-contain">
       <div className="bg-surface-lowest border border-outline-variant/30 rounded-3xl p-6 shadow-level3 max-w-xl w-full space-y-4 max-h-[90vh] overflow-y-auto overscroll-contain">
@@ -23,6 +50,9 @@ export function AX_InvoiceDetailsModal({ invoice, onClose }) {
             <div className="flex items-center gap-2">
               <span className="font-mono text-xs font-bold text-primary">
                 {invoice.code}
+              </span>
+              <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black border ${getTypeStyle(invoice.type)}`}>
+                {getTypeLabel(invoice.type)}
               </span>
               <span
                 className={`px-2.5 py-0.5 rounded-full text-[10px] font-black ${
@@ -56,7 +86,7 @@ export function AX_InvoiceDetailsModal({ invoice, onClose }) {
               key={i}
               className="flex items-center justify-between p-2.5 rounded-xl bg-surface-low text-xs font-bold"
             >
-              <span>{item.compositeName || 'صنف'}</span>
+              <span>{getItemDisplayName(item)}</span>
               <span className="font-mono">
                 {item.quantity} {item.unit} × {item.price} = {(Number(item.total) || 0).toLocaleString('en-US')} ج.م
               </span>

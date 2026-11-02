@@ -62,6 +62,8 @@ export default function App() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'ax_inventory_stock' }, syncDatabase)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'ax_manufacturing_orders' }, syncDatabase)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'ax_categories' }, syncDatabase)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'ax_treasuries' }, syncDatabase)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'ax_cash_transactions' }, syncDatabase)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'ax_notifications' }, syncDatabase)
       .subscribe()
 

@@ -1,4 +1,5 @@
 import { supabase } from './supabaseClient.js'
+import { offlineDB } from './offlineDB.js'
 import { generateUUID } from '../utils/AX_UUID.js'
 import { AX_StaffOperationsService } from './AX_StaffOperationsService.js'
 import { AX_CategoryOperationsService } from './AX_CategoryOperationsService.js'
@@ -13,10 +14,15 @@ export const AX_OperationsService = {
     if (!supabase || typeof supabase.from !== 'function' || !inv) return { success: false }
     try {
       const invoiceId = inv.id || generateUUID()
+      const isSaleReturn = inv.type === 'sale_return'
+      const isPurchaseReturn = inv.type === 'purchase_return'
+      const dbType = (isSaleReturn || inv.type === 'sale') ? 'sale' : 'purchase'
+      const defaultTerms = isSaleReturn ? 'مردود مبيعات' : isPurchaseReturn ? 'مردود مشتريات' : (Number(inv.remainingAmount || 0) > 0 ? 'مدفوع جزئي' : 'مدفوع كلي')
+
       const invoiceRow = {
         id: invoiceId,
-        code: inv.code || `INV-${Date.now().toString().slice(-5)}`,
-        type: inv.type || 'sale',
+        code: inv.code || (isSaleReturn ? `RET-SALE-${Date.now().toString().slice(-4)}` : isPurchaseReturn ? `RET-PURCHASE-${Date.now().toString().slice(-4)}` : `INV-${Date.now().toString().slice(-5)}`),
+        type: dbType,
         party_name: inv.partyName || inv.party_name || '',
         warehouse_id: inv.warehouseId || inv.warehouse_id || null,
         date: inv.date || new Date().toISOString().split('T')[0],
@@ -26,8 +32,8 @@ export const AX_OperationsService = {
         total: Number(inv.total || 0),
         paid_amount: Number(inv.paidAmount ?? inv.paid_amount ?? 0),
         remaining_amount: Number(inv.remainingAmount ?? inv.remaining_amount ?? 0),
-        status: inv.status || (Number(inv.remainingAmount || 0) > 0 ? (Number(inv.paidAmount || 0) > 0 ? 'partial' : 'unpaid') : 'paid'),
-        payment_terms: inv.paymentTerms || inv.payment_terms || (Number(inv.remainingAmount || 0) > 0 ? 'مدفوع جزئي' : 'مدفوع كلي'),
+        status: isSaleReturn ? 'sale_return' : isPurchaseReturn ? 'purchase_return' : (inv.status || (Number(inv.remainingAmount || 0) > 0 ? (Number(inv.paidAmount || 0) > 0 ? 'partial' : 'unpaid') : 'paid')),
+        payment_terms: inv.paymentTerms || inv.payment_terms || defaultTerms,
         items: inv.items || [],
       }
       const { error: invErr } = await supabase.from('ax_invoices').insert(invoiceRow)
@@ -39,11 +45,11 @@ export const AX_OperationsService = {
           const qty = Number(item.quantity || 0)
           if (!itemId || qty <= 0) continue
           const { data: stockRow } = await supabase.from('ax_inventory_stock').select('*').eq('warehouse_id', invoiceRow.warehouse_id).eq('item_id', itemId).maybeSingle()
+          const delta = isSaleReturn ? qty : (isPurchaseReturn ? -qty : (dbType === 'sale' ? -qty : qty))
           if (stockRow) {
-            const delta = invoiceRow.type === 'sale' ? -qty : qty
             const newQty = Math.max(0, Number(stockRow.quantity || 0) + delta)
             await supabase.from('ax_inventory_stock').update({ quantity: newQty, updated_at: new Date().toISOString() }).eq('id', stockRow.id)
-          } else if (invoiceRow.type !== 'sale') {
+          } else if (delta > 0) {
             await supabase.from('ax_inventory_stock').insert({ id: generateUUID(), warehouse_id: invoiceRow.warehouse_id, item_id: itemId, quantity: qty, unit: item.unit || 'كرتونة' })
           }
         }
@@ -55,37 +61,48 @@ export const AX_OperationsService = {
           const { data: firstTr } = await supabase.from('ax_treasuries').select('id').order('created_at').limit(1).maybeSingle()
           tId = firstTr?.id || null
         }
-        const txCode = (invoiceRow.type === 'sale' ? 'REC-' : 'PAY-') + Date.now().toString().slice(-4)
+        const isCashOut = (dbType === 'purchase' && !isPurchaseReturn) || isSaleReturn
+        const txCode = (isCashOut ? 'PAY-' : 'REC-') + Date.now().toString().slice(-4)
+        const txNotes = isSaleReturn
+          ? `رد نقدية للعميل - مردود مبيعات ${invoiceRow.code}`
+          : isPurchaseReturn
+          ? `استرداد نقدية من المورد - مردود مشتريات ${invoiceRow.code}`
+          : dbType === 'sale'
+          ? `تحصيل نقدي - فاتورة مبيعات ${invoiceRow.code}`
+          : `سداد نقدي - فاتورة مشتريات ${invoiceRow.code}`
+
         const txRow = {
           id: generateUUID(),
           code: txCode,
-          type: invoiceRow.type === 'sale' ? 'client_receipt' : 'supplier_payment',
-          party_type: invoiceRow.type === 'sale' ? 'client' : 'supplier',
+          type: isCashOut ? 'supplier_payment' : 'client_receipt',
+          party_type: isSaleReturn || dbType === 'sale' ? 'client' : 'supplier',
           party_id: null,
           party_name: invoiceRow.party_name,
           amount: invoiceRow.paid_amount,
           treasury_id: tId,
           date: invoiceRow.date,
-          notes: invoiceRow.type === 'sale' ? `تحصيل نقدي - فاتورة مبيعات ${invoiceRow.code}` : `سداد نقدي - فاتورة مشتريات ${invoiceRow.code}`,
+          notes: txNotes,
         }
         await supabase.from('ax_cash_transactions').insert(txRow)
         if (tId) {
           const { data: tr } = await supabase.from('ax_treasuries').select('*').eq('id', tId).maybeSingle()
           if (tr) {
-            const delta = invoiceRow.type === 'sale' ? invoiceRow.paid_amount : -invoiceRow.paid_amount
-            await supabase.from('ax_treasuries').update({ balance: Number(tr.balance || 0) + delta }).eq('id', tr.id)
+            const trDelta = isCashOut ? -invoiceRow.paid_amount : invoiceRow.paid_amount
+            await supabase.from('ax_treasuries').update({ balance: Number(tr.balance || 0) + trDelta }).eq('id', tr.id)
           }
         }
       }
 
       const rem = Number(invoiceRow.remaining_amount || 0)
       if (rem > 0 && invoiceRow.party_name) {
-        const targetTable = invoiceRow.type === 'sale' ? 'ax_clients' : 'ax_suppliers'
+        const targetTable = (isSaleReturn || dbType === 'sale') ? 'ax_clients' : 'ax_suppliers'
         const { data: party } = await supabase.from(targetTable).select('*').eq('name', invoiceRow.party_name).maybeSingle()
         if (party) {
-          await supabase.from(targetTable).update({ balance: Number(party.balance || 0) + rem }).eq('id', party.id)
+          const partyDelta = (isSaleReturn || isPurchaseReturn) ? -rem : rem
+          await supabase.from(targetTable).update({ balance: Number(party.balance || 0) + partyDelta }).eq('id', party.id)
         } else {
-          await supabase.from(targetTable).insert({ id: generateUUID(), name: invoiceRow.party_name, phone: '', address: 'بيانات ناقصة', balance: rem })
+          const initialBal = (isSaleReturn || isPurchaseReturn) ? -rem : rem
+          await supabase.from(targetTable).insert({ id: generateUUID(), name: invoiceRow.party_name, phone: '', address: 'بيانات ناقصة', balance: initialBal })
         }
       }
 
@@ -98,20 +115,24 @@ export const AX_OperationsService = {
 
   addCashTransactionInDB: async (tx, userProfile = null) => {
     if (!supabase || typeof supabase.from !== 'function' || !tx) return { success: false }
+    const isPayroll = tx.type === 'payroll' || tx.partyType === 'employee'
+    const isExpense = tx.type === 'expense' || isPayroll
+    const dbType = isExpense ? 'expense' : (tx.type === 'supplier_payment' ? 'supplier_payment' : 'client_receipt')
+    const dbPartyType = isPayroll ? 'employee' : (tx.partyType || (dbType === 'client_receipt' ? 'client' : (dbType === 'supplier_payment' ? 'supplier' : 'expense')))
+    const txId = tx.id || generateUUID()
+    const txRow = {
+      id: txId,
+      code: tx.code || (isPayroll ? `WAGE-${Date.now().toString().slice(-4)}` : `CTX-${Date.now().toString().slice(-4)}`),
+      type: dbType,
+      party_type: dbPartyType,
+      party_id: tx.partyId || null,
+      party_name: tx.partyName || tx.party_name || '',
+      amount: Number(tx.amount || 0),
+      treasury_id: tx.treasuryId || tx.treasury_id || null,
+      date: tx.date || new Date().toISOString().split('T')[0],
+      notes: tx.notes || (isPayroll ? `[أجور ومرتبات] ${tx.partyName || ''}` : null),
+    }
     try {
-      const txId = tx.id || generateUUID()
-      const txRow = {
-        id: txId,
-        code: tx.code || `CTX-${Date.now().toString().slice(-4)}`,
-        type: tx.type || 'client_receipt',
-        party_type: tx.partyType || (tx.type === 'client_receipt' ? 'client' : 'supplier'),
-        party_id: tx.partyId || null,
-        party_name: tx.partyName || tx.party_name || '',
-        amount: Number(tx.amount || 0),
-        treasury_id: tx.treasuryId || tx.treasury_id || null,
-        date: tx.date || new Date().toISOString().split('T')[0],
-        notes: tx.notes || null,
-      }
       const { error } = await supabase.from('ax_cash_transactions').insert(txRow)
       if (error) throw error
 
@@ -123,8 +144,8 @@ export const AX_OperationsService = {
         }
       }
 
-      if (txRow.party_name && txRow.amount > 0) {
-        const targetTable = txRow.type === 'client_receipt' ? 'ax_clients' : 'ax_suppliers'
+      if (txRow.party_name && txRow.amount > 0 && (dbType === 'client_receipt' || dbType === 'supplier_payment')) {
+        const targetTable = dbType === 'client_receipt' ? 'ax_clients' : 'ax_suppliers'
         const { data: party } = await supabase.from(targetTable).select('*').eq('name', txRow.party_name).maybeSingle()
         if (party) {
           const newBal = Math.max(0, Number(party.balance || 0) - txRow.amount)
@@ -135,7 +156,8 @@ export const AX_OperationsService = {
       try { await supabase.from('ax_activity_logs').insert({ id: generateUUID(), table_name: 'ax_cash_transactions', action: 'INSERT', record_id: txId, new_data: txRow, user_id: userProfile?.id || null }) } catch {}
       return { success: true }
     } catch (err) {
-      return { success: false, error: err.message }
+      try { await offlineDB.enqueue('ax_cash_transactions', 'insert', txRow) } catch {}
+      return { success: false, error: err.message, enqueued: true }
     }
   },
 
@@ -195,23 +217,28 @@ export const AX_OperationsService = {
 
   addTreasuryAccountInDB: async (account, userProfile = null) => {
     if (!supabase || typeof supabase.from !== 'function' || !account?.name) return { success: false }
+    const VALID_TREASURY_TYPES = ['cash', 'bank', 'wallet', 'instapay', 'van_cash']
+    const accId = account.id || generateUUID()
+    const accType = VALID_TREASURY_TYPES.includes(account.type) ? account.type : 'cash'
+    const row = { id: accId, name: account.name.trim(), type: accType, balance: Number(account.balance || 0) }
     try {
-      const accId = account.id || generateUUID()
-      const row = { id: accId, name: account.name.trim(), type: account.type || 'cash', balance: Number(account.balance || 0) }
       const { error } = await supabase.from('ax_treasuries').insert(row)
       if (error) throw error
       try { await supabase.from('ax_activity_logs').insert({ id: generateUUID(), table_name: 'ax_treasuries', action: 'INSERT', record_id: accId, new_data: row, user_id: userProfile?.id || null }) } catch {}
       return { success: true }
     } catch (err) {
-      return { success: false, error: err.message }
+      try { await offlineDB.enqueue('ax_treasuries', 'insert', row) } catch {}
+      return { success: false, error: err.message, enqueued: true }
     }
   },
 
   addWarehouseInDB: async (warehouse, userProfile = null) => {
     if (!supabase || typeof supabase.from !== 'function' || !warehouse?.name) return { success: false }
+    const VALID_WH_TYPES = ['cold_store', 'raw_materials', 'processing', 'finished_goods', 'van']
+    const whId = warehouse.id || generateUUID()
+    const whType = VALID_WH_TYPES.includes(warehouse.type) ? warehouse.type : 'cold_store'
+    const row = { id: whId, name: warehouse.name.trim(), type: whType, manager: warehouse.manager || null, phone: warehouse.phone || null }
     try {
-      const whId = warehouse.id || generateUUID()
-      const row = { id: whId, name: warehouse.name.trim(), type: warehouse.type || 'branch', manager: warehouse.manager || null, phone: warehouse.phone || null }
       const { error } = await supabase.from('ax_warehouses').insert(row)
       if (error) throw error
       const creatorName = userProfile?.name || userProfile?.full_name || 'مدير المنظومة'
@@ -224,14 +251,17 @@ export const AX_OperationsService = {
       try { await supabase.from('ax_activity_logs').insert({ id: generateUUID(), table_name: 'ax_warehouses', action: 'INSERT', record_id: whId, new_data: row, user_id: userProfile?.id || null }) } catch {}
       return { success: true }
     } catch (err) {
-      return { success: false, error: err.message }
+      try { await offlineDB.enqueue('ax_warehouses', 'insert', row) } catch {}
+      return { success: false, error: err.message, enqueued: true }
     }
   },
 
   editWarehouseInDB: async (warehouse, userProfile = null) => {
     if (!supabase || typeof supabase.from !== 'function' || !warehouse?.id) return { success: false }
     try {
-      const updateData = { name: warehouse.name.trim(), type: warehouse.type || 'branch', manager: warehouse.manager || null, phone: warehouse.phone || null }
+      const VALID_WH_TYPES = ['cold_store', 'raw_materials', 'processing', 'finished_goods', 'van']
+      const whType = VALID_WH_TYPES.includes(warehouse.type) ? warehouse.type : 'cold_store'
+      const updateData = { name: warehouse.name.trim(), type: whType, manager: warehouse.manager || null, phone: warehouse.phone || null }
       const { error } = await supabase.from('ax_warehouses').update(updateData).eq('id', warehouse.id)
       if (error) throw error
       const editorName = userProfile?.name || userProfile?.full_name || 'مدير المنظومة'

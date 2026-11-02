@@ -1,9 +1,12 @@
 import React, { useState, useEffect } from 'react'
-import { Plus, AlertTriangle } from 'lucide-react'
+import { Plus, AlertTriangle, RotateCcw } from 'lucide-react'
 import { AX_SearchableSelect } from '../common/AX_SearchableSelect'
 import { AX_InvoiceItemsEditor } from './AX_InvoiceItemsEditor'
+import { AX_CustomerModal } from '../customers/AX_CustomerModal'
+import { AX_SupplierModal } from '../suppliers/AX_SupplierModal'
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock'
 import { generateUUID } from '../../utils/AX_UUID'
+import { getItemDisplayName } from '../../utils/AX_ItemNameHelper'
 
 export function AX_CreateInvoiceModal({
   isOpen,
@@ -31,6 +34,8 @@ export function AX_CreateInvoiceModal({
   const [paymentStatus, setPaymentStatus] = useState('unpaid')
   const [paidInput, setPaidInput] = useState('')
   const [selectedTreasuryId, setSelectedTreasuryId] = useState(treasuryAccounts[0]?.id || '')
+  const [showCustomerModal, setShowCustomerModal] = useState(false)
+  const [showSupplierModal, setShowSupplierModal] = useState(false)
 
   const [draftItem, setDraftItem] = useState({
     itemId: '',
@@ -39,6 +44,9 @@ export function AX_CreateInvoiceModal({
   })
 
   const [expandedRowIndex, setExpandedRowIndex] = useState(null)
+
+  const isSaleType = invForm.type === 'sale' || invForm.type === 'sale_return'
+  const partyList = isSaleType ? clients : suppliers
 
   const selectedItemIds = new Set(invForm.items.map((row) => row.itemId))
   const availableItems = items.filter((it) => !selectedItemIds.has(it.id))
@@ -61,6 +69,8 @@ export function AX_CreateInvoiceModal({
       setPaidInput('')
       setSelectedTreasuryId(treasuryAccounts[0]?.id || '')
       setExpandedRowIndex(null)
+      setShowCustomerModal(false)
+      setShowSupplierModal(false)
     }
   }, [isOpen])
 
@@ -71,33 +81,27 @@ export function AX_CreateInvoiceModal({
         setDraftItem({
           itemId: next.id,
           quantity: 1,
-          price: invForm.type === 'sale' ? (next.sellPrice ?? 0) : (next.buyPrice ?? 0),
+          price: isSaleType ? (next.sellPrice ?? 0) : (next.buyPrice ?? 0),
         })
       } else {
-        setDraftItem({
-          itemId: '',
-          quantity: 1,
-          price: 0,
-        })
+        setDraftItem({ itemId: '', quantity: 1, price: 0 })
       }
     }
-  }, [invForm.items, availableItems, invForm.type])
+  }, [invForm.items, availableItems, isSaleType])
 
   if (!isOpen) return null
 
-  const isPartyInList = (name) => {
-    const list = invForm.type === 'sale' ? clients : suppliers
-    return list.some((p) => p.name === name)
-  }
+  const isPartyInList = (name) => partyList.some((p) => p.name === name)
 
   const handleTypeChange = (type) => {
-    const list = type === 'sale' ? clients : suppliers
+    const isNewTypeSale = type === 'sale' || type === 'sale_return'
+    const list = isNewTypeSale ? clients : suppliers
     setInvForm((prev) => ({ ...prev, type, partyName: list[0]?.name || '', isCustomParty: false }))
     const curItem = items.find((i) => i.id === draftItem.itemId)
     if (curItem) {
       setDraftItem((prev) => ({
         ...prev,
-        price: type === 'sale' ? (curItem.sellPrice ?? 0) : (curItem.buyPrice ?? 0),
+        price: isNewTypeSale ? (curItem.sellPrice ?? 0) : (curItem.buyPrice ?? 0),
       }))
     }
   }
@@ -106,7 +110,7 @@ export function AX_CreateInvoiceModal({
     const updated = { ...draftItem, [field]: value }
     if (field === 'itemId') {
       const selected = items.find((i) => i.id === value)
-      if (selected) updated.price = invForm.type === 'sale' ? (selected.sellPrice ?? 0) : (selected.buyPrice ?? 0)
+      if (selected) updated.price = isSaleType ? (selected.sellPrice ?? 0) : (selected.buyPrice ?? 0)
     }
     setDraftItem(updated)
   }
@@ -121,8 +125,15 @@ export function AX_CreateInvoiceModal({
     setDraftItem({
       itemId: next?.id || '',
       quantity: 1,
-      price: next ? (invForm.type === 'sale' ? (next.sellPrice ?? 0) : (next.buyPrice ?? 0)) : 0,
+      price: next ? (isSaleType ? (next.sellPrice ?? 0) : (next.buyPrice ?? 0)) : 0,
     })
+  }
+
+  const handleDirectAddItem = (newItem) => {
+    setInvForm((prev) => ({
+      ...prev,
+      items: [newItem, ...prev.items],
+    }))
   }
 
   const handleRemoveItem = (idx) => {
@@ -157,11 +168,22 @@ export function AX_CreateInvoiceModal({
     if (paymentStatus === 'paid') paidAmt = tot
     else if (paymentStatus === 'partial') paidAmt = Math.min(tot, Math.max(0, Number(paidInput) || 0))
     const remAmt = Math.max(0, tot - paidAmt)
-    const paymentTerms = paymentStatus === 'paid' ? 'مدفوع كلي' : paymentStatus === 'partial' ? 'مدفوع جزئي' : 'غير مدفوع'
+
+    let paymentTerms = paymentStatus === 'paid' ? 'مدفوع كلي' : paymentStatus === 'partial' ? 'مدفوع جزئي' : 'غير مدفوع'
+    if (invForm.type === 'sale_return') paymentTerms = 'مردود مبيعات'
+    if (invForm.type === 'purchase_return') paymentTerms = 'مردود مشتريات'
+
+    const codePrefix = invForm.type === 'sale_return'
+      ? 'RET-SALE'
+      : invForm.type === 'purchase_return'
+      ? 'RET-PUR'
+      : invForm.type === 'purchase'
+      ? 'PUR'
+      : 'INV'
 
     const newInv = {
       id: generateUUID(),
-      code: `INV-${Date.now().toString().slice(-5)}`,
+      code: `${codePrefix}-${Date.now().toString().slice(-5)}`,
       type: invForm.type,
       partyName,
       isIncompleteData: !isPartyInList(partyName),
@@ -171,9 +193,9 @@ export function AX_CreateInvoiceModal({
         const itemObj = items.find((i) => i.id === it.itemId)
         return {
           itemId: it.itemId,
-          compositeName: itemObj?.compositeName || '',
+          compositeName: getItemDisplayName(itemObj || it),
           quantity: Number(it.quantity) || 0,
-          unit: itemObj?.unitType || 'كرتونة',
+          unit: itemObj?.unitType || it.unit || 'كرتونة',
           price: Number(it.price) || 0,
           total: (Number(it.quantity) || 0) * (Number(it.price) || 0),
         }
@@ -193,42 +215,40 @@ export function AX_CreateInvoiceModal({
     onClose()
   }
 
-  const partyList = invForm.type === 'sale' ? clients : suppliers
   const isIncomplete = invForm.partyName && !isPartyInList(invForm.partyName)
   const currentTotal = computeTotal()
   const currentPaid = paymentStatus === 'paid' ? currentTotal : paymentStatus === 'partial' ? Math.min(currentTotal, Number(paidInput) || 0) : 0
   const currentRemaining = Math.max(0, currentTotal - currentPaid)
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in overscroll-contain">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-sm animate-in fade-in overscroll-contain">
       <form
         onSubmit={handleSubmit}
-        className="bg-surface-lowest border-2 border-secondary/30 rounded-3xl p-6 shadow-level3 max-w-2xl w-full space-y-4 max-h-[90vh] overflow-y-auto overscroll-contain"
+        className="bg-surface-lowest border-2 border-secondary/30 rounded-3xl p-5 sm:p-6 shadow-level3 max-w-3xl w-full space-y-4 max-h-[92vh] overflow-y-auto overscroll-contain"
       >
-        <div className="flex items-center justify-between border-b border-surface-container pb-3">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5 border-b border-surface-container pb-3">
           <span className="text-sm font-black text-on-surface flex items-center gap-2">
             <Plus className="w-4 h-4 text-secondary" />
-            إنشاء فاتورة
+            إنشاء فاتورة جديدة
           </span>
-          <div className="flex gap-1.5">
-            <button
-              type="button"
-              onClick={() => handleTypeChange('sale')}
-              className={`px-3.5 py-1 rounded-full text-xs font-black transition-all cursor-pointer ${
-                invForm.type === 'sale' ? 'bg-primary text-white shadow-sm' : 'bg-surface-low text-on-surface'
-              }`}
-            >
-              فاتورة مبيعات
-            </button>
-            <button
-              type="button"
-              onClick={() => handleTypeChange('purchase')}
-              className={`px-3.5 py-1 rounded-full text-xs font-black transition-all cursor-pointer ${
-                invForm.type === 'purchase' ? 'bg-secondary text-white shadow-sm' : 'bg-surface-low text-on-surface'
-              }`}
-            >
-              فاتورة مشتريات
-            </button>
+          <div className="grid grid-cols-2 sm:flex gap-1.5 w-full sm:w-auto">
+            {[
+              { id: 'sale', label: 'فاتورة مبيعات', activeBg: 'bg-primary text-white shadow-xs' },
+              { id: 'purchase', label: 'فاتورة مشتريات', activeBg: 'bg-secondary text-white shadow-xs' },
+              { id: 'sale_return', label: 'مردود مبيعات', activeBg: 'bg-purple-700 text-white shadow-xs' },
+              { id: 'purchase_return', label: 'مردود مشتريات', activeBg: 'bg-amber-600 text-white shadow-xs' },
+            ].map((tab) => (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => handleTypeChange(tab.id)}
+                className={`px-3 py-1.5 rounded-full text-[11px] font-black transition-all cursor-pointer text-center ${
+                  invForm.type === tab.id ? tab.activeBg : 'bg-surface-low text-on-surface'
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
           </div>
         </div>
 
@@ -236,21 +256,31 @@ export function AX_CreateInvoiceModal({
           <div className="space-y-1">
             <div className="flex items-center justify-between">
               <label className="text-xs font-bold text-on-surface-variant">
-                {invForm.type === 'sale' ? 'العميل' : 'المورد'}
+                {isSaleType ? 'العميل' : 'المورد'}
               </label>
-              {isIncomplete && (
-                <span className="inline-flex items-center gap-1 text-[10px] font-black px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-700 border border-amber-500/30">
-                  <AlertTriangle className="w-3 h-3 text-amber-600" />
-                  بيانات ناقصة
-                </span>
-              )}
+              <div className="flex items-center gap-2">
+                {isIncomplete && (
+                  <span className="inline-flex items-center gap-1 text-[10px] font-black px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-700 border border-amber-500/30">
+                    <AlertTriangle className="w-3 h-3 text-amber-600" />
+                    بيانات ناقصة
+                  </span>
+                )}
+                <button
+                  type="button"
+                  onClick={() => isSaleType ? setShowCustomerModal(true) : setShowSupplierModal(true)}
+                  className="inline-flex items-center gap-1 text-[11px] font-black text-primary hover:underline cursor-pointer"
+                >
+                  <Plus className="w-3 h-3" />
+                  <span>{isSaleType ? 'إضافة عميل' : 'إضافة مورد'}</span>
+                </button>
+              </div>
             </div>
 
             <div className="space-y-1.5">
               <input
                 type="text"
                 required
-                placeholder={invForm.type === 'sale' ? 'اكتب اسم العميل أو اختر...' : 'اكتب اسم المورد أو اختر...'}
+                placeholder={isSaleType ? 'اكتب اسم العميل أو اختر...' : 'اكتب اسم المورد أو اختر...'}
                 value={invForm.partyName}
                 onChange={(e) => setInvForm({ ...invForm, partyName: e.target.value })}
                 className="w-full px-3 py-2 rounded-2xl bg-surface-low border border-outline-variant/30 text-xs font-bold text-on-surface focus:outline-none focus:border-primary"
@@ -272,7 +302,7 @@ export function AX_CreateInvoiceModal({
               options={warehouses.map((w) => ({
                 value: w.id,
                 label: w.name,
-                badge: w.type === 'main' ? 'رئيسي' : 'فرع',
+                badge: w.type === 'cold_store' ? 'تبريد' : w.type === 'van' ? 'سيارة' : 'مخزن',
               }))}
               placeholder="اختر المخزن..."
             />
@@ -283,9 +313,11 @@ export function AX_CreateInvoiceModal({
           items={items}
           availableItems={availableItems}
           invoiceItems={invForm.items}
+          invType={invForm.type}
           draftItem={draftItem}
           onDraftItemChange={handleDraftItemChange}
           onCommitDraftItem={handleCommitDraftItem}
+          onAddItem={handleDirectAddItem}
           onRemoveItem={handleRemoveItem}
           onItemRowChange={handleItemRowChange}
           expandedRowIndex={expandedRowIndex}
@@ -422,6 +454,24 @@ export function AX_CreateInvoiceModal({
           </div>
         </div>
       </form>
+
+      <AX_CustomerModal
+        isOpen={showCustomerModal}
+        onClose={() => setShowCustomerModal(false)}
+        onSuccess={(c) => {
+          setInvForm((prev) => ({ ...prev, partyName: c.name }))
+          setShowCustomerModal(false)
+        }}
+      />
+
+      <AX_SupplierModal
+        isOpen={showSupplierModal}
+        onClose={() => setShowSupplierModal(false)}
+        onSuccess={(s) => {
+          setInvForm((prev) => ({ ...prev, partyName: s.companyName || s.name }))
+          setShowSupplierModal(false)
+        }}
+      />
     </div>
   )
 }

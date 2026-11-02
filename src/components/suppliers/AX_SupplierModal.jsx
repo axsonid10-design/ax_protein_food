@@ -18,7 +18,7 @@ import { showToast } from '../common/AX_Toast'
 import { generateUUID } from '../../utils/AX_UUID'
 import { SUPPLY_TYPES, SUPPLIER_CATEGORIES } from './supplierConstants'
 
-export function AX_SupplierModal({ isOpen, onClose, supplier = null }) {
+export function AX_SupplierModal({ isOpen, onClose, supplier = null, onSuccess }) {
   useBodyScrollLock(isOpen)
   const { addSupplier, updateSupplier, profile } = useAXStore()
 
@@ -134,6 +134,7 @@ export function AX_SupplierModal({ isOpen, onClose, supplier = null }) {
         addSupplier(newSupplier)
         await AX_SupplierOperationsService.addSupplierInDB(newSupplier, profile)
         showToast('تمت إضافة المورد بنجاح', 'success')
+        if (onSuccess) onSuccess(newSupplier)
       }
 
       onClose()
@@ -145,7 +146,7 @@ export function AX_SupplierModal({ isOpen, onClose, supplier = null }) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-on-surface/50 backdrop-blur-sm animate-fadeIn overflow-y-auto">
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-3 sm:p-4 bg-on-surface/50 backdrop-blur-sm animate-fadeIn overflow-y-auto">
       <div className="bg-surface-lowest border border-outline-variant/30 rounded-3xl p-5 sm:p-6 max-w-2xl w-full shadow-level3 space-y-4 my-auto">
         <div className="flex items-center justify-between pb-3 border-b border-surface-container">
           <div className="flex items-center gap-2.5">

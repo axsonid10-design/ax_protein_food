@@ -15,7 +15,7 @@ import { generateUUID } from '../../utils/AX_UUID'
 import { DEFAULT_CATEGORIES } from './customerConstants'
 import { AX_CustomerFormFields } from './AX_CustomerFormFields'
 
-export function AX_CustomerModal({ isOpen, onClose, customer = null }) {
+export function AX_CustomerModal({ isOpen, onClose, customer = null, onSuccess }) {
   useBodyScrollLock(isOpen)
   const { addClient, updateClient, profile } = useAXStore()
 
@@ -184,6 +184,7 @@ export function AX_CustomerModal({ isOpen, onClose, customer = null }) {
         addClient(newCust)
         await AX_CustomerOperationsService.addCustomerInDB(newCust, profile)
         showToast(isIncomplete ? 'تمت إضافة العميل مع شارة بيانات ناقصة' : 'تمت إضافة العميل بنجاح', 'success')
+        if (onSuccess) onSuccess(newCust)
       }
       onClose()
     } catch {
@@ -196,7 +197,7 @@ export function AX_CustomerModal({ isOpen, onClose, customer = null }) {
   const isQuickMode = !phone.trim() && !address.trim() && !city.trim()
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-on-surface/50 backdrop-blur-sm animate-fadeIn overflow-y-auto">
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-3 sm:p-4 bg-on-surface/50 backdrop-blur-sm animate-fadeIn overflow-y-auto">
       <div className="bg-surface-lowest border border-outline-variant/30 rounded-3xl p-5 sm:p-6 max-w-2xl w-full shadow-level3 space-y-4 my-auto">
         <div className="flex items-center justify-between pb-3 border-b border-surface-container">
           <div className="flex items-center gap-2.5">

@@ -8,8 +8,11 @@ import {
   Building2,
   BadgePercent,
 } from 'lucide-react'
+import { useAXStore } from '../../store/useAXStore'
 
 export function AX_QuickActionsBar({ onNavigateTab }) {
+  const openModal = useAXStore((s) => s.openModal)
+
   const actions = [
     {
       id: 'invoice',
@@ -17,6 +20,7 @@ export function AX_QuickActionsBar({ onNavigateTab }) {
       icon: Plus,
       color: 'bg-primary hover:bg-primary-dark text-white',
       tab: 'invoices',
+      modal: 'create_invoice',
     },
     {
       id: 'customer',
@@ -24,6 +28,7 @@ export function AX_QuickActionsBar({ onNavigateTab }) {
       icon: UserCheck,
       color: 'bg-secondary hover:bg-secondary-hover text-white',
       tab: 'customers',
+      modal: 'add_customer',
     },
     {
       id: 'supplier',
@@ -31,6 +36,7 @@ export function AX_QuickActionsBar({ onNavigateTab }) {
       icon: Building2,
       color: 'bg-primary-container hover:bg-primary text-white',
       tab: 'suppliers',
+      modal: 'add_supplier',
     },
     {
       id: 'sales_rep',
@@ -52,6 +58,7 @@ export function AX_QuickActionsBar({ onNavigateTab }) {
       icon: Wallet,
       color: 'bg-surface-lowest hover:bg-primary/5 text-primary border border-primary/25',
       tab: 'treasury',
+      modal: 'create_transaction',
     },
     {
       id: 'items',
@@ -61,6 +68,13 @@ export function AX_QuickActionsBar({ onNavigateTab }) {
       tab: 'items',
     },
   ]
+
+  const handleActionClick = (act) => {
+    onNavigateTab(act.tab)
+    if (act.modal) {
+      openModal(act.modal)
+    }
+  }
 
   return (
     <div className="bg-surface-lowest border border-outline-variant/30 rounded-2xl sm:rounded-3xl p-3 sm:p-3.5 shadow-xs space-y-2">
@@ -72,7 +86,7 @@ export function AX_QuickActionsBar({ onNavigateTab }) {
             <button
               key={act.id}
               type="button"
-              onClick={() => onNavigateTab(act.tab)}
+              onClick={() => handleActionClick(act)}
               className={`inline-flex items-center gap-1.5 px-3 sm:px-3.5 py-1.5 rounded-full text-xs font-black shadow-xs transition-all active:scale-95 cursor-pointer ${act.color}`}
             >
               <Icon className="w-3.5 h-3.5" />

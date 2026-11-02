@@ -6,6 +6,7 @@ import { AX_SupplierOperationsService } from '../services/AX_SupplierOperationsS
 import { AX_DatabaseSync } from '../services/AX_DatabaseSync.js'
 import { generateUUID } from '../utils/AX_UUID.js'
 import { categoryHelpers } from './categoryHelpers.js'
+import { updateLocalCachePayload, processInvoiceStoreState } from './storeCacheHelper.js'
 import {
   initialCategories, initialSubCategories, initialSecondaryCategories,
   initialItems, initialWarehouses, initialDistributors, initialInventoryStock,
@@ -276,10 +277,40 @@ export const useAXStore = create((set, get) => ({
     return { systemSettings: updated }
   }),
 
-  addWarehouse: (newWh) => { AX_OperationsService.addWarehouseInDB(newWh, get().profile); set((state) => ({ warehouses: [...state.warehouses, newWh] })) },
-  editWarehouse: (updatedWh) => { AX_OperationsService.editWarehouseInDB(updatedWh, get().profile); set((state) => ({ warehouses: state.warehouses.map((w) => (w.id === updatedWh.id ? { ...w, ...updatedWh } : w)) })) },
-  deleteWarehouse: (id) => { AX_OperationsService.deleteWarehouseInDB(id, get().profile); set((state) => ({ warehouses: state.warehouses.filter((w) => w.id !== id), inventoryStock: state.inventoryStock.filter((s) => s.warehouseId !== id) })) },
-  addTreasuryAccount: (account) => { AX_OperationsService.addTreasuryAccountInDB(account, get().profile); set((state) => ({ treasuryAccounts: [...state.treasuryAccounts, account] })) },
+  addWarehouse: (newWh) => {
+    const wh = { ...newWh, id: newWh.id || generateUUID() }
+    AX_OperationsService.addWarehouseInDB(wh, get().profile)
+    set((state) => {
+      const nextWh = [...state.warehouses, wh]
+      updateLocalCachePayload('warehouses', nextWh)
+      return { warehouses: nextWh }
+    })
+  },
+  editWarehouse: (updatedWh) => {
+    AX_OperationsService.editWarehouseInDB(updatedWh, get().profile)
+    set((state) => {
+      const nextWh = state.warehouses.map((w) => (w.id === updatedWh.id ? { ...w, ...updatedWh } : w))
+      updateLocalCachePayload('warehouses', nextWh)
+      return { warehouses: nextWh }
+    })
+  },
+  deleteWarehouse: (id) => {
+    AX_OperationsService.deleteWarehouseInDB(id, get().profile)
+    set((state) => {
+      const nextWh = state.warehouses.filter((w) => w.id !== id)
+      updateLocalCachePayload('warehouses', nextWh)
+      return { warehouses: nextWh, inventoryStock: state.inventoryStock.filter((s) => s.warehouseId !== id) }
+    })
+  },
+  addTreasuryAccount: (account) => {
+    const acc = { ...account, id: account.id || generateUUID() }
+    AX_OperationsService.addTreasuryAccountInDB(acc, get().profile)
+    set((state) => {
+      const nextTr = [...state.treasuryAccounts, acc]
+      updateLocalCachePayload('treasuryAccounts', nextTr)
+      return { treasuryAccounts: nextTr }
+    })
+  },
 
   confirmTransfer: (transferId) => set((state) => {
     const trf = state.transfers.find((t) => t.id === transferId)
@@ -352,7 +383,12 @@ export const useAXStore = create((set, get) => ({
       const updatedTreasuries = state.treasuryAccounts.map((t) => t.id === tx.treasuryId ? { ...t, balance: t.balance + (tx.type === 'client_receipt' ? tx.amount : -tx.amount) } : t)
       const updatedClients = state.clients.map((c) => (tx.partyId === c.id || tx.partyName === c.name) ? { ...c, balance: Math.max(0, c.balance - tx.amount) } : c)
       const updatedSuppliers = state.suppliers.map((s) => (tx.partyId === s.id || tx.partyName === s.name) ? { ...s, balance: Math.max(0, s.balance - tx.amount) } : s)
-      return { cashTransactions: [tx, ...state.cashTransactions], treasuryAccounts: updatedTreasuries, clients: updatedClients, suppliers: updatedSuppliers }
+      const nextTx = [tx, ...state.cashTransactions]
+      updateLocalCachePayload('cashTransactions', nextTx)
+      updateLocalCachePayload('treasuryAccounts', updatedTreasuries)
+      updateLocalCachePayload('clients', updatedClients)
+      updateLocalCachePayload('suppliers', updatedSuppliers)
+      return { cashTransactions: nextTx, treasuryAccounts: updatedTreasuries, clients: updatedClients, suppliers: updatedSuppliers }
     })
   },
 
@@ -368,72 +404,24 @@ export const useAXStore = create((set, get) => ({
         if (t.id === target.toTreasuryId) return { ...t, balance: t.balance + target.amount }
         return t
       })
+      updateLocalCachePayload('pendingCashTransfers', newTransfers)
+      updateLocalCachePayload('treasuryAccounts', updatedTreasuries)
       return { pendingCashTransfers: newTransfers, treasuryAccounts: updatedTreasuries }
     })
   },
 
   addPendingCashTransfer: (pct) => {
     AX_OperationsService.addCashTransferInDB(pct, get().profile)
-    set((state) => ({ pendingCashTransfers: [pct, ...state.pendingCashTransfers] }))
+    set((state) => {
+      const nextP = [pct, ...state.pendingCashTransfers]
+      updateLocalCachePayload('pendingCashTransfers', nextP)
+      return { pendingCashTransfers: nextP }
+    })
   },
 
   addInvoice: (inv) => {
     AX_OperationsService.addInvoiceInDB(inv, get().profile)
-    set((state) => {
-      let updatedClients = [...state.clients]
-      let updatedSuppliers = [...state.suppliers]
-      if (inv.type === 'sale') {
-        const cIdx = updatedClients.findIndex((c) => c.name === inv.partyName)
-        if (cIdx >= 0) {
-          updatedClients[cIdx] = { ...updatedClients[cIdx], balance: updatedClients[cIdx].balance + inv.remainingAmount }
-        } else {
-          updatedClients.unshift({ id: generateUUID(), name: inv.partyName, balance: inv.remainingAmount, phone: '', address: 'بيانات ناقصة' })
-        }
-      } else {
-        const sIdx = updatedSuppliers.findIndex((s) => s.name === inv.partyName)
-        if (sIdx >= 0) {
-          updatedSuppliers[sIdx] = { ...updatedSuppliers[sIdx], balance: updatedSuppliers[sIdx].balance + inv.remainingAmount }
-        } else {
-          updatedSuppliers.unshift({ id: generateUUID(), name: inv.partyName, balance: inv.remainingAmount, phone: '', address: 'بيانات ناقصة' })
-        }
-      }
-      let updatedStock = [...state.inventoryStock]
-      inv.items?.forEach((item) => {
-        const sIdx = updatedStock.findIndex((s) => s.warehouseId === inv.warehouseId && s.itemId === item.itemId)
-        if (sIdx >= 0) {
-          const delta = inv.type === 'sale' ? -item.quantity : item.quantity
-          updatedStock[sIdx] = { ...updatedStock[sIdx], quantity: Math.max(0, updatedStock[sIdx].quantity + delta) }
-        }
-      })
-      let updatedTreasuries = [...state.treasuryAccounts]
-      let updatedCashTx = [...state.cashTransactions]
-      if (inv.paidAmount > 0) {
-        const tIdx = updatedTreasuries.findIndex((t) => t.id === inv.treasuryId)
-        const trIndex = tIdx >= 0 ? tIdx : 0
-        if (updatedTreasuries[trIndex]) {
-          const delta = inv.type === 'sale' ? inv.paidAmount : -inv.paidAmount
-          updatedTreasuries[trIndex] = { ...updatedTreasuries[trIndex], balance: updatedTreasuries[trIndex].balance + delta }
-        }
-        updatedCashTx.unshift({
-          id: generateUUID(),
-          code: (inv.type === 'sale' ? 'REC-' : 'PAY-') + Date.now().toString().slice(-4),
-          type: inv.type === 'sale' ? 'client_receipt' : 'supplier_payment',
-          partyName: inv.partyName,
-          amount: inv.paidAmount,
-          treasuryId: inv.treasuryId || updatedTreasuries[0]?.id,
-          date: inv.date,
-          notes: inv.type === 'sale' ? `تحصيل نقدي - فاتورة مبيعات ${inv.code}` : `سداد نقدي - فاتورة مشتريات ${inv.code}`,
-        })
-      }
-      return {
-        invoices: [inv, ...state.invoices],
-        clients: updatedClients,
-        suppliers: updatedSuppliers,
-        inventoryStock: updatedStock,
-        treasuryAccounts: updatedTreasuries,
-        cashTransactions: updatedCashTx,
-      }
-    })
+    set((state) => processInvoiceStoreState(state, inv))
   },
 
   addEmployee: (emp) => {

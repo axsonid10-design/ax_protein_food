@@ -38,6 +38,15 @@ export function AX_CustomersManager() {
   const [deletingCustomer, setDeletingCustomer] = useState(null)
 
   const [currentPage, setCurrentPage] = useState(1)
+  const activeModal = useAXStore((s) => s.activeModal)
+  const closeModal = useAXStore((s) => s.closeModal)
+
+  useEffect(() => {
+    if (activeModal === 'add_customer' || activeModal === 'create_customer') {
+      setIsAddOpen(true)
+      closeModal()
+    }
+  }, [activeModal, closeModal])
 
   const categories = useMemo(() => {
     const catSet = new Set()

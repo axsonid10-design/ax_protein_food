@@ -49,8 +49,8 @@ export function AX_ItemPackagingFields({
         <label className="block text-xs font-black text-on-surface-variant text-right">
           وحدة التعامل والبيع الأساسية
         </label>
-        <div className="grid grid-cols-4 gap-2">
-          {['كرتونة', 'كيلو', 'قطعة', 'حبة'].map((u) => {
+        <div className="grid grid-cols-3 gap-2">
+          {['كرتونة', 'كيلو', 'قطعة'].map((u) => {
             const isSelected = unitType === u
             return (
               <button
@@ -66,7 +66,6 @@ export function AX_ItemPackagingFields({
                 {u === 'كرتونة' && <Package className="w-3.5 h-3.5" />}
                 {u === 'كيلو' && <Scale className="w-3.5 h-3.5" />}
                 {u === 'قطعة' && <Boxes className="w-3.5 h-3.5" />}
-                {u === 'حبة' && <CircleDot className="w-3.5 h-3.5" />}
                 <span>{u}</span>
               </button>
             )
@@ -81,11 +80,11 @@ export function AX_ItemPackagingFields({
             <span>تفاصيل التعبئة والتحويل (اختياري)</span>
           </span>
           <span className="text-[10px] text-on-surface-variant font-bold">
-            يتيح البيع بالكرتونة والقطعة والحبة معاً
+            يتيح البيع بالكرتونة والقطعة والكيلو
           </span>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {isCarton && (
             <div>
               <label className="block text-[11px] font-bold text-on-surface-variant mb-1 text-right">
@@ -116,52 +115,22 @@ export function AX_ItemPackagingFields({
               className="w-full px-3 py-2 rounded-xl bg-surface-lowest border border-outline-variant/40 text-xs font-mono font-bold text-on-surface focus:outline-none focus:border-primary text-right"
             />
           </div>
-
-          <div>
-            <label className="block text-[11px] font-bold text-on-surface-variant mb-1 text-right">
-              عدد الحبات (في القطعة/الكرتونة)
-            </label>
-            <input
-              type="number"
-              min="0"
-              placeholder="مثال: 4 (اختياري)"
-              value={grainsPerPiece}
-              onChange={(e) => setGrainsPerPiece(e.target.value)}
-              className="w-full px-3 py-2 rounded-xl bg-surface-lowest border border-outline-variant/40 text-xs font-mono font-bold text-on-surface focus:outline-none focus:border-primary text-right"
-            />
-          </div>
         </div>
 
-        {(hasPieces || hasGrains) && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-surface-container/60">
-            {hasPieces && (
-              <div>
-                <label className="block text-[11px] font-bold text-on-surface-variant mb-1 text-right">
-                  وزن القطعة الواحدة (اختياري)
-                </label>
-                <input
-                  type="text"
-                  placeholder="مثال: 800 جرام أو 0.8 كجم"
-                  value={pieceWeight}
-                  onChange={(e) => setPieceWeight(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl bg-surface-lowest border border-outline-variant/40 text-xs font-bold text-on-surface focus:outline-none focus:border-primary text-right"
-                />
-              </div>
-            )}
-            {hasGrains && (
-              <div>
-                <label className="block text-[11px] font-bold text-on-surface-variant mb-1 text-right">
-                  وزن الحبة الواحدة (اختياري)
-                </label>
-                <input
-                  type="text"
-                  placeholder="مثال: 200 جرام"
-                  value={grainWeight}
-                  onChange={(e) => setGrainWeight(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl bg-surface-lowest border border-outline-variant/40 text-xs font-bold text-on-surface focus:outline-none focus:border-primary text-right"
-                />
-              </div>
-            )}
+        {hasPieces && (
+          <div className="pt-2 border-t border-surface-container/60">
+            <div>
+              <label className="block text-[11px] font-bold text-on-surface-variant mb-1 text-right">
+                وزن القطعة الواحدة (اختياري)
+              </label>
+              <input
+                type="text"
+                placeholder="مثال: 800 جرام أو 0.8 كجم"
+                value={pieceWeight}
+                onChange={(e) => setPieceWeight(e.target.value)}
+                className="w-full px-3 py-2 rounded-xl bg-surface-lowest border border-outline-variant/40 text-xs font-bold text-on-surface focus:outline-none focus:border-primary text-right"
+              />
+            </div>
           </div>
         )}
       </div>
@@ -251,48 +220,6 @@ export function AX_ItemPackagingFields({
           </div>
         )}
 
-        {hasGrains && (
-          <div className="p-3 rounded-2xl bg-surface-low/50 border border-outline-variant/30 space-y-2">
-            <div className="flex items-center justify-between text-xs font-black text-on-surface">
-              <span>أسعار الحبة (محددة بعدد {grainsPerPiece} حبة)</span>
-              {suggestedGrainSell && (
-                <span className="text-[10px] font-mono text-primary font-bold">
-                  سعر الحبة المقترح: {suggestedGrainSell} ج.م
-                </span>
-              )}
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <span className="block text-[11px] font-bold text-on-surface-variant mb-1 text-right">
-                  سعر شراء الحبة (ج.م)
-                </span>
-                <input
-                  type="number"
-                  min="0"
-                  step="any"
-                  placeholder="0"
-                  value={grainBuyPrice}
-                  onChange={(e) => setGrainBuyPrice(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl bg-surface-lowest border border-outline-variant/40 text-xs font-mono font-bold text-on-surface focus:outline-none focus:border-primary text-right"
-                />
-              </div>
-              <div>
-                <span className="block text-[11px] font-bold text-on-surface-variant mb-1 text-right">
-                  سعر بيع الحبة (ج.م) *
-                </span>
-                <input
-                  type="number"
-                  min="0"
-                  step="any"
-                  placeholder={suggestedGrainSell || '0'}
-                  value={grainSellPrice}
-                  onChange={(e) => setGrainSellPrice(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl bg-surface-lowest border border-primary/50 text-xs font-mono font-bold text-on-surface focus:outline-none focus:border-primary text-right"
-                />
-              </div>
-            </div>
-          </div>
-        )}
       </div>
     </div>
   )

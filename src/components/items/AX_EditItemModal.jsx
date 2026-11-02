@@ -85,12 +85,7 @@ export function AX_EditItemModal({
       return
     }
 
-    if (Number(grainsPerPiece) > 0 && !grainSellPrice && Number(grainSellPrice) !== 0) {
-      setErrorMsg('يرجى تحديد سعر بيع الحبة')
-      return
-    }
-
-    const finalName = compositeName.trim() || [subCategory.trim(), secondaryCategory?.trim()].filter(Boolean).join(' ')
+    const finalName = compositeName.trim() || [primaryCategory, subCategory.trim(), secondaryCategory?.trim()].filter(Boolean).join(' ')
 
     const updated = {
       ...item,
@@ -99,7 +94,7 @@ export function AX_EditItemModal({
       secondaryCategory: secondaryCategory?.trim() || null,
       compositeName: finalName,
       unitType,
-      units: [unitType, Number(piecesPerCarton) > 0 ? 'قطعة' : null, Number(grainsPerPiece) > 0 ? 'حبة' : null, 'كيلو'].filter(Boolean),
+      units: [unitType, Number(piecesPerCarton) > 0 ? 'قطعة' : null, 'كيلو'].filter(Boolean),
       weightPerCarton: unitType === 'كرتونة' ? Number(weightPerCarton) || 10 : 1,
       piecesPerCarton: Number(piecesPerCarton) || null,
       grainsPerPiece: Number(grainsPerPiece) || null,

@@ -1,24 +1,78 @@
-import React from 'react'
-import { Plus, Trash2, ChevronDown, ChevronUp, PackagePlus } from 'lucide-react'
+import React, { useState } from 'react'
+import { Trash2, ChevronDown, ChevronUp, PackagePlus, LayoutGrid, ListPlus } from 'lucide-react'
 import { AX_SearchableSelect } from '../common/AX_SearchableSelect'
+import { AX_InvoiceItemsGrid } from './AX_InvoiceItemsGrid'
+import { getItemDisplayName } from '../../utils/AX_ItemNameHelper'
 
 export function AX_InvoiceItemsEditor({
   items = [],
   availableItems = [],
   invoiceItems = [],
+  invType = 'sale',
   draftItem,
   onDraftItemChange,
   onCommitDraftItem,
+  onAddItem,
   onRemoveItem,
   onItemRowChange,
   expandedRowIndex,
   setExpandedRowIndex,
 }) {
+  const [inputMode, setInputMode] = useState('grid')
+
+  const handleGridAddItem = (newItem) => {
+    if (onAddItem) {
+      onAddItem(newItem)
+    } else {
+      if (onDraftItemChange) {
+        onDraftItemChange('itemId', newItem.itemId)
+        onDraftItemChange('quantity', newItem.quantity)
+        onDraftItemChange('price', newItem.price)
+      }
+      if (onCommitDraftItem) {
+        setTimeout(() => onCommitDraftItem(), 10)
+      }
+    }
+  }
+
   return (
     <div className="space-y-3 pt-2 border-t border-surface-container">
-      <span className="text-xs font-black text-on-surface block">إضافة بند جديد (بالأعلى):</span>
+      <div className="flex items-center justify-between">
+        <span className="text-xs font-black text-on-surface">إضافة بنود الفاتورة:</span>
+        <div className="flex items-center gap-1 bg-surface-low p-0.5 rounded-full border border-outline-variant/30">
+          <button
+            type="button"
+            onClick={() => setInputMode('grid')}
+            className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-[11px] font-black transition-all cursor-pointer ${
+              inputMode === 'grid' ? 'bg-primary text-white shadow-xs' : 'text-on-surface-variant hover:text-on-surface'
+            }`}
+          >
+            <LayoutGrid className="w-3 h-3" />
+            <span>شبكة الأصناف</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setInputMode('manual')}
+            className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-[11px] font-black transition-all cursor-pointer ${
+              inputMode === 'manual' ? 'bg-primary text-white shadow-xs' : 'text-on-surface-variant hover:text-on-surface'
+            }`}
+          >
+            <ListPlus className="w-3 h-3" />
+            <span>إدخال يدوي</span>
+          </button>
+        </div>
+      </div>
 
-      {availableItems.length === 0 ? (
+      {inputMode === 'grid' ? (
+        <AX_InvoiceItemsGrid
+          items={items}
+          invoiceItems={invoiceItems}
+          invType={invType}
+          onAddItem={handleGridAddItem}
+          onUpdateQuantity={(idx, q) => onItemRowChange(idx, 'quantity', q)}
+          onRemoveItem={onRemoveItem}
+        />
+      ) : availableItems.length === 0 ? (
         <div className="bg-surface-low border border-outline-variant/30 p-3 rounded-2xl text-center text-xs font-bold text-on-surface-variant">
           تم إدراج جميع الأصناف المتاحة في الفاتورة ({items.length} صنف)
         </div>
@@ -27,12 +81,12 @@ export function AX_InvoiceItemsEditor({
           <div className="grid grid-cols-1 sm:grid-cols-12 gap-2 items-center">
             <div className="sm:col-span-6">
               <AX_SearchableSelect
-                value={draftItem.itemId}
+                value={draftItem?.itemId || ''}
                 onChange={(val) => onDraftItemChange('itemId', val)}
                 options={availableItems.map((it) => ({
                   value: it.id,
-                  label: it.compositeName,
-                  sublabel: `${it.primaryCategory} • ${it.unitType}`,
+                  label: getItemDisplayName(it),
+                  sublabel: `${it.primaryCategory || ''} • ${it.unitType || 'كرتونة'}`,
                 }))}
                 placeholder="اختر الصنف المراد إضافته..."
               />
@@ -43,7 +97,7 @@ export function AX_InvoiceItemsEditor({
                 type="number"
                 min="1"
                 placeholder="الكمية"
-                value={draftItem.quantity}
+                value={draftItem?.quantity || 1}
                 onChange={(e) => onDraftItemChange('quantity', e.target.value)}
                 className="w-full px-2.5 py-1.5 rounded-xl bg-surface-lowest text-xs font-bold text-on-surface border border-outline-variant/30 font-mono"
               />
@@ -52,9 +106,10 @@ export function AX_InvoiceItemsEditor({
             <div className="sm:col-span-3">
               <input
                 type="number"
-                min="1"
+                min="0.1"
+                step="any"
                 placeholder="السعر"
-                value={draftItem.price}
+                value={draftItem?.price || 0}
                 onChange={(e) => onDraftItemChange('price', e.target.value)}
                 className="w-full px-2.5 py-1.5 rounded-xl bg-surface-lowest text-xs font-bold text-on-surface border border-outline-variant/30 font-mono"
               />
@@ -74,14 +129,14 @@ export function AX_InvoiceItemsEditor({
         </div>
       )}
 
-      <div className="space-y-1.5 max-h-44 overflow-y-auto pr-0.5">
+      <div className="space-y-1.5 max-h-48 overflow-y-auto pr-0.5">
         <span className="text-[11px] font-bold text-on-surface-variant block">
-          البنود المضافة ({invoiceItems.length}):
+          البنود المضافة للفاتورة ({invoiceItems.length}):
         </span>
 
         {invoiceItems.length === 0 ? (
           <div className="p-4 text-center text-xs font-bold text-on-surface-variant/70 border border-dashed border-outline-variant/40 rounded-xl">
-            لم يتم إضافة أي بنود بالفاتورة بعد. اختر صنفاً واضغط "إدراج البند بالفاتورة" بالأعلى.
+            لم يتم إضافة أي بنود بالفاتورة بعد. اختر صنفاً من الشبكة بالأعلى بنقرة واحدة.
           </div>
         ) : (
           invoiceItems.map((row, idx) => {
@@ -100,10 +155,10 @@ export function AX_InvoiceItemsEditor({
                       #{idx + 1}
                     </span>
                     <span className="font-black text-on-surface truncate">
-                      {itObj?.compositeName || 'صنف'}
+                      {getItemDisplayName(itObj || row)}
                     </span>
                     <span className="text-on-surface-variant text-[11px] font-mono">
-                      ({row.quantity} {itObj?.unitType || 'كرتونة'} × {row.price} ج.م)
+                      ({row.quantity} {itObj?.unitType || row.unit || 'كرتونة'} × {row.price} ج.م)
                     </span>
                   </div>
 
@@ -146,7 +201,8 @@ export function AX_InvoiceItemsEditor({
                       <label className="text-[10px] font-bold text-on-surface-variant block">السعر (ج.م)</label>
                       <input
                         type="number"
-                        min="1"
+                        min="0.1"
+                        step="any"
                         value={row.price}
                         onChange={(e) => onItemRowChange(idx, 'price', e.target.value)}
                         className="w-full px-2 py-1 rounded-lg bg-surface-lowest text-xs font-mono font-bold border border-outline-variant/30"

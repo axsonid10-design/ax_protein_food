@@ -11,6 +11,7 @@ import {
 } from 'lucide-react'
 import { useAXStore } from '../../store/useAXStore'
 import { AX_StockDrilldownModal } from './AX_StockDrilldownModal'
+import { getItemDisplayName } from '../../utils/AX_ItemNameHelper'
 
 export function AX_PinnedStockWidget() {
   const { items = [], inventoryStock = [] } = useAXStore()
@@ -95,7 +96,7 @@ export function AX_PinnedStockWidget() {
             >
               <div className="flex items-start justify-between gap-1 w-full">
                 <span className="text-xs font-black text-on-surface truncate group-hover:text-primary transition-colors">
-                  {item.compositeName || item.name}
+                  {getItemDisplayName(item)}
                 </span>
                 <ChevronLeft className="w-3.5 h-3.5 text-outline-variant group-hover:-translate-x-0.5 transition-transform shrink-0" />
               </div>
@@ -150,7 +151,13 @@ export function AX_PinnedStockWidget() {
               {(items || [])
                 .filter((item) => {
                   const q = searchQuery.trim().toLowerCase()
-                  return !q || (item.compositeName || item.name || '').toLowerCase().includes(q)
+                  if (!q) return true
+                  const displayName = getItemDisplayName(item).toLowerCase()
+                  const sub = (item.subCategory || '').toLowerCase()
+                  const prim = (item.primaryCategory || '').toLowerCase()
+                  const sec = (item.secondaryCategory || '').toLowerCase()
+                  const code = (item.code || '').toLowerCase()
+                  return displayName.includes(q) || sub.includes(q) || prim.includes(q) || sec.includes(q) || code.includes(q)
                 })
                 .map((item) => {
                   const isPinned = pinnedIds.includes(item.id)
@@ -161,8 +168,8 @@ export function AX_PinnedStockWidget() {
                       className="p-2.5 flex items-center justify-between hover:bg-surface-container/40 cursor-pointer transition-colors text-xs"
                     >
                       <div>
-                        <span className="font-bold text-on-surface block">{item.compositeName || item.name}</span>
-                        <span className="text-[10px] text-on-surface-variant font-mono">{item.code || item.id}</span>
+                        <span className="font-bold text-on-surface block">{getItemDisplayName(item)}</span>
+                        <span className="text-[10px] text-on-surface-variant font-mono">{item.primaryCategory ? `${item.primaryCategory} • ` : ''}{item.code || item.id}</span>
                       </div>
                       <div className={`w-6 h-6 rounded-full flex items-center justify-center border transition-all ${
                         isPinned ? 'bg-primary text-white border-primary' : 'border-outline-variant/50 text-transparent'

@@ -11,6 +11,7 @@ import {
 } from 'lucide-react'
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock'
 import { useAXStore } from '../../store/useAXStore'
+import { getItemDisplayName } from '../../utils/AX_ItemNameHelper'
 
 export function AX_StockDrilldownModal({ item, isOpen, onClose }) {
   useBodyScrollLock(isOpen)
@@ -72,7 +73,7 @@ export function AX_StockDrilldownModal({ item, isOpen, onClose }) {
             </div>
             <div>
               <h3 className="text-base sm:text-lg font-black text-on-surface">
-                {item.compositeName || item.name}
+                {getItemDisplayName(item)}
               </h3>
               <p className="text-xs text-on-surface-variant font-mono">
                 كود الصنف: {item.code || item.id} • الوحدة: {item.unitType || 'كرتونة'}

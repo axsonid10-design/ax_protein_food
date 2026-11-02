@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import {
   Wallet,
   Building2,
@@ -8,7 +8,6 @@ import {
   Plus,
   Clock,
   CheckCircle2,
-  DollarSign,
   ArrowLeftRight,
   Landmark,
 } from 'lucide-react'
@@ -16,6 +15,7 @@ import { useAXStore } from '../../store/useAXStore'
 import { AX_SearchableSelect } from '../common/AX_SearchableSelect'
 import { AX_TreasuryTransactionsTable } from './AX_TreasuryTransactionsTable'
 import { AX_AddTreasuryModal } from './AX_AddTreasuryModal'
+import { AX_TreasuryTransactionModal } from './AX_TreasuryTransactionModal'
 import { generateUUID } from '../../utils/AX_UUID'
 
 export function AX_TreasuryLedger() {
@@ -25,6 +25,9 @@ export function AX_TreasuryLedger() {
     pendingCashTransfers = [],
     clients = [],
     suppliers = [],
+    employees = [],
+    activeModal,
+    closeModal,
     addCashTransaction,
     addPendingCashTransfer,
     confirmCashTransfer,
@@ -38,6 +41,16 @@ export function AX_TreasuryLedger() {
   const [currentPage, setCurrentPage] = useState(1)
   const PAGE_SIZE = 15
 
+  useEffect(() => {
+    if (activeModal === 'create_transaction' || activeModal === 'add_transaction') {
+      setShowTransactionModal(true)
+      closeModal()
+    } else if (activeModal === 'add_treasury') {
+      setShowAddTreasuryModal(true)
+      closeModal()
+    }
+  }, [activeModal, closeModal])
+
   const defaultTreasuryId = treasuryAccounts[0]?.id || 'c0000000-0000-0000-0000-000000000001'
 
   const totalTx = cashTransactions?.length || 0
@@ -46,16 +59,6 @@ export function AX_TreasuryLedger() {
     (currentPage - 1) * PAGE_SIZE,
     currentPage * PAGE_SIZE
   )
-
-  const [txForm, setTxForm] = useState({
-    type: 'client_receipt',
-    partyType: 'client',
-    partyName: clients[0]?.name || '',
-    amount: '',
-    treasuryId: defaultTreasuryId,
-    date: new Date().toISOString().split('T')[0],
-    notes: '',
-  })
 
   const [transferForm, setTransferForm] = useState({
     fromTreasuryId: treasuryAccounts.find((t) => t.type === 'van_cash')?.id || treasuryAccounts[1]?.id || defaultTreasuryId,
@@ -81,36 +84,6 @@ export function AX_TreasuryLedger() {
   }
 
   const getTreasuryName = (id) => treasuryAccounts.find((t) => t.id === id)?.name || id
-
-  const handleSaveTransaction = (e) => {
-    e.preventDefault()
-    if (!txForm.amount || Number(txForm.amount) <= 0) return
-
-    const newTx = {
-      id: generateUUID(),
-      code: `${txForm.type === 'client_receipt' ? 'REC' : 'PAY'}-${Date.now().toString().slice(-4)}`,
-      type: txForm.type,
-      partyType: txForm.partyType || 'client',
-      partyName: txForm.partyName,
-      amount: Number(txForm.amount),
-      treasuryId: txForm.treasuryId || defaultTreasuryId,
-      date: txForm.date,
-      notes: txForm.notes || 'حركة نقدية مفصولة عن الفواتير',
-      status: 'completed',
-    }
-
-    addCashTransaction(newTx)
-    setShowTransactionModal(false)
-    setTxForm({
-      type: 'client_receipt',
-      partyType: 'client',
-      partyName: clients[0]?.name || '',
-      amount: '',
-      treasuryId: defaultTreasuryId,
-      date: new Date().toISOString().split('T')[0],
-      notes: '',
-    })
-  }
 
   const handleCreateCashTransfer = (e) => {
     e.preventDefault()
@@ -275,111 +248,6 @@ export function AX_TreasuryLedger() {
         </div>
       )}
 
-      {showTransactionModal && (
-        <form
-          onSubmit={handleSaveTransaction}
-          className="bg-surface-lowest border-2 border-primary/20 rounded-3xl p-6 shadow-level2 space-y-4"
-        >
-          <div className="flex items-center justify-between border-b border-surface-container pb-3">
-            <span className="text-sm font-black text-on-surface flex items-center gap-2">
-              <DollarSign className="w-4 h-4 text-primary" />
-              إصدار سند مالي
-            </span>
-            <div className="flex gap-1.5">
-              <button
-                type="button"
-                onClick={() => setTxForm({ ...txForm, type: 'client_receipt', partyType: 'client' })}
-                className={`px-3 py-1 rounded-full text-xs font-bold cursor-pointer ${
-                  txForm.type === 'client_receipt' ? 'bg-primary text-white' : 'bg-surface-low text-on-surface'
-                }`}
-              >
-                وارد / قبض من عميل
-              </button>
-              <button
-                type="button"
-                onClick={() => setTxForm({ ...txForm, type: 'supplier_payment', partyType: 'supplier' })}
-                className={`px-3 py-1 rounded-full text-xs font-bold cursor-pointer ${
-                  txForm.type === 'supplier_payment' ? 'bg-error text-white' : 'bg-surface-low text-on-surface'
-                }`}
-              >
-                صادر / سداد لمورد
-              </button>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="space-y-1.5">
-              <label className="text-xs font-bold text-on-surface-variant block">
-                {txForm.type === 'client_receipt' ? 'اسم العميل' : 'اسم المورد'}
-              </label>
-              <AX_SearchableSelect
-                value={txForm.partyName}
-                onChange={(val) => setTxForm({ ...txForm, partyName: val })}
-                options={(txForm.type === 'client_receipt' ? (clients || []) : (suppliers || [])).map((p) => ({
-                  value: p.name,
-                  label: p.name,
-                  badge: `${(Number(p.balance) || 0).toLocaleString('en-US')} ج.م`,
-                }))}
-                placeholder="اختر الطرف..."
-              />
-            </div>
-
-            <div className="space-y-1.5">
-              <label className="text-xs font-bold text-on-surface-variant block">المبلغ (ج.م)</label>
-              <input
-                type="number"
-                required
-                min="1"
-                placeholder="0"
-                value={txForm.amount}
-                onChange={(e) => setTxForm({ ...txForm, amount: e.target.value })}
-                className="w-full px-3 py-2.5 rounded-2xl bg-surface-low border border-outline-variant/30 text-xs font-bold text-on-surface font-mono"
-              />
-            </div>
-
-            <div className="space-y-1.5">
-              <label className="text-xs font-bold text-on-surface-variant block">قناة الخزينة</label>
-              <AX_SearchableSelect
-                value={txForm.treasuryId}
-                onChange={(val) => setTxForm({ ...txForm, treasuryId: val })}
-                options={(treasuryAccounts || []).map((t) => ({
-                  value: t.id,
-                  label: t.name,
-                  badge: `${(Number(t.balance) || 0).toLocaleString('en-US')} ج.م`,
-                }))}
-                placeholder="اختر الخزينة..."
-              />
-            </div>
-          </div>
-
-          <div className="space-y-1.5">
-            <label className="text-xs font-bold text-on-surface-variant">البيان / ملاحظات السداد</label>
-            <input
-              type="text"
-              placeholder="مثال: دفعة من حساب البضاعة، شيك، أو تحويل إنستا باي..."
-              value={txForm.notes}
-              onChange={(e) => setTxForm({ ...txForm, notes: e.target.value })}
-              className="w-full px-4 py-2 rounded-2xl bg-surface-low border border-outline-variant/30 text-xs font-bold text-on-surface"
-            />
-          </div>
-
-          <div className="flex justify-end gap-3 pt-2">
-            <button
-              type="button"
-              onClick={() => setShowTransactionModal(false)}
-              className="px-5 py-2 rounded-full bg-surface-container text-on-surface-variant text-xs font-bold cursor-pointer"
-            >
-              إلغاء
-            </button>
-            <button
-              type="submit"
-              className="px-6 py-2 rounded-full bg-primary text-white text-xs font-extrabold shadow-sm hover:bg-primary-dark cursor-pointer"
-            >
-              حفظ وقيد السند المالي
-            </button>
-          </div>
-        </form>
-      )}
 
       {showTransferModal && (
         <form
@@ -474,6 +342,16 @@ export function AX_TreasuryLedger() {
         <Plus className="w-4 h-4 sm:w-5 sm:h-5" />
         <span>إصدار سند مالي</span>
       </button>
+
+      <AX_TreasuryTransactionModal
+        isOpen={showTransactionModal}
+        onClose={() => setShowTransactionModal(false)}
+        treasuryAccounts={treasuryAccounts}
+        clients={clients}
+        suppliers={suppliers}
+        employees={employees}
+        onSave={addCashTransaction}
+      />
 
       <AX_AddTreasuryModal
         isOpen={showAddTreasuryModal}

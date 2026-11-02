@@ -61,7 +61,7 @@ export const AX_DatabaseSync = {
           subCategory: it.sub_category,
           secondaryCategory: it.secondary_category,
           unitType: it.unit_type,
-          units: [it.unit_type, Number(it.pieces_per_carton) > 0 ? 'قطعة' : null, Number(it.grains_per_piece) > 0 ? 'حبة' : null, 'كيلو'].filter(Boolean),
+          units: [it.unit_type, Number(it.pieces_per_carton) > 0 ? 'قطعة' : null, 'كيلو'].filter(Boolean),
           weightPerCarton: Number(it.weight_per_carton || 0),
           piecesPerCarton: it.pieces_per_carton ? Number(it.pieces_per_carton) : null,
           grainsPerPiece: it.grains_per_piece ? Number(it.grains_per_piece) : null,
@@ -138,16 +138,23 @@ export const AX_DatabaseSync = {
       }
 
       if (Array.isArray(cashTx)) {
-        payload.cashTransactions = cashTx.map((c) => ({
-          id: c.id,
-          code: c.code,
-          type: c.type,
-          partyName: c.party_name,
-          amount: Number(c.amount || 0),
-          treasuryId: c.treasury_id,
-          date: c.date,
-          notes: c.notes,
-        }))
+        payload.cashTransactions = cashTx.map((c) => {
+          let resolvedType = c.type
+          if (c.type === 'expense' && (c.party_type === 'employee' || c.notes?.includes('[أجور') || c.code?.startsWith('WAGE-'))) {
+            resolvedType = 'payroll'
+          }
+          return {
+            id: c.id,
+            code: c.code,
+            type: resolvedType,
+            partyType: c.party_type,
+            partyName: c.party_name,
+            amount: Number(c.amount || 0),
+            treasuryId: c.treasury_id,
+            date: c.date,
+            notes: c.notes,
+          }
+        })
       }
 
       if (Array.isArray(cashTransfers)) {
@@ -169,23 +176,31 @@ export const AX_DatabaseSync = {
       }
 
       if (Array.isArray(invoices)) {
-        payload.invoices = invoices.map((inv) => ({
-          id: inv.id,
-          code: inv.code,
-          type: inv.type,
-          partyName: inv.party_name,
-          warehouseId: inv.warehouse_id,
-          date: inv.date,
-          transportCost: Number(inv.transport_cost || 0),
-          loadingCost: Number(inv.loading_cost || 0),
-          subtotal: Number(inv.subtotal || 0),
-          total: Number(inv.total || 0),
-          paidAmount: Number(inv.paid_amount || 0),
-          remainingAmount: Number(inv.remaining_amount || 0),
-          status: inv.status || 'paid',
-          paymentTerms: inv.payment_terms || (Number(inv.remaining_amount) > 0 ? 'مدفوع جزئي' : 'مدفوع كلي'),
-          items: inv.items || [],
-        }))
+        payload.invoices = invoices.map((inv) => {
+          let resolvedType = inv.type
+          if (inv.payment_terms === 'مردود مبيعات' || inv.code?.startsWith('RET-SALE') || inv.status === 'sale_return') {
+            resolvedType = 'sale_return'
+          } else if (inv.payment_terms === 'مردود مشتريات' || inv.code?.startsWith('RET-PURCHASE') || inv.status === 'purchase_return') {
+            resolvedType = 'purchase_return'
+          }
+          return {
+            id: inv.id,
+            code: inv.code,
+            type: resolvedType,
+            partyName: inv.party_name,
+            warehouseId: inv.warehouse_id,
+            date: inv.date,
+            transportCost: Number(inv.transport_cost || 0),
+            loadingCost: Number(inv.loading_cost || 0),
+            subtotal: Number(inv.subtotal || 0),
+            total: Number(inv.total || 0),
+            paidAmount: Number(inv.paid_amount || 0),
+            remainingAmount: Number(inv.remaining_amount || 0),
+            status: inv.status || 'paid',
+            paymentTerms: inv.payment_terms || (Number(inv.remaining_amount) > 0 ? 'مدفوع جزئي' : 'مدفوع كلي'),
+            items: inv.items || [],
+          }
+        })
       }
 
       if (Array.isArray(clients)) {

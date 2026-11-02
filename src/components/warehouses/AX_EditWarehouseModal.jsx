@@ -15,8 +15,6 @@ export function AX_EditWarehouseModal({ isOpen, onClose, warehouse }) {
   const [type, setType] = useState('cold_store')
   const [manager, setManager] = useState('')
   const [phone, setPhone] = useState('')
-  const [customType, setCustomType] = useState('')
-  const [isAddingCustomType, setIsAddingCustomType] = useState(false)
   const [errorMsg, setErrorMsg] = useState(null)
 
   const staffOptions = useMemo(() => {
@@ -35,17 +33,7 @@ export function AX_EditWarehouseModal({ isOpen, onClose, warehouse }) {
     if (warehouse) {
       setName(warehouse.name || '')
       const isKnownType = WAREHOUSE_TYPES.some((t) => t.value === warehouse.type)
-      if (isKnownType) {
-        setType(warehouse.type)
-        setIsAddingCustomType(false)
-      } else if (warehouse.type) {
-        setType('__custom__')
-        setCustomType(warehouse.type)
-        setIsAddingCustomType(true)
-      } else {
-        setType('cold_store')
-        setIsAddingCustomType(false)
-      }
+      setType(isKnownType ? warehouse.type : 'cold_store')
       setManager(warehouse.manager || '')
       setPhone(warehouse.phone || '')
       setErrorMsg(null)
@@ -60,7 +48,8 @@ export function AX_EditWarehouseModal({ isOpen, onClose, warehouse }) {
 
     setErrorMsg(null)
     try {
-      const finalType = isAddingCustomType && customType.trim() ? customType.trim() : (type || 'cold_store')
+      const validTypes = WAREHOUSE_TYPES.map((t) => t.value)
+      const finalType = validTypes.includes(type) ? type : 'cold_store'
 
       editWarehouse({
         ...warehouse,
@@ -75,10 +64,7 @@ export function AX_EditWarehouseModal({ isOpen, onClose, warehouse }) {
     }
   }
 
-  const typeOptions = [
-    ...WAREHOUSE_TYPES.map((t) => ({ value: t.value, label: t.label })),
-    { value: '__custom__', label: '+ إضافة نوع مخصص...' },
-  ]
+  const typeOptions = WAREHOUSE_TYPES.map((t) => ({ value: t.value, label: t.label }))
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-on-surface/50 backdrop-blur-sm animate-fadeIn">
@@ -121,38 +107,12 @@ export function AX_EditWarehouseModal({ isOpen, onClose, warehouse }) {
 
           <div>
             <label className="block text-xs font-black text-on-surface mb-1">طبيعة ونوع المخزن *</label>
-            {!isAddingCustomType ? (
-              <AX_SearchableSelect
-                value={type}
-                onChange={(val) => {
-                  if (val === '__custom__') {
-                    setIsAddingCustomType(true)
-                  } else {
-                    setType(val)
-                  }
-                }}
-                options={typeOptions}
-                searchable={false}
-              />
-            ) : (
-              <div className="flex gap-2 items-center">
-                <input
-                  type="text"
-                  required
-                  placeholder="اكتب نوع المخزن الجديد..."
-                  value={customType}
-                  onChange={(e) => setCustomType(e.target.value)}
-                  className="flex-1 px-3.5 py-2.5 rounded-2xl bg-surface-low border border-outline-variant/40 text-on-surface text-xs font-bold focus:border-primary focus:outline-none"
-                />
-                <button
-                  type="button"
-                  onClick={() => setIsAddingCustomType(false)}
-                  className="px-3 py-2 rounded-xl text-xs font-bold text-on-surface-variant hover:bg-surface-container"
-                >
-                  إلغاء
-                </button>
-              </div>
-            )}
+            <AX_SearchableSelect
+              value={type}
+              onChange={setType}
+              options={typeOptions}
+              searchable={false}
+            />
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

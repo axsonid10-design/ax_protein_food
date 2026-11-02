@@ -38,6 +38,15 @@ export function AX_SuppliersManager() {
   const [deletingSupplier, setDeletingSupplier] = useState(null)
 
   const [currentPage, setCurrentPage] = useState(1)
+  const activeModal = useAXStore((s) => s.activeModal)
+  const closeModal = useAXStore((s) => s.closeModal)
+
+  useEffect(() => {
+    if (activeModal === 'add_supplier' || activeModal === 'create_supplier') {
+      setIsAddOpen(true)
+      closeModal()
+    }
+  }, [activeModal, closeModal])
 
   const categories = useMemo(() => {
     const set = new Set()

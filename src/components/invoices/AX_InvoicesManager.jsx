@@ -15,19 +15,48 @@ export function AX_InvoicesManager() {
   const { invoices, items, warehouses, clients, suppliers, treasuryAccounts, addInvoice } = useAXStore()
 
   const [activeSubView, setActiveSubView] = useState('invoices')
+  const [typeFilter, setTypeFilter] = useState('all')
   const [selectedParty, setSelectedParty] = useState(clients[0]?.name || '')
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [selectedInvoiceForModal, setSelectedInvoiceForModal] = useState(null)
   const [invoicePage, setInvoicePage] = useState(1)
   const [statementPage, setStatementPage] = useState(1)
+  const activeModal = useAXStore((s) => s.activeModal)
+  const closeModal = useAXStore((s) => s.closeModal)
+
+  React.useEffect(() => {
+    if (activeModal === 'create_invoice') {
+      setShowCreateModal(true)
+      closeModal()
+    }
+  }, [activeModal, closeModal])
+
   const PAGE_SIZE = 15
 
-  const totalInvoices = invoices?.length || 0
+  const filteredInvoices = (invoices || []).filter((inv) => {
+    if (typeFilter === 'all') return true
+    return inv.type === typeFilter
+  })
+
+  const totalInvoices = filteredInvoices.length
   const totalInvPages = Math.max(1, Math.ceil(totalInvoices / PAGE_SIZE))
-  const paginatedInvoices = (invoices || []).slice(
+  const paginatedInvoices = filteredInvoices.slice(
     (invoicePage - 1) * PAGE_SIZE,
     invoicePage * PAGE_SIZE
   )
+
+  const getTypeBadge = (type) => {
+    switch (type) {
+      case 'sale_return':
+        return { label: 'مردود مبيعات', className: 'bg-purple-500/10 text-purple-700 border-purple-500/30' }
+      case 'purchase_return':
+        return { label: 'مردود مشتريات', className: 'bg-amber-500/10 text-amber-700 border-amber-500/30' }
+      case 'purchase':
+        return { label: 'فاتورة مشتريات', className: 'bg-secondary/10 text-secondary border-secondary/30' }
+      default:
+        return { label: 'فاتورة بيع', className: 'bg-primary/10 text-primary border-primary/30' }
+    }
+  }
 
   const getPartyStatementRows = () => {
     const partyInvoices = (invoices || []).filter((i) => i && i.partyName === selectedParty)
@@ -35,14 +64,35 @@ export function AX_InvoicesManager() {
 
     return partyInvoices.map((inv) => {
       const invTotal = Number(inv.total) || 0
-      runningBalance += invTotal
+      let typeLabel = 'فاتورة مبيعات'
+      let debit = 0
+      let credit = 0
+
+      if (inv.type === 'sale') {
+        typeLabel = 'فاتورة مبيعات'
+        debit = invTotal
+        runningBalance += invTotal
+      } else if (inv.type === 'sale_return') {
+        typeLabel = 'مردود مبيعات'
+        credit = invTotal
+        runningBalance -= invTotal
+      } else if (inv.type === 'purchase') {
+        typeLabel = 'فاتورة توريد مشتريات'
+        credit = invTotal
+        runningBalance += invTotal
+      } else if (inv.type === 'purchase_return') {
+        typeLabel = 'مردود مشتريات'
+        debit = invTotal
+        runningBalance -= invTotal
+      }
+
       return {
         date: inv.date || '',
-        type: inv.type === 'sale' ? 'فاتورة مبيعات' : 'فاتورة توريد مشتريات',
+        type: typeLabel,
         refCode: inv.code || '',
         invoiceObj: inv,
-        debit: inv.type === 'sale' ? invTotal : 0,
-        credit: inv.type === 'purchase' ? invTotal : 0,
+        debit,
+        credit,
         balance: runningBalance,
       }
     })
@@ -88,6 +138,32 @@ export function AX_InvoicesManager() {
 
       {activeSubView === 'invoices' ? (
         <div className="bg-surface-lowest border border-outline-variant/30 rounded-3xl p-5 shadow-level1 space-y-4">
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-thin">
+            {[
+              { id: 'all', label: 'الكل' },
+              { id: 'sale', label: 'مبيعات' },
+              { id: 'purchase', label: 'مشتريات' },
+              { id: 'sale_return', label: 'مردودات مبيعات' },
+              { id: 'purchase_return', label: 'مردودات مشتريات' },
+            ].map((tab) => (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => {
+                  setTypeFilter(tab.id)
+                  setInvoicePage(1)
+                }}
+                className={`px-3 py-1 rounded-full text-[11px] font-black whitespace-nowrap transition-all cursor-pointer ${
+                  typeFilter === tab.id
+                    ? 'bg-primary text-white shadow-xs'
+                    : 'bg-surface-low text-on-surface-variant hover:text-on-surface border border-outline-variant/20'
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+
           <div className="hidden lg:block overflow-hidden rounded-2xl border border-surface-container">
             <table className="w-full text-right text-xs">
               <thead className="bg-surface-low border-b border-surface-container text-on-surface-variant font-black">
@@ -106,49 +182,46 @@ export function AX_InvoicesManager() {
                 {paginatedInvoices.length === 0 ? (
                   <tr>
                     <td colSpan={8} className="py-8 text-center text-xs font-bold text-on-surface-variant">
-                      لا توجد فواتير مسجلة حتى الآن. اضغط على "فاتورة جديدة" بالأعلى لتسجيل حركة بيع أو شراء.
+                      لا توجد فواتير تطابق هذا التصنيف. اضغط على "فاتورة جديدة" بالأعلى لتسجيل حركة بيع أو شراء.
                     </td>
                   </tr>
                 ) : (
-                  paginatedInvoices.map((inv) => (
-                    <tr key={inv.id} className="h-11 hover:bg-surface-low/50 transition-colors">
-                      <td className="px-3.5 whitespace-nowrap font-mono text-primary font-black">{inv.code}</td>
-                      <td className="px-3.5 whitespace-nowrap">
-                        <span
-                          className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold ${
-                            inv.type === 'sale'
-                              ? 'bg-secondary-container text-secondary-on-container'
-                              : 'bg-surface-low text-on-surface-variant border border-outline-variant/30'
-                          }`}
-                        >
-                          {inv.type === 'sale' ? 'فاتورة بيع' : 'فاتورة مشتريات'}
-                        </span>
-                      </td>
-                      <td className="px-3.5 whitespace-nowrap font-black">{inv.partyName}</td>
-                      <td className="px-3.5 whitespace-nowrap text-on-surface-variant">{inv.date}</td>
-                      <td className="px-3.5 whitespace-nowrap font-mono font-bold text-on-surface-variant">
-                        {((Number(inv.transportCost) || 0) + (Number(inv.loadingCost) || 0)).toLocaleString('en-US')} ج.م
-                      </td>
-                      <td className="px-3.5 whitespace-nowrap font-mono font-black text-primary">
-                        {(Number(inv.total) || 0).toLocaleString('en-US')} ج.م
-                      </td>
-                      <td className="px-3.5 whitespace-nowrap">
-                        <span className="text-[11px] font-bold text-on-surface-variant">
-                          {inv.paymentTerms}
-                        </span>
-                      </td>
-                      <td className="px-3.5 whitespace-nowrap text-center">
-                        <button
-                          type="button"
-                          onClick={() => setSelectedInvoiceForModal(inv)}
-                          className="p-1.5 rounded-full hover:bg-surface-container text-primary transition-colors cursor-pointer"
-                          title="عرض تفاصيل الفاتورة"
-                        >
-                          <Eye className="w-4 h-4" />
-                        </button>
-                      </td>
-                    </tr>
-                  ))
+                  paginatedInvoices.map((inv) => {
+                    const badge = getTypeBadge(inv.type)
+                    return (
+                      <tr key={inv.id} className="h-11 hover:bg-surface-low/50 transition-colors">
+                        <td className="px-3.5 whitespace-nowrap font-mono text-primary font-black">{inv.code}</td>
+                        <td className="px-3.5 whitespace-nowrap">
+                          <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold border ${badge.className}`}>
+                            {badge.label}
+                          </span>
+                        </td>
+                        <td className="px-3.5 whitespace-nowrap font-black">{inv.partyName}</td>
+                        <td className="px-3.5 whitespace-nowrap text-on-surface-variant">{inv.date}</td>
+                        <td className="px-3.5 whitespace-nowrap font-mono font-bold text-on-surface-variant">
+                          {((Number(inv.transportCost) || 0) + (Number(inv.loadingCost) || 0)).toLocaleString('en-US')} ج.م
+                        </td>
+                        <td className="px-3.5 whitespace-nowrap font-mono font-black text-primary">
+                          {(Number(inv.total) || 0).toLocaleString('en-US')} ج.م
+                        </td>
+                        <td className="px-3.5 whitespace-nowrap">
+                          <span className="text-[11px] font-bold text-on-surface-variant">
+                            {inv.paymentTerms}
+                          </span>
+                        </td>
+                        <td className="px-3.5 whitespace-nowrap text-center">
+                          <button
+                            type="button"
+                            onClick={() => setSelectedInvoiceForModal(inv)}
+                            className="p-1.5 rounded-full hover:bg-surface-container text-primary transition-colors cursor-pointer"
+                            title="عرض تفاصيل الفاتورة"
+                          >
+                            <Eye className="w-4 h-4" />
+                          </button>
+                        </td>
+                      </tr>
+                    )
+                  })
                 )}
               </tbody>
             </table>
@@ -157,31 +230,39 @@ export function AX_InvoicesManager() {
           <div className="grid grid-cols-1 gap-3 lg:hidden">
             {paginatedInvoices.length === 0 ? (
               <div className="py-8 text-center text-xs font-bold text-on-surface-variant bg-surface-low/30 rounded-2xl border border-dashed border-outline-variant/30">
-                لا توجد فواتير مسجلة حتى الآن.
+                لا توجد فواتير تطابق هذا التصنيف.
               </div>
             ) : (
-              paginatedInvoices.map((inv) => (
-                <div
-                  key={inv.id}
-                  onClick={() => setSelectedInvoiceForModal(inv)}
-                  className="bg-surface-low/50 border border-outline-variant/30 rounded-2xl p-4 shadow-sm space-y-2 cursor-pointer hover:border-primary/40 transition-colors"
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="font-mono text-xs font-bold text-primary">{inv.code}</span>
-                    <span className="text-xs text-on-surface-variant">{inv.date}</span>
+              paginatedInvoices.map((inv) => {
+                const badge = getTypeBadge(inv.type)
+                return (
+                  <div
+                    key={inv.id}
+                    onClick={() => setSelectedInvoiceForModal(inv)}
+                    className="bg-surface-low/50 border border-outline-variant/30 rounded-2xl p-4 shadow-sm space-y-2 cursor-pointer hover:border-primary/40 transition-colors"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-mono text-xs font-bold text-primary">{inv.code}</span>
+                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${badge.className}`}>
+                          {badge.label}
+                        </span>
+                      </div>
+                      <span className="text-xs text-on-surface-variant">{inv.date}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="font-black text-sm text-on-surface">{inv.partyName}</span>
+                      <span className="font-mono font-black text-primary text-sm">
+                        {(Number(inv.total) || 0).toLocaleString('en-US')} ج.م
+                      </span>
+                    </div>
+                    <div className="text-[11px] text-on-surface-variant flex items-center justify-between pt-2 border-t border-surface-container">
+                      <span>نقل ومشال: {((Number(inv.transportCost) || 0) + (Number(inv.loadingCost) || 0)).toLocaleString('en-US')} ج.م</span>
+                      <span className="font-bold text-secondary">عرض البنود ←</span>
+                    </div>
                   </div>
-                  <div className="flex items-center justify-between">
-                    <span className="font-black text-sm text-on-surface">{inv.partyName}</span>
-                    <span className="font-mono font-black text-primary text-sm">
-                      {(Number(inv.total) || 0).toLocaleString('en-US')} ج.م
-                    </span>
-                  </div>
-                  <div className="text-[11px] text-on-surface-variant flex items-center justify-between pt-2 border-t border-surface-container">
-                    <span>نقل ومشال: {((Number(inv.transportCost) || 0) + (Number(inv.loadingCost) || 0)).toLocaleString('en-US')} ج.م</span>
-                    <span className="font-bold text-secondary">عرض البنود ←</span>
-                  </div>
-                </div>
-              ))
+                )
+              })
             )}
           </div>
 

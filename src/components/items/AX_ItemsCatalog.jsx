@@ -277,11 +277,6 @@ export function AX_ItemsCatalog() {
                         {item.piecesPerCarton} قطعة
                       </span>
                     )}
-                    {Number(item.grainsPerPiece) > 0 && (
-                      <span className="px-1.5 py-0.2 rounded bg-secondary/10 text-secondary border border-secondary/20 text-[10px]">
-                        {item.grainsPerPiece} حبة
-                      </span>
-                    )}
                   </span>
                 </td>
                 <td className="px-3.5 whitespace-nowrap">
@@ -340,7 +335,6 @@ export function AX_ItemsCatalog() {
                   {item.subCategory}
                   {item.secondaryCategory ? ` • ${item.secondaryCategory}` : ''}
                   {Number(item.piecesPerCarton) > 0 ? ` • ${item.piecesPerCarton} قطعة` : ''}
-                  {Number(item.grainsPerPiece) > 0 ? ` • ${item.grainsPerPiece} حبة` : ''}
                 </span>
               </div>
               <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-black border ${getCategoryClass(item.primaryCategory)}`}>

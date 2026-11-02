@@ -36,55 +36,76 @@ export function AX_TreasuryTransactionsTable({
             </tr>
           </thead>
           <tbody className="divide-y divide-surface-container text-on-surface font-bold">
-            {paginatedTransactions.map((tx) => (
-              <tr key={tx.id} className="h-11 hover:bg-surface-low/50 transition-colors">
-                <td className="px-3.5 whitespace-nowrap font-mono text-primary font-black">{tx.code}</td>
-                <td className="px-3.5 whitespace-nowrap">
-                  {tx.type === 'client_receipt' ? (
-                    <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-primary/10 text-primary">
-                      <ArrowDownLeft className="w-3 h-3" /> وارد قبض
-                    </span>
-                  ) : (
-                    <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-error-container/40 text-error">
-                      <ArrowUpRight className="w-3 h-3" /> صادر سداد
-                    </span>
-                  )}
-                </td>
-                <td className="px-3.5 whitespace-nowrap font-black">{tx.partyName}</td>
-                <td className="px-3.5 whitespace-nowrap text-on-surface-variant">{getTreasuryName(tx.treasuryId)}</td>
-                <td className="px-3.5 whitespace-nowrap font-mono font-black text-sm">
-                  {(Number(tx.amount) || 0).toLocaleString('en-US')} ج.م
-                </td>
-                <td className="px-3.5 whitespace-nowrap text-on-surface-variant">{tx.date}</td>
-                <td className="px-3.5 whitespace-nowrap text-on-surface-variant text-[11px] truncate max-w-xs">{tx.notes}</td>
-              </tr>
-            ))}
+            {paginatedTransactions.map((tx) => {
+              const isPayroll = tx.type === 'payroll' || tx.notes?.startsWith('[أجور ومرتبات]')
+              const isExpense = tx.type === 'expense' && !isPayroll
+              return (
+                <tr key={tx.id} className="h-11 hover:bg-surface-low/50 transition-colors">
+                  <td className="px-3.5 whitespace-nowrap font-mono text-primary font-black">{tx.code}</td>
+                  <td className="px-3.5 whitespace-nowrap">
+                    {tx.type === 'client_receipt' ? (
+                      <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-700 border border-emerald-500/20">
+                        <ArrowDownLeft className="w-3 h-3" /> وارد قبض
+                      </span>
+                    ) : isExpense ? (
+                      <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-amber-500/10 text-amber-700 border border-amber-500/20">
+                        <ArrowUpRight className="w-3 h-3" /> صادر مصروف
+                      </span>
+                    ) : isPayroll ? (
+                      <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-purple-500/10 text-purple-700 border border-purple-500/20">
+                        <ArrowUpRight className="w-3 h-3" /> صادر أجور
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-error-container/40 text-error">
+                        <ArrowUpRight className="w-3 h-3" /> صادر سداد
+                      </span>
+                    )}
+                  </td>
+                  <td className="px-3.5 whitespace-nowrap font-black">{tx.partyName}</td>
+                  <td className="px-3.5 whitespace-nowrap text-on-surface-variant">{getTreasuryName(tx.treasuryId)}</td>
+                  <td className="px-3.5 whitespace-nowrap font-mono font-black text-sm">
+                    {(Number(tx.amount) || 0).toLocaleString('en-US')} ج.م
+                  </td>
+                  <td className="px-3.5 whitespace-nowrap text-on-surface-variant">{tx.date}</td>
+                  <td className="px-3.5 whitespace-nowrap text-on-surface-variant text-[11px] truncate max-w-xs">{tx.notes}</td>
+                </tr>
+              )
+            })}
           </tbody>
         </table>
       </div>
 
       <div className="grid grid-cols-1 gap-3 lg:hidden">
-        {paginatedTransactions.map((tx) => (
-          <div
-            key={tx.id}
-            className="bg-surface-low/50 border border-outline-variant/30 rounded-2xl p-4 shadow-sm space-y-2"
-          >
-            <div className="flex items-center justify-between">
-              <span className="font-mono text-xs font-bold text-primary">{tx.code}</span>
-              <span className="text-xs text-on-surface-variant">{tx.date}</span>
+        {paginatedTransactions.map((tx) => {
+          const isPayroll = tx.type === 'payroll' || tx.notes?.startsWith('[أجور ومرتبات]')
+          const isExpense = tx.type === 'expense' && !isPayroll
+          return (
+            <div
+              key={tx.id}
+              className="bg-surface-low/50 border border-outline-variant/30 rounded-2xl p-4 shadow-sm space-y-2"
+            >
+              <div className="flex items-center justify-between">
+                <span className="font-mono text-xs font-bold text-primary">{tx.code}</span>
+                <span className="text-xs text-on-surface-variant">{tx.date}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <div>
+                  <span className="font-black text-sm text-on-surface block">{tx.partyName}</span>
+                  <span className="text-[10px] text-on-surface-variant">
+                    {tx.type === 'client_receipt' ? 'وارد قبض' : isExpense ? 'مصروف' : isPayroll ? 'أجور' : 'سداد مورد'}
+                  </span>
+                </div>
+                <span className="font-mono font-black text-sm text-primary">
+                  {(Number(tx.amount) || 0).toLocaleString('en-US')} ج.م
+                </span>
+              </div>
+              <div className="text-xs text-on-surface-variant flex items-center justify-between pt-2 border-t border-surface-container">
+                <span>{getTreasuryName(tx.treasuryId)}</span>
+                <span className="italic truncate max-w-[180px]">{tx.notes}</span>
+              </div>
             </div>
-            <div className="flex items-center justify-between">
-              <span className="font-black text-sm text-on-surface">{tx.partyName}</span>
-              <span className="font-mono font-black text-sm text-primary">
-                {(Number(tx.amount) || 0).toLocaleString('en-US')} ج.م
-              </span>
-            </div>
-            <div className="text-xs text-on-surface-variant flex items-center justify-between pt-2 border-t border-surface-container">
-              <span>{getTreasuryName(tx.treasuryId)}</span>
-              <span className="italic">{tx.notes}</span>
-            </div>
-          </div>
-        ))}
+          )
+        })}
       </div>
 
       {totalPages > 1 && (

@@ -6,19 +6,10 @@ const os = require('os')
 const rootDir = path.resolve(__dirname, '..')
 
 let env = { ...process.env }
-const credPath = path.join(os.homedir(), '.gemini', 'antigravity', 'cloudflare_creds.json')
-let zoneId = '0dd86559ec5e4085d682d08892f5fe83'
-let apiToken = ''
-let accountId = 'cb2cbce9c005b6719994cfbeefdc5da8'
-
-if (fs.existsSync(credPath)) {
-  try {
-    const creds = JSON.parse(fs.readFileSync(credPath, 'utf-8'))
-    if (creds.api_token) apiToken = creds.api_token
-    if (creds.account_id) accountId = creds.account_id
-    if (creds.zone_id) zoneId = creds.zone_id
-  } catch {}
-}
+// Locked Cloudflare account for AX_PROTEIN_FOOD
+const zoneId = '0dd86559ec5e4085d682d08892f5fe83'
+const apiToken = ''
+const accountId = 'cb2cbce9c005b6719994cfbeefdc5da8'
 
 env.CLOUDFLARE_API_TOKEN = apiToken
 env.CLOUDFLARE_ACCOUNT_ID = accountId
