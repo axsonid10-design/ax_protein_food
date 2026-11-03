@@ -10,6 +10,7 @@ import {
   Trash2,
   PhoneCall,
   Eye,
+  UserCheck,
 } from 'lucide-react'
 import { getTransformedUrl } from '../../services/imageKitService'
 
@@ -108,12 +109,16 @@ export function AX_CustomerBentoCard({
       </div>
 
       <div className="flex items-center justify-between gap-1.5 pt-1">
-        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-surface-container text-on-surface-variant font-bold text-[10px] truncate max-w-[140px]">
-          <Tag className="w-2.5 h-2.5 text-primary flex-shrink-0" />
-          <span className="truncate">
-            {[customer.primaryCategory, customer.subCategory].filter(Boolean).join(' > ') || 'عام'}
+        <div className="flex items-center gap-1 min-w-0">
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-primary/10 text-primary font-bold text-[10px] truncate max-w-[120px]" title={customer.salesRepName || 'إدارة مباشرة'}>
+            <UserCheck className="w-2.5 h-2.5 flex-shrink-0" />
+            <span className="truncate">{customer.salesRepName || 'إدارة مباشرة'}</span>
           </span>
-        </span>
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-surface-container text-on-surface-variant font-bold text-[10px] truncate max-w-[90px]">
+            <Tag className="w-2.5 h-2.5 text-primary flex-shrink-0" />
+            <span className="truncate">{customer.primaryCategory || 'عام'}</span>
+          </span>
+        </div>
 
         <div className="flex items-center gap-1.5">
           {customer.phone && (

@@ -204,7 +204,19 @@ export const AX_DatabaseSync = {
       }
 
       if (Array.isArray(clients)) {
-        payload.clients = clients
+        payload.clients = clients.map((c) => ({
+          ...c,
+          salesRepName: c.sales_rep_name || c.salesRepName || '',
+          commercialRegister: c.commercial_register || c.commercialRegister || '',
+          contactPerson: c.contact_person || c.contactPerson || '',
+          phone2: c.phone2 || '',
+          governorate: c.governorate || '',
+          city: c.city || '',
+          district: c.district || '',
+          primaryCategory: c.primary_category || c.primaryCategory || 'عام',
+          notes: c.notes || '',
+          attachments: c.attachments || [],
+        }))
       }
 
       if (Array.isArray(suppliers)) {

@@ -132,4 +132,29 @@ describe('Tier 1: Customers Management & Balances (F4, F5, F6, F7, F8)', () => {
     customer.balance -= cashReceipt
     assert.strictEqual(customer.balance, 3000, '13000 - 10000 cash payment = 3000')
   })
+
+  it('should support salesRepName (تبعية المندوب) and geographic fields side-by-side', () => {
+    const customer = {
+      name: 'سوبر ماركت الفيروز',
+      contactPerson: 'الحاج جابر',
+      phone: '01011223344',
+      phone2: '01299887766',
+      salesRepName: 'محمد عبد الله',
+      commercialRegister: '12345/جيزة',
+      governorate: 'الجيزة',
+      city: 'السادس من أكتوبر',
+      district: 'الحي المتميز',
+      address: 'المحور المركزي مول السرايا',
+      primaryCategory: 'سوبر ماركت',
+      balance: 0,
+    }
+
+    assert.strictEqual(customer.salesRepName, 'محمد عبد الله')
+    assert.strictEqual(customer.commercialRegister, '12345/جيزة')
+    assert.strictEqual(customer.governorate, 'الجيزة')
+    assert.strictEqual(customer.city, 'السادس من أكتوبر')
+    assert.strictEqual(customer.district, 'الحي المتميز')
+    assert.strictEqual(customer.contactPerson, 'الحاج جابر')
+    assert.strictEqual(customer.phone2, '01299887766')
+  })
 })

@@ -8,6 +8,7 @@ import {
   Tag,
   Building,
   Eye,
+  UserCheck,
 } from 'lucide-react'
 
 export function AX_CustomersTable({
@@ -31,6 +32,7 @@ export function AX_CustomersTable({
               <th className="px-4 whitespace-nowrap">العميل</th>
               <th className="px-3 whitespace-nowrap">الهاتف</th>
               <th className="px-3 whitespace-nowrap">الموقع الجغرافي</th>
+              <th className="px-3 whitespace-nowrap">تبعية المندوب</th>
               <th className="px-3 whitespace-nowrap">التصنيف</th>
               <th className="px-3 whitespace-nowrap font-mono">الرصيد الحالي</th>
               <th className="px-3 whitespace-nowrap text-center">الحالة</th>
@@ -81,9 +83,16 @@ export function AX_CustomersTable({
                   </td>
 
                   <td className="px-3 whitespace-nowrap">
+                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-primary/10 text-primary font-bold text-[11px]">
+                      <UserCheck className="w-3 h-3 text-primary flex-shrink-0" />
+                      <span className="truncate max-w-[120px]">{c.salesRepName || 'إدارة مباشرة'}</span>
+                    </span>
+                  </td>
+
+                  <td className="px-3 whitespace-nowrap">
                     <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-surface-container text-on-surface-variant font-bold text-[11px]">
                       <Tag className="w-3 h-3 text-primary" />
-                      {c.primaryCategory || 'عام'} {c.subCategory ? `• ${c.subCategory}` : ''}
+                      {c.primaryCategory || 'عام'}
                     </span>
                   </td>
 

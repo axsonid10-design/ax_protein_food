@@ -238,7 +238,7 @@ export function AX_CustomerDetailsModal({ customer, isOpen, onClose }) {
                 <div className="flex justify-between border-b border-outline-variant/20 pb-1.5">
                   <span className="text-on-surface-variant font-bold">التصنيف:</span>
                   <span className="font-bold text-primary">
-                    {[customer.primaryCategory, customer.subCategory].filter(Boolean).join(' > ') || 'عام'}
+                    {customer.primaryCategory || 'عام'}
                   </span>
                 </div>
               </div>
@@ -249,8 +249,8 @@ export function AX_CustomerDetailsModal({ customer, isOpen, onClose }) {
                   <span className="font-mono font-bold text-on-surface">{customer.commercialRegister || '—'}</span>
                 </div>
                 <div className="flex justify-between border-b border-outline-variant/20 pb-1.5">
-                  <span className="text-on-surface-variant font-bold">البطاقة الضريبية:</span>
-                  <span className="font-mono font-bold text-on-surface">{customer.taxNumber || '—'}</span>
+                  <span className="text-on-surface-variant font-bold">تبعية المندوب:</span>
+                  <span className="font-bold text-primary">{customer.salesRepName || 'إدارة مباشرة'}</span>
                 </div>
                 <div className="flex justify-between border-b border-outline-variant/20 pb-1.5">
                   <span className="text-on-surface-variant font-bold">العنوان التفصيلي:</span>

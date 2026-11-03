@@ -9,6 +9,7 @@ import {
   Upload,
   Image as ImageIcon,
   X,
+  UserCheck,
 } from 'lucide-react'
 import { GOVERNORATES, DEFAULT_CATEGORIES } from './customerConstants'
 import { getTransformedUrl } from '../../services/imageKitService'
@@ -20,15 +21,13 @@ export function AX_CustomerFormFields({
   phone, setPhone,
   phone2, setPhone2,
   commercialRegister, setCommercialRegister,
-  taxNumber, setTaxNumber,
+  salesRepName, setSalesRepName,
+  salesReps = [],
   governorate, setGovernorate,
   city, setCity,
   district, setDistrict,
   address, setAddress,
   primaryCategory, handlePrimaryCategoryChange,
-  subCategory, setSubCategory,
-  customSubCategory, setCustomSubCategory,
-  isAddingCustomSub, setIsAddingCustomSub,
   openingBalance, setOpeningBalance,
   openingBalanceType, setOpeningBalanceType,
   openingBalanceDate, setOpeningBalanceDate,
@@ -95,6 +94,26 @@ export function AX_CustomerFormFields({
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div className="space-y-1">
           <label className="text-xs font-bold text-on-surface flex items-center gap-1.5">
+            <UserCheck className="w-3.5 h-3.5 text-primary" />
+            تبعية المندوب
+          </label>
+          <input
+            type="text"
+            list="customer-sales-reps-list"
+            value={salesRepName}
+            onChange={(e) => setSalesRepName(e.target.value)}
+            placeholder="اختر أو اكتب اسم المندوب المسؤول"
+            className="w-full px-3.5 py-2 rounded-full border border-outline-variant/60 focus:border-primary text-xs sm:text-sm font-semibold bg-surface-lowest text-on-surface outline-none"
+          />
+          <datalist id="customer-sales-reps-list">
+            <option value="إدارة مباشرة (بدون مندوب)" />
+            {salesReps.map((r) => (
+              <option key={r.id || r.name} value={r.name} />
+            ))}
+          </datalist>
+        </div>
+        <div className="space-y-1">
+          <label className="text-xs font-bold text-on-surface flex items-center gap-1.5">
             <FileText className="w-3.5 h-3.5 text-primary" />
             السجل التجاري
           </label>
@@ -102,17 +121,7 @@ export function AX_CustomerFormFields({
             type="text"
             value={commercialRegister}
             onChange={(e) => setCommercialRegister(e.target.value)}
-            placeholder="CR-XXXXXX"
-            className="w-full px-3.5 py-2 rounded-full border border-outline-variant/60 focus:border-primary text-xs sm:text-sm font-mono bg-surface-lowest text-on-surface outline-none"
-          />
-        </div>
-        <div className="space-y-1">
-          <label className="text-xs font-bold text-on-surface">البطاقة الضريبية</label>
-          <input
-            type="text"
-            value={taxNumber}
-            onChange={(e) => setTaxNumber(e.target.value)}
-            placeholder="TX-XXX-XXX"
+            placeholder="سجل تجاري / ترخيص المنشأة"
             className="w-full px-3.5 py-2 rounded-full border border-outline-variant/60 focus:border-primary text-xs sm:text-sm font-mono bg-surface-lowest text-on-surface outline-none"
           />
         </div>
@@ -167,53 +176,20 @@ export function AX_CustomerFormFields({
         />
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <div className="space-y-1">
-          <label className="text-xs font-bold text-on-surface flex items-center gap-1.5">
-            <Tag className="w-3.5 h-3.5 text-primary" />
-            التصنيف الرئيسي
-          </label>
-          <select
-            value={primaryCategory}
-            onChange={(e) => handlePrimaryCategoryChange(e.target.value)}
-            className="w-full px-3.5 py-2 rounded-full border border-outline-variant/60 focus:border-primary text-xs font-semibold bg-surface-lowest text-on-surface outline-none cursor-pointer"
-          >
-            {Object.keys(DEFAULT_CATEGORIES).map((c) => (
-              <option key={c} value={c}>{c}</option>
-            ))}
-          </select>
-        </div>
-        <div className="space-y-1">
-          <div className="flex items-center justify-between">
-            <label className="text-xs font-bold text-on-surface">التصنيف الفرعي</label>
-            <button
-              type="button"
-              onClick={() => setIsAddingCustomSub(!isAddingCustomSub)}
-              className="text-[10px] text-primary hover:underline font-bold"
-            >
-              {isAddingCustomSub ? 'اختيار من القائمة' : '+ مخصص'}
-            </button>
-          </div>
-          {isAddingCustomSub ? (
-            <input
-              type="text"
-              value={customSubCategory}
-              onChange={(e) => setCustomSubCategory(e.target.value)}
-              placeholder="التصنيف الفرعي المخصص..."
-              className="w-full px-3.5 py-2 rounded-full border border-primary text-xs font-semibold bg-surface-lowest text-on-surface outline-none"
-            />
-          ) : (
-            <select
-              value={subCategory}
-              onChange={(e) => setSubCategory(e.target.value)}
-              className="w-full px-3.5 py-2 rounded-full border border-outline-variant/60 focus:border-primary text-xs font-semibold bg-surface-lowest text-on-surface outline-none cursor-pointer"
-            >
-              {(DEFAULT_CATEGORIES[primaryCategory] || ['عام']).map((sc) => (
-                <option key={sc} value={sc}>{sc}</option>
-              ))}
-            </select>
-          )}
-        </div>
+      <div className="space-y-1">
+        <label className="text-xs font-bold text-on-surface flex items-center gap-1.5">
+          <Tag className="w-3.5 h-3.5 text-primary" />
+          تصنيف النشاط
+        </label>
+        <select
+          value={primaryCategory}
+          onChange={(e) => handlePrimaryCategoryChange(e.target.value)}
+          className="w-full px-3.5 py-2 rounded-full border border-outline-variant/60 focus:border-primary text-xs font-semibold bg-surface-lowest text-on-surface outline-none cursor-pointer"
+        >
+          {Object.keys(DEFAULT_CATEGORIES).map((c) => (
+            <option key={c} value={c}>{c}</option>
+          ))}
+        </select>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-surface-low/50 p-2.5 rounded-2xl border border-outline-variant/30">
@@ -287,7 +263,7 @@ export function AX_CustomerFormFields({
             <ImageIcon className="w-3.5 h-3.5 text-primary" />
             مستندات وصور العميل (ImageKit)
           </span>
-          <span className="text-[11px] text-on-surface-variant">سجل، بطاقة ضريبية، واجهة</span>
+          <span className="text-[11px] text-on-surface-variant">سجل، ترخيص، واجهة</span>
         </label>
         <div className="flex flex-wrap items-center gap-2">
           <label className="cursor-pointer inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full border border-dashed border-primary/50 text-primary hover:bg-primary/5 text-xs font-bold transition-all">

@@ -13,6 +13,16 @@ export const AX_CustomerOperationsService = {
         address: (customer.address || '').trim() || (customer.isIncomplete ? 'بيانات ناقصة' : ''),
         balance: Number(customer.balance || 0),
         created_at: customer.createdAt || new Date().toISOString(),
+        sales_rep_name: (customer.salesRepName || '').trim() || null,
+        commercial_register: (customer.commercialRegister || '').trim() || null,
+        contact_person: (customer.contactPerson || '').trim() || null,
+        phone2: (customer.phone2 || '').trim() || null,
+        governorate: (customer.governorate || '').trim() || null,
+        city: (customer.city || '').trim() || null,
+        district: (customer.district || '').trim() || null,
+        primary_category: (customer.primaryCategory || '').trim() || null,
+        notes: (customer.notes || '').trim() || null,
+        attachments: customer.attachments || [],
       }
       const { error } = await supabase.from('ax_clients').insert(row)
       if (error) throw error
@@ -42,6 +52,16 @@ export const AX_CustomerOperationsService = {
         phone: (customer.phone || '').trim(),
         address: (customer.address || '').trim(),
         balance: Number(customer.balance || 0),
+        sales_rep_name: (customer.salesRepName || '').trim() || null,
+        commercial_register: (customer.commercialRegister || '').trim() || null,
+        contact_person: (customer.contactPerson || '').trim() || null,
+        phone2: (customer.phone2 || '').trim() || null,
+        governorate: (customer.governorate || '').trim() || null,
+        city: (customer.city || '').trim() || null,
+        district: (customer.district || '').trim() || null,
+        primary_category: (customer.primaryCategory || '').trim() || null,
+        notes: (customer.notes || '').trim() || null,
+        attachments: customer.attachments || [],
       }
       const { error } = await supabase.from('ax_clients').update(row).eq('id', customer.id)
       if (error) throw error

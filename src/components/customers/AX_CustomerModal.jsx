@@ -17,22 +17,19 @@ import { AX_CustomerFormFields } from './AX_CustomerFormFields'
 
 export function AX_CustomerModal({ isOpen, onClose, customer = null, onSuccess }) {
   useBodyScrollLock(isOpen, onClose)
-  const { addClient, updateClient, profile } = useAXStore()
+  const { addClient, updateClient, profile, salesReps = [] } = useAXStore()
 
   const [name, setName] = useState('')
   const [contactPerson, setContactPerson] = useState('')
   const [phone, setPhone] = useState('')
   const [phone2, setPhone2] = useState('')
   const [commercialRegister, setCommercialRegister] = useState('')
-  const [taxNumber, setTaxNumber] = useState('')
+  const [salesRepName, setSalesRepName] = useState('')
   const [governorate, setGovernorate] = useState('القاهرة')
   const [city, setCity] = useState('')
   const [district, setDistrict] = useState('')
   const [address, setAddress] = useState('')
   const [primaryCategory, setPrimaryCategory] = useState('مطاعم وفنادق (HORECA)')
-  const [subCategory, setSubCategory] = useState('مشويات وكباب')
-  const [customSubCategory, setCustomSubCategory] = useState('')
-  const [isAddingCustomSub, setIsAddingCustomSub] = useState(false)
   const [openingBalance, setOpeningBalance] = useState('')
   const [openingBalanceType, setOpeningBalanceType] = useState('debit')
   const [openingBalanceDate, setOpeningBalanceDate] = useState(() => new Date().toISOString().split('T')[0])
@@ -51,13 +48,12 @@ export function AX_CustomerModal({ isOpen, onClose, customer = null, onSuccess }
       setPhone(customer.phone || '')
       setPhone2(customer.phone2 || '')
       setCommercialRegister(customer.commercialRegister || '')
-      setTaxNumber(customer.taxNumber || '')
+      setSalesRepName(customer.salesRepName || '')
       setGovernorate(customer.governorate || 'القاهرة')
       setCity(customer.city || '')
       setDistrict(customer.district || '')
       setAddress(customer.address || '')
       setPrimaryCategory(customer.primaryCategory || 'مطاعم وفنادق (HORECA)')
-      setSubCategory(customer.subCategory || 'مشويات وكباب')
       setOpeningBalance(customer.openingBalance !== undefined ? String(customer.openingBalance) : '')
       setOpeningBalanceType(customer.openingBalanceType || 'debit')
       setOpeningBalanceDate(customer.openingBalanceDate || customer.createdAt?.split('T')[0] || new Date().toISOString().split('T')[0])
@@ -70,15 +66,12 @@ export function AX_CustomerModal({ isOpen, onClose, customer = null, onSuccess }
       setPhone('')
       setPhone2('')
       setCommercialRegister('')
-      setTaxNumber('')
+      setSalesRepName('')
       setGovernorate('القاهرة')
       setCity('')
       setDistrict('')
       setAddress('')
       setPrimaryCategory('مطاعم وفنادق (HORECA)')
-      setSubCategory('مشويات وكباب')
-      setCustomSubCategory('')
-      setIsAddingCustomSub(false)
       setOpeningBalance('')
       setOpeningBalanceType('debit')
       setOpeningBalanceDate(new Date().toISOString().split('T')[0])
@@ -113,9 +106,6 @@ export function AX_CustomerModal({ isOpen, onClose, customer = null, onSuccess }
 
   const handlePrimaryCategoryChange = (val) => {
     setPrimaryCategory(val)
-    const subs = DEFAULT_CATEGORIES[val] || ['عام']
-    setSubCategory(subs[0] || 'عام')
-    setIsAddingCustomSub(false)
   }
 
   const handleSubmit = async (e) => {
@@ -130,7 +120,6 @@ export function AX_CustomerModal({ isOpen, onClose, customer = null, onSuccess }
       const rawOpening = Number(openingBalance) || 0
       const normalizedOpening = rawOpening === 0 ? 0 : rawOpening
       const signedOpening = normalizedOpening === 0 ? 0 : (openingBalanceType === 'debit' ? normalizedOpening : -normalizedOpening)
-      const finalSub = isAddingCustomSub && customSubCategory.trim() ? customSubCategory.trim() : subCategory
       const isIncomplete = !phone.trim() && !address.trim() && !city.trim()
 
       if (isEditMode) {
@@ -143,13 +132,13 @@ export function AX_CustomerModal({ isOpen, onClose, customer = null, onSuccess }
           phone: phone.trim(),
           phone2: phone2.trim(),
           commercialRegister: commercialRegister.trim(),
-          taxNumber: taxNumber.trim(),
+          salesRepName: salesRepName.trim(),
           governorate: governorate || '',
           city: city.trim(),
           district: district.trim(),
           address: address.trim(),
           primaryCategory: primaryCategory || '',
-          subCategory: finalSub || '',
+          subCategory: '',
           openingBalance: normalizedOpening,
           openingBalanceType,
           openingBalanceDate,
@@ -170,13 +159,13 @@ export function AX_CustomerModal({ isOpen, onClose, customer = null, onSuccess }
           phone: phone.trim(),
           phone2: phone2.trim(),
           commercialRegister: commercialRegister.trim(),
-          taxNumber: taxNumber.trim(),
+          salesRepName: salesRepName.trim(),
           governorate: governorate || '',
           city: city.trim(),
           district: district.trim(),
           address: address.trim(),
           primaryCategory: primaryCategory || '',
-          subCategory: finalSub || '',
+          subCategory: '',
           openingBalance: normalizedOpening,
           openingBalanceType,
           openingBalanceDate,
@@ -238,15 +227,13 @@ export function AX_CustomerModal({ isOpen, onClose, customer = null, onSuccess }
             phone={phone} setPhone={setPhone}
             phone2={phone2} setPhone2={setPhone2}
             commercialRegister={commercialRegister} setCommercialRegister={setCommercialRegister}
-            taxNumber={taxNumber} setTaxNumber={setTaxNumber}
+            salesRepName={salesRepName} setSalesRepName={setSalesRepName}
+            salesReps={salesReps}
             governorate={governorate} setGovernorate={setGovernorate}
             city={city} setCity={setCity}
             district={district} setDistrict={setDistrict}
             address={address} setAddress={setAddress}
             primaryCategory={primaryCategory} handlePrimaryCategoryChange={handlePrimaryCategoryChange}
-            subCategory={subCategory} setSubCategory={setSubCategory}
-            customSubCategory={customSubCategory} setCustomSubCategory={setCustomSubCategory}
-            isAddingCustomSub={isAddingCustomSub} setIsAddingCustomSub={setIsAddingCustomSub}
             openingBalance={openingBalance} setOpeningBalance={setOpeningBalance}
             openingBalanceType={openingBalanceType} setOpeningBalanceType={setOpeningBalanceType}
             openingBalanceDate={openingBalanceDate} setOpeningBalanceDate={setOpeningBalanceDate}
