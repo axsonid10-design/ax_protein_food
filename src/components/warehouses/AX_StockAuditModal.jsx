@@ -5,16 +5,17 @@ import {
   Warehouse,
   User,
   Clock,
-  AlertTriangle,
   CheckCircle2,
-  TrendingDown,
-  TrendingUp,
   Printer,
   Boxes,
+  Layers,
+  Search,
+  CheckCheck,
 } from 'lucide-react'
 import { useAXStore } from '../../store/useAXStore'
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock'
 import { AX_SearchableSelect } from '../common/AX_SearchableSelect'
+import { AX_StockAuditCategoryGroup } from './AX_StockAuditCategoryGroup'
 import { generateUUID } from '../../utils/AX_UUID'
 
 export function AX_StockAuditModal({
@@ -34,29 +35,32 @@ export function AX_StockAuditModal({
   const [auditDate, setAuditDate] = useState(() => new Date().toISOString().slice(0, 16).replace('T', ' '))
   const [auditNotes, setAuditNotes] = useState('')
   const [searchQuery, setSearchQuery] = useState('')
+  const [selectedCategoryTab, setSelectedCategoryTab] = useState('ALL')
+  const [collapsedCategories, setCollapsedCategories] = useState({})
 
   const activeWh = warehouses.find((w) => w.id === activeWhId) || warehouses[0]
-
-  const itemsMap = useMemo(() => {
-    const map = {}
-    items.forEach((it) => {
-      map[it.id] = it
-    })
-    return map
-  }, [items])
 
   const [auditRows, setAuditRows] = useState([])
 
   useEffect(() => {
-    const whStock = inventoryStock.filter((s) => s.warehouseId === activeWhId)
+    const whStockMap = {}
+    inventoryStock
+      .filter((s) => s.warehouseId === activeWhId)
+      .forEach((s) => {
+        whStockMap[s.itemId] = {
+          quantity: Number(s.quantity) || 0,
+          unit: s.unit,
+        }
+      })
 
-    const initialRows = whStock.map((s) => {
-      const it = itemsMap[s.itemId] || { id: s.itemId, compositeName: 'صنف', buyPrice: 0 }
-      const sysQty = Number(s.quantity) || 0
+    const initialRows = (items || []).map((it) => {
+      const stockEntry = whStockMap[it.id]
+      const sysQty = stockEntry ? stockEntry.quantity : 0
       return {
-        itemId: s.itemId,
+        itemId: it.id,
         itemName: it.compositeName || it.name || 'صنف',
-        unit: s.unit || it.unitType || 'كرتونة',
+        category: it.primaryCategory || 'أصناف عامة',
+        unit: stockEntry?.unit || it.unitType || 'كرتونة',
         costPrice: Number(it.buyPrice) || 0,
         systemQty: sysQty,
         actualQty: sysQty,
@@ -64,19 +68,47 @@ export function AX_StockAuditModal({
     })
 
     setAuditRows(initialRows)
-  }, [activeWhId, inventoryStock, itemsMap])
+  }, [activeWhId, inventoryStock, items])
 
   const handleActualQtyChange = (itemId, val) => {
     setAuditRows((prev) =>
       prev.map((r) => {
         if (r.itemId !== itemId) return r
         const num = val === '' ? '' : Number(val)
-        return {
-          ...r,
-          actualQty: num,
-        }
+        return { ...r, actualQty: num }
       })
     )
+  }
+
+  const handleMarkItemZero = (itemId) => {
+    setAuditRows((prev) =>
+      prev.map((r) => (r.itemId === itemId ? { ...r, actualQty: 0 } : r))
+    )
+  }
+
+  const handleMarkItemMatched = (itemId) => {
+    setAuditRows((prev) =>
+      prev.map((r) => (r.itemId === itemId ? { ...r, actualQty: r.systemQty } : r))
+    )
+  }
+
+  const handleMarkCategoryMatched = (catName) => {
+    setAuditRows((prev) =>
+      prev.map((r) => (r.category === catName ? { ...r, actualQty: r.systemQty } : r))
+    )
+  }
+
+  const handleMarkAllMatched = () => {
+    setAuditRows((prev) =>
+      prev.map((r) => ({ ...r, actualQty: r.systemQty }))
+    )
+  }
+
+  const toggleCategoryExpand = (catName) => {
+    setCollapsedCategories((prev) => ({
+      ...prev,
+      [catName]: !prev[catName],
+    }))
   }
 
   const calculatedStats = useMemo(() => {
@@ -126,11 +158,31 @@ export function AX_StockAuditModal({
     }
   }, [auditRows])
 
-  const filteredEnrichedRows = useMemo(() => {
-    if (!searchQuery.trim()) return calculatedStats.enrichedRows
+  const categoriesList = useMemo(() => {
+    const cats = new Set()
+    auditRows.forEach((r) => cats.add(r.category || 'أصناف عامة'))
+    return Array.from(cats)
+  }, [auditRows])
+
+  const groupedRows = useMemo(() => {
     const q = searchQuery.trim().toLowerCase()
-    return calculatedStats.enrichedRows.filter((r) => r.itemName.toLowerCase().includes(q))
-  }, [calculatedStats.enrichedRows, searchQuery])
+    const groups = {}
+
+    calculatedStats.enrichedRows.forEach((row) => {
+      if (selectedCategoryTab !== 'ALL' && row.category !== selectedCategoryTab) {
+        return
+      }
+      if (q && !row.itemName.toLowerCase().includes(q) && !row.category.toLowerCase().includes(q)) {
+        return
+      }
+
+      const cat = row.category || 'أصناف عامة'
+      if (!groups[cat]) groups[cat] = []
+      groups[cat].push(row)
+    })
+
+    return groups
+  }, [calculatedStats.enrichedRows, selectedCategoryTab, searchQuery])
 
   if (!isOpen) return null
 
@@ -149,7 +201,7 @@ export function AX_StockAuditModal({
       deficitsCount: calculatedStats.deficitCount,
       surplusesCount: calculatedStats.surplusCount,
       totalVarianceCost: calculatedStats.netVarianceCost,
-      notes: auditNotes.trim() || 'تسوية جردية دورية',
+      notes: auditNotes.trim() || 'تسوية جردية دورية شاملة لكافة الأصناف',
       status: 'approved',
       items: calculatedStats.enrichedRows,
     }
@@ -179,6 +231,8 @@ export function AX_StockAuditModal({
     window.print()
   }
 
+  const totalFilteredCount = Object.values(groupedRows).reduce((s, g) => s + g.length, 0)
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-150 overscroll-contain">
       <div className="bg-surface-lowest border border-outline-variant/30 rounded-3xl max-w-4xl w-full max-h-[94vh] flex flex-col shadow-2xl overflow-hidden overscroll-contain">
@@ -189,10 +243,10 @@ export function AX_StockAuditModal({
             </div>
             <div>
               <h3 className="text-sm sm:text-base font-black text-on-surface">
-                محضر جرد مخزني وتسوية فعلية
+                محضر جرد مخزني تفصيلي بالأقسام
               </h3>
               <span className="text-[11px] font-bold text-on-surface-variant block">
-                حصر الفعلي والدفتري، قياس العجز والزيادة، وتحديث الأرصدة تلقائياً
+                حصر كافة الأصناف بالقسم والوحدة، وتحديد الفعلي والمطابق والعجز تلقائياً
               </span>
             </div>
           </div>
@@ -204,7 +258,7 @@ export function AX_StockAuditModal({
               className="px-3.5 py-1.5 rounded-full bg-surface-low hover:bg-surface-container border border-outline-variant/30 text-xs font-bold text-on-surface flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer shadow-xs"
             >
               <Printer className="w-3.5 h-3.5" />
-              <span>طباعة المحضر</span>
+              <span>طباعة</span>
             </button>
             <button
               type="button"
@@ -262,12 +316,12 @@ export function AX_StockAuditModal({
 
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
             <div className="p-3 rounded-2xl bg-surface-lowest border border-outline-variant/30 space-y-0.5">
-              <span className="text-[10px] text-on-surface-variant block">الأصناف المجرودة</span>
+              <span className="text-[10px] text-on-surface-variant block">إجمالي أصناف المنظومة</span>
               <span className="text-base font-black text-on-surface block font-mono">
                 {calculatedStats.enrichedRows.length} صنف
               </span>
               <span className="text-[10px] text-emerald-600 block">
-                {calculatedStats.matchedCount} صنف مطابق 100%
+                {calculatedStats.matchedCount} مطابق دفترياً
               </span>
             </div>
 
@@ -287,7 +341,7 @@ export function AX_StockAuditModal({
                 {calculatedStats.surplusCount} أصناف
               </span>
               <span className="text-[10px] text-emerald-700 block font-mono">
-                قيمة: +{calculatedStats.totalSurplusCost.toLocaleString('en-US')} ج.م
+                فائض: +{calculatedStats.totalSurplusCost.toLocaleString('en-US')} ج.م
               </span>
             </div>
 
@@ -301,130 +355,103 @@ export function AX_StockAuditModal({
                 {calculatedStats.netVarianceCost.toLocaleString('en-US')} ج.م
               </span>
               <span className="text-[10px] text-on-surface-variant block">
-                تأثير التسوية على الأرباح
+                التأثير المالي على الأرباح
               </span>
             </div>
           </div>
 
-          <div className="bg-surface-lowest border border-outline-variant/30 rounded-2xl overflow-hidden shadow-xs">
-            <div className="p-3 border-b border-surface-container flex items-center justify-between">
-              <span className="text-xs font-black text-on-surface">جدول تدقيق ومقارنة الأرصدة:</span>
-              <input
-                type="text"
-                placeholder="تصفية باسم الصنف..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="h-8 px-3 rounded-full bg-surface-low border border-outline-variant/40 text-xs text-on-surface outline-none w-48"
-              />
+          <div className="flex flex-wrap items-center justify-between gap-2.5 pt-1">
+            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 max-w-full">
+              <button
+                type="button"
+                onClick={() => setSelectedCategoryTab('ALL')}
+                className={`px-3 py-1 rounded-full text-xs font-black transition-all cursor-pointer whitespace-nowrap ${
+                  selectedCategoryTab === 'ALL'
+                    ? 'bg-primary text-white shadow-xs'
+                    : 'bg-surface-low text-on-surface-variant hover:bg-surface-container'
+                }`}
+              >
+                كافة الأقسام ({items.length})
+              </button>
+              {categoriesList.map((cat) => {
+                const count = auditRows.filter((r) => r.category === cat).length
+                return (
+                  <button
+                    key={cat}
+                    type="button"
+                    onClick={() => setSelectedCategoryTab(cat)}
+                    className={`px-3 py-1 rounded-full text-xs font-black transition-all cursor-pointer whitespace-nowrap ${
+                      selectedCategoryTab === cat
+                        ? 'bg-primary text-white shadow-xs'
+                        : 'bg-surface-low text-on-surface-variant hover:bg-surface-container'
+                    }`}
+                  >
+                    {cat} ({count})
+                  </button>
+                )
+              })}
             </div>
 
-            <div className="overflow-x-auto">
-              <table className="w-full text-right text-xs">
-                <thead>
-                  <tr className="bg-surface-low border-b border-surface-container text-on-surface-variant font-black h-10">
-                    <th className="px-3 whitespace-nowrap">اسم الصنف</th>
-                    <th className="px-3 whitespace-nowrap text-center">الوحدة</th>
-                    <th className="px-3 whitespace-nowrap text-center">الرصيد الدفتري</th>
-                    <th className="px-3 whitespace-nowrap text-center">الرصيد الفعلي (العد)</th>
-                    <th className="px-3 whitespace-nowrap text-center">الفارق</th>
-                    <th className="px-3 whitespace-nowrap text-center">الحالة</th>
-                    <th className="px-3 whitespace-nowrap text-left">قيمة الفارق</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-surface-container/60 font-bold">
-                  {filteredEnrichedRows.length === 0 ? (
-                    <tr>
-                      <td colSpan={7} className="py-6 text-center text-on-surface-variant">
-                        لا توجد أصناف مسجلة في هذا المخزن
-                      </td>
-                    </tr>
-                  ) : (
-                    filteredEnrichedRows.map((r) => (
-                      <tr key={r.itemId} className="hover:bg-surface-low/40 transition-colors h-11">
-                        <td className="px-3 font-black text-on-surface max-w-[200px] truncate">
-                          {r.itemName}
-                        </td>
-                        <td className="px-3 text-center text-on-surface-variant text-[11px] whitespace-nowrap">
-                          {r.unit}
-                        </td>
-                        <td className="px-3 text-center font-mono text-on-surface-variant whitespace-nowrap">
-                          {r.systemQty}
-                        </td>
-                        <td className="px-3 text-center whitespace-nowrap">
-                          <input
-                            type="number"
-                            min="0"
-                            step="any"
-                            value={r.actualQty}
-                            onChange={(e) => handleActualQtyChange(r.itemId, e.target.value)}
-                            className="w-20 h-8 px-2 rounded-lg bg-surface-low border border-outline-variant/50 text-center font-mono font-black text-on-surface focus:border-primary outline-none"
-                          />
-                        </td>
-                        <td className="px-3 text-center font-mono font-black whitespace-nowrap">
-                          <span
-                            className={
-                              r.variance === 0
-                                ? 'text-on-surface-variant'
-                                : r.variance < 0
-                                ? 'text-rose-700'
-                                : 'text-emerald-600'
-                            }
-                          >
-                            {r.variance > 0 ? `+${r.variance}` : r.variance}
-                          </span>
-                        </td>
-                        <td className="px-3 text-center whitespace-nowrap">
-                          <span
-                            className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
-                              r.status === 'matched'
-                                ? 'bg-surface-low text-on-surface-variant border border-outline-variant/30'
-                                : r.status === 'deficit'
-                                ? 'bg-rose-500/10 text-rose-700 border border-rose-500/20'
-                                : 'bg-emerald-500/10 text-emerald-700 border border-emerald-500/20'
-                            }`}
-                          >
-                            {r.status === 'matched' && 'مطابق'}
-                            {r.status === 'deficit' && 'عجز'}
-                            {r.status === 'surplus' && 'فائض'}
-                          </span>
-                        </td>
-                        <td className="px-3 text-left font-mono font-black whitespace-nowrap">
-                          <span
-                            className={
-                              r.varianceCost === 0
-                                ? 'text-on-surface-variant'
-                                : r.varianceCost < 0
-                                ? 'text-rose-700'
-                                : 'text-emerald-600'
-                            }
-                          >
-                            {r.varianceCost === 0
-                              ? '-'
-                              : `${r.varianceCost > 0 ? '+' : ''}${r.varianceCost.toLocaleString('en-US')} ج.م`}
-                          </span>
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
+            <div className="flex items-center gap-2">
+              <div className="relative">
+                <Search className="w-3.5 h-3.5 text-on-surface-variant absolute right-3 top-2.5 pointer-events-none" />
+                <input
+                  type="text"
+                  placeholder="بحث باسم الصنف أو القسم..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="h-8 pr-8 pl-3 rounded-full bg-surface-low border border-outline-variant/40 text-xs text-on-surface outline-none w-48 sm:w-56"
+                />
+              </div>
+
+              <button
+                type="button"
+                onClick={handleMarkAllMatched}
+                className="px-3 py-1 rounded-full bg-surface-low hover:bg-primary/10 hover:text-primary border border-outline-variant/30 text-xs font-bold text-on-surface flex items-center gap-1 transition-all cursor-pointer"
+                title="تحديد كل أصناف المخزن مطابقة للرصيد الدفتري"
+              >
+                <CheckCheck className="w-3.5 h-3.5 text-primary" />
+                <span className="hidden sm:inline">الكل مطابق</span>
+              </button>
             </div>
           </div>
 
+          <div className="space-y-3">
+            {totalFilteredCount === 0 ? (
+              <div className="p-8 text-center text-on-surface-variant bg-surface-lowest border border-outline-variant/30 rounded-2xl font-bold">
+                لا توجد أصناف مطابقة للبحث أو للقسم المختار.
+              </div>
+            ) : (
+              Object.entries(groupedRows).map(([catName, catItems]) => (
+                <AX_StockAuditCategoryGroup
+                  key={catName}
+                  category={catName}
+                  items={catItems}
+                  onActualQtyChange={handleActualQtyChange}
+                  onMarkCategoryMatched={handleMarkCategoryMatched}
+                  onMarkItemZero={handleMarkItemZero}
+                  onMarkItemMatched={handleMarkItemMatched}
+                  isExpanded={!collapsedCategories[catName]}
+                  onToggleExpand={() => toggleCategoryExpand(catName)}
+                />
+              ))
+            )}
+          </div>
+
           <div className="space-y-1">
-            <label className="text-on-surface block text-[11px]">ملاحظات وقرار لجنة الجرد:</label>
+            <label className="text-on-surface block text-[11px]">ملاحظات وتوصيات لجنة الجرد:</label>
             <input
               type="text"
               value={auditNotes}
               onChange={(e) => setAuditNotes(e.target.value)}
-              placeholder="اكتب أسباب العجز أو الزيادة أو توصيات الجرد..."
+              placeholder="اكتب أسباب العجز أو الفائض وتوصيات الحفظ..."
               className="w-full h-10 px-3.5 rounded-xl bg-surface-low border border-outline-variant/40 focus:border-primary text-xs font-bold text-on-surface outline-none"
             />
           </div>
 
           <div className="pt-3 border-t border-surface-container flex items-center justify-between">
             <div className="text-[11px] text-on-surface-variant font-bold">
-              سيتم تعديل أرصدة المخزن المعتمدة فوراً لتتطابق مع العد الفعلي.
+              سيتم تعديل رصيد المخزن المعتمد فوراً ليتطابق مع العد الفعلي.
             </div>
 
             <div className="flex items-center gap-2">
@@ -449,3 +476,5 @@ export function AX_StockAuditModal({
     </div>
   )
 }
+
+export default AX_StockAuditModal

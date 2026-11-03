@@ -69,6 +69,9 @@ export function AX_Dashboard() {
   const salesInvoices = filteredInvoices.filter((i) => i.type === 'sale')
   const salesTotal = salesInvoices.reduce((acc, inv) => acc + (Number(inv.total) || 0), 0)
 
+  const purchaseInvoices = filteredInvoices.filter((i) => i.type === 'purchase')
+  const purchasesTotal = purchaseInvoices.reduce((acc, inv) => acc + (Number(inv.total) || 0), 0)
+
   const salesTrend = useMemo(() => {
     const now = new Date()
     let prevPeriodInvoices = []
@@ -104,6 +107,42 @@ export function AX_Dashboard() {
       isPositive: diffPct >= 0,
     }
   }, [invoices, period, salesTotal])
+
+  const purchasesTrend = useMemo(() => {
+    const now = new Date()
+    let prevPeriodInvoices = []
+
+    if (period === 'today') {
+      const yesterday = new Date(now)
+      yesterday.setDate(yesterday.getDate() - 1)
+      const yStr = yesterday.toISOString().split('T')[0]
+      prevPeriodInvoices = invoices.filter((inv) => inv && inv.type === 'purchase' && inv.date?.startsWith(yStr))
+    } else if (period === '7days') {
+      const past7 = new Date(now)
+      past7.setDate(past7.getDate() - 7)
+      const past14 = new Date(now)
+      past14.setDate(past14.getDate() - 14)
+      const p7Str = past7.toISOString().split('T')[0]
+      const p14Str = past14.toISOString().split('T')[0]
+      prevPeriodInvoices = invoices.filter((inv) => inv && inv.type === 'purchase' && inv.date >= p14Str && inv.date < p7Str)
+    } else if (period === 'year') {
+      const prevYearStr = String(now.getFullYear() - 1)
+      prevPeriodInvoices = invoices.filter((inv) => inv && inv.type === 'purchase' && inv.date?.startsWith(prevYearStr))
+    } else if (period === 'month') {
+      const prevMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1)
+      const prevMonthPrefix = `${prevMonth.getFullYear()}-${String(prevMonth.getMonth() + 1).padStart(2, '0')}`
+      prevPeriodInvoices = invoices.filter((inv) => inv && inv.type === 'purchase' && inv.date?.startsWith(prevMonthPrefix))
+    }
+
+    const prevPurchasesTotal = prevPeriodInvoices.reduce((acc, inv) => acc + (Number(inv.total) || 0), 0)
+    if (!prevPurchasesTotal || prevPurchasesTotal === 0) return null
+
+    const diffPct = Math.round(((purchasesTotal - prevPurchasesTotal) / prevPurchasesTotal) * 100)
+    return {
+      label: `${diffPct >= 0 ? '+' : ''}${diffPct}%`,
+      isPositive: diffPct <= 0,
+    }
+  }, [invoices, period, purchasesTotal])
 
   const totalStockQuantity = inventoryStock.reduce((acc, s) => acc + (Number(s.quantity) || 0), 0)
   const totalStockValue = inventoryStock.reduce((acc, s) => {
@@ -166,7 +205,9 @@ export function AX_Dashboard() {
 
       <AX_DashboardMetricsCards
         salesTotal={salesTotal}
-        stockValue={totalStockValue}
+        purchasesTotal={purchasesTotal}
+        purchasesCount={purchaseInvoices.length}
+        purchasesTrend={purchasesTrend}
         stockQuantity={totalStockQuantity}
         cashBalance={totalCashBalance}
         salesCount={salesInvoices.length}

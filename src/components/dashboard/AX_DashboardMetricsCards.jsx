@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
 import {
   TrendingUp,
+  ShoppingBag,
   Warehouse,
   Boxes,
   Wallet,
@@ -15,6 +16,9 @@ import {
 
 export function AX_DashboardMetricsCards({
   salesTotal = 0,
+  purchasesTotal = 0,
+  purchasesCount = 0,
+  purchasesTrend = null,
   stockValue = 0,
   stockQuantity = 0,
   cashBalance = 0,
@@ -53,14 +57,15 @@ export function AX_DashboardMetricsCards({
       isPositive: salesTrend ? salesTrend.isPositive : true,
     },
     {
-      id: 'stockValue',
-      title: 'قيمة المخزون',
-      value: Number(stockValue || 0).toLocaleString('en-US'),
+      id: 'purchases',
+      title: 'إجمالي المشتريات',
+      value: Number(purchasesTotal || 0).toLocaleString('en-US'),
       unit: 'ج.م',
-      icon: Warehouse,
+      icon: ShoppingBag,
       iconColor: 'text-primary bg-primary/10',
-      subtitle: `${warehousesCount} مخازن`,
-      trend: null,
+      subtitle: `${purchasesCount} فاتورة توريد`,
+      trend: purchasesTrend ? purchasesTrend.label : null,
+      isPositive: purchasesTrend ? purchasesTrend.isPositive : true,
     },
     {
       id: 'stockUnits',
