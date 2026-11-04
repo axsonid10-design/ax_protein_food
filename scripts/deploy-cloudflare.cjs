@@ -24,7 +24,7 @@ const parsedEnv = getEnvVars()
 let env = { ...parsedEnv }
 // Locked Cloudflare account for AX_PROTEIN_FOOD
 const zoneId = '0dd86559ec5e4085d682d08892f5fe83'
-const apiToken = ''
+const apiToken = env.CLOUDFLARE_API_TOKEN || ''
 const accountId = 'cb2cbce9c005b6719994cfbeefdc5da8'
 
 env.CLOUDFLARE_API_TOKEN = apiToken
