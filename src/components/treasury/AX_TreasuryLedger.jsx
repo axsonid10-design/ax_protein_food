@@ -49,7 +49,6 @@ export function AX_TreasuryLedger() {
   const [showExpenseCategoriesModal, setShowExpenseCategoriesModal] = useState(false)
   const [editingAccount, setEditingAccount] = useState(null)
   const [deletingAccount, setDeletingAccount] = useState(null)
-  const [blockedNotice, setBlockedNotice] = useState(null)
   const [currentPage, setCurrentPage] = useState(1)
   const PAGE_SIZE = 15
 
@@ -98,18 +97,21 @@ export function AX_TreasuryLedger() {
     }
   }
 
-  const getTreasuryName = (id) => treasuryAccounts.find((t) => t.id === id)?.name || id
+  const getTreasuryName = (id) => {
+    const acc = treasuryAccounts.find((t) => t.id === id)
+    return acc?.name || (id ? '[حساب محذوف]' : '—')
+  }
 
   const handleDeleteAccountClick = (account) => {
     const relatedTx = (cashTransactions || []).filter((tx) => tx.treasuryId === account.id).length
     const relatedInv = (invoices || []).filter((inv) => inv.treasuryId === account.id).length
     const relatedTrf = (pendingCashTransfers || []).filter((p) => p.fromTreasuryId === account.id || p.toTreasuryId === account.id).length
     const total = relatedTx + relatedInv + relatedTrf
-    if (total > 0) {
-      setBlockedNotice({ account, count: total })
-    } else {
-      setDeletingAccount(account)
-    }
+    setDeletingAccount({
+      ...account,
+      hasOperations: total > 0,
+      operationsCount: total,
+    })
   }
 
   const handleCreateCashTransfer = (e) => {
@@ -424,20 +426,14 @@ export function AX_TreasuryLedger() {
       />
 
       <AX_ConfirmModal
-        isOpen={Boolean(blockedNotice)}
-        title="حماية السجلات المالية"
-        message={`لا يمكن حذف الحساب (${blockedNotice?.account?.name}) لوجود (${blockedNotice?.count}) حركة مالية وسندات مرتبطة به. لحفظ سلامة القيود والأرصدة المحاسبية، يرجى تعديل الحساب بدلاً من حذفه.`}
-        confirmText="فهمت ذلك"
-        cancelText="إغلاق"
-        onConfirm={() => setBlockedNotice(null)}
-        onCancel={() => setBlockedNotice(null)}
-      />
-
-      <AX_ConfirmModal
         isOpen={Boolean(deletingAccount)}
         title="حذف الحساب المالي"
-        message={`هل أنت متأكد من حذف الحساب / الخزينة (${deletingAccount?.name}) نهائياً؟`}
-        confirmText="تأكيد الحذف النهائي"
+        message={
+          deletingAccount?.hasOperations
+            ? `تنبيه: الحساب المالي (${deletingAccount?.name}) مرتبط بـ (${deletingAccount?.operationsCount}) حركة تاريخية وسندات. سيتم حذف الحساب وخصم رصيده (${(Number(deletingAccount?.balance) || 0).toLocaleString('en-US')} ج.م) من السيولة، وستظل العمليات السابقة موثقة مع وسم [حساب محذوف]. هل تريد المتابعة وحذف الحساب؟`
+            : `هل أنت متأكد من حذف الحساب / الخزينة (${deletingAccount?.name}) نهائياً وخصم رصيده من السيولة؟`
+        }
+        confirmText="تأكيد حذف الحساب"
         cancelText="إلغاء"
         isDestructive={true}
         requireHold={true}

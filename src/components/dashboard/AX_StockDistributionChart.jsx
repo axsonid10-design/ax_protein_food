@@ -15,7 +15,7 @@ export function AX_StockDistributionChart({
         const totalQty = stocks.reduce((sum, s) => sum + (Number(s.quantity) || 0), 0)
         const totalVal = stocks.reduce((sum, s) => {
           const it = items.find((i) => i.id === s.itemId)
-          const price = Number(it?.buyPrice) || 0
+          const price = Number(it?.sellPrice ?? it?.buyPrice ?? 0)
           return sum + (Number(s.quantity) || 0) * price
         }, 0)
         const colors = ['#991b1b', '#450a0a', '#b91c1c', '#7f1d1d']
@@ -42,7 +42,7 @@ export function AX_StockDistributionChart({
         catMap[cat] = { name: cat, qty: 0, value: 0 }
       }
       const qty = Number(stk.quantity) || 0
-      const cost = Number(it?.buyPrice) || 0
+      const cost = Number(it?.sellPrice ?? it?.buyPrice ?? 0)
       catMap[cat].qty += qty
       catMap[cat].value += qty * cost
     })

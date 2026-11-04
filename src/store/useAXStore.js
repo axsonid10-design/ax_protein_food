@@ -338,9 +338,21 @@ export const useAXStore = create((set, get) => ({
   deleteTreasuryAccount: (id) => {
     AX_OperationsService.deleteTreasuryAccountInDB(id, get().profile)
     set((state) => {
+      const deletedAccount = state.treasuryAccounts.find((t) => t.id === id)
       const nextTr = state.treasuryAccounts.filter((t) => t.id !== id)
+      const updatedCashTx = (state.cashTransactions || []).map((tx) => {
+        if (tx.treasuryId === id) {
+          return {
+            ...tx,
+            treasuryName: `[حساب محذوف: ${deletedAccount?.name || 'خزينة'}]`,
+            isDeletedAccount: true,
+          }
+        }
+        return tx
+      })
       updateLocalCachePayload('treasuryAccounts', nextTr)
-      return { treasuryAccounts: nextTr }
+      updateLocalCachePayload('cashTransactions', updatedCashTx)
+      return { treasuryAccounts: nextTr, cashTransactions: updatedCashTx }
     })
   },
 

@@ -296,8 +296,10 @@ export function AX_WarehousesInventory() {
               </div>
 
               <div className="pt-2 border-t border-surface-container flex items-center justify-between text-xs">
-                <span className="text-on-surface-variant font-bold">الأصناف:</span>
-                <span className="font-mono font-black text-primary">{whStock.length} صنف</span>
+                <span className="text-on-surface-variant font-bold">قيمة البيع:</span>
+                <span className="font-mono font-black text-primary">
+                  {whStock.reduce((acc, s) => acc + (Number(s.quantity) || 0) * (Number(getItem(s.itemId)?.sellPrice ?? getItem(s.itemId)?.buyPrice ?? 0)), 0).toLocaleString('en-US')} ج.م
+                </span>
               </div>
             </div>
           )

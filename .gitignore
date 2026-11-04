@@ -10,3 +10,5 @@ dev-dist
 *.wav
 *.jpg
 AX_Logo_Kit_*
+.agents
+

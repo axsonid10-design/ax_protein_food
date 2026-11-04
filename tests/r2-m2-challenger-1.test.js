@@ -120,7 +120,7 @@ describe('Challenger 1 — Adversarial Challenge 2: Override Detection Precision
     assert.equal(isPriceOverridden(99.992, 100), false)
 
     assert.equal(isPriceOverridden(100.01, 100), true)
-    assert.equal(isPriceOverridden(100.009, 100), true)
+    assert.equal(isPriceOverridden(100.009, 100), false)
     assert.equal(isPriceOverridden(99.99, 100), true)
   })
 

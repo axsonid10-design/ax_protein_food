@@ -12,7 +12,8 @@ export const updateLocalCachePayload = (key, value) => {
 export const processInvoiceStoreState = (state, inv) => {
   const isSaleReturn = inv.type === 'sale_return'
   const isPurchaseReturn = inv.type === 'purchase_return'
-  const isCustomerRelated = inv.type === 'sale' || isSaleReturn
+  const partyKind = inv.partyKind || inv.partyType || (inv.type === 'sale' || isSaleReturn ? 'customer' : 'supplier')
+  const isCustomerRelated = partyKind === 'customer'
   let updatedClients = [...state.clients]
   let updatedSuppliers = [...state.suppliers]
 
@@ -22,30 +23,37 @@ export const processInvoiceStoreState = (state, inv) => {
     if (cIdx >= 0) {
       updatedClients[cIdx] = {
         ...updatedClients[cIdx],
-        balance: Math.max(0, (updatedClients[cIdx].balance || 0) + balanceDelta),
+        balance: (updatedClients[cIdx].balance || 0) + balanceDelta,
       }
     } else {
       updatedClients.unshift({
         id: generateUUID(),
         name: inv.partyName,
-        balance: Math.max(0, balanceDelta),
+        balance: balanceDelta,
         phone: '',
         address: 'بيانات ناقصة',
       })
     }
   } else {
-    const sIdx = updatedSuppliers.findIndex((s) => s.name === inv.partyName)
-    const balanceDelta = isPurchaseReturn ? -inv.remainingAmount : inv.remainingAmount
+    const sIdx = updatedSuppliers.findIndex(
+      (s) => s.name === inv.partyName || s.companyName === inv.partyName || s.id === inv.partyId
+    )
+    const isSupplierBuying = inv.type === 'sale' || isSaleReturn
+    const balanceDelta = isSupplierBuying
+      ? (isSaleReturn ? inv.remainingAmount : -inv.remainingAmount)
+      : (isPurchaseReturn ? -inv.remainingAmount : inv.remainingAmount)
+
     if (sIdx >= 0) {
       updatedSuppliers[sIdx] = {
         ...updatedSuppliers[sIdx],
-        balance: Math.max(0, (updatedSuppliers[sIdx].balance || 0) + balanceDelta),
+        balance: (updatedSuppliers[sIdx].balance || 0) + balanceDelta,
       }
     } else {
       updatedSuppliers.unshift({
         id: generateUUID(),
         name: inv.partyName,
-        balance: Math.max(0, balanceDelta),
+        companyName: inv.partyName,
+        balance: balanceDelta,
         phone: '',
         address: 'بيانات ناقصة',
       })

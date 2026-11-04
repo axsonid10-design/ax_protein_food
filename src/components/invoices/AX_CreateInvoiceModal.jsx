@@ -3,6 +3,7 @@ import { Plus, AlertTriangle, RotateCcw } from 'lucide-react'
 import { AX_SearchableSelect } from '../common/AX_SearchableSelect'
 import { AX_CompanyDatePicker } from '../common/AX_CompanyDatePicker'
 import { AX_InvoiceItemsEditor } from './AX_InvoiceItemsEditor'
+import { AX_InvoicePaymentSection } from './AX_InvoicePaymentSection'
 import { AX_CustomerModal } from '../customers/AX_CustomerModal'
 import { AX_SupplierModal } from '../suppliers/AX_SupplierModal'
 import { axToast } from '../common/AX_Toast'
@@ -34,6 +35,7 @@ export function AX_CreateInvoiceModal({
 
   const [paymentStatus, setPaymentStatus] = useState('unpaid')
   const [paidInput, setPaidInput] = useState('')
+  const [partyKind, setPartyKind] = useState('customer')
   const [selectedTreasuryId, setSelectedTreasuryId] = useState(treasuryAccounts[0]?.id || '')
   const [showCustomerModal, setShowCustomerModal] = useState(false)
   const [showSupplierModal, setShowSupplierModal] = useState(false)
@@ -42,7 +44,7 @@ export function AX_CreateInvoiceModal({
   const [expandedRowIndex, setExpandedRowIndex] = useState(null)
 
   const isSaleType = invForm.type === 'sale' || invForm.type === 'sale_return'
-  const partyList = isSaleType ? clients : suppliers
+  const partyList = partyKind === 'customer' ? clients : suppliers
   const selectedItemIds = new Set(invForm.items.map((row) => row.itemId))
   const availableItems = items.filter((it) => !selectedItemIds.has(it.id))
 
@@ -91,8 +93,10 @@ export function AX_CreateInvoiceModal({
 
   const handleTypeChange = (type) => {
     const isNewTypeSale = type === 'sale' || type === 'sale_return'
-    const list = isNewTypeSale ? clients : suppliers
-    setInvForm((prev) => ({ ...prev, type, partyName: list[0]?.name || '', isCustomParty: false }))
+    const newKind = isNewTypeSale ? 'customer' : 'supplier'
+    setPartyKind(newKind)
+    const list = newKind === 'customer' ? clients : suppliers
+    setInvForm((prev) => ({ ...prev, type, partyName: list[0]?.name || list[0]?.companyName || '', isCustomParty: false }))
     const curItem = items.find((i) => i.id === draftItem.itemId)
     if (curItem) {
       setDraftItem((prev) => ({
@@ -222,6 +226,8 @@ export function AX_CreateInvoiceModal({
       id: generateUUID(),
       code: `${codePrefix}-${Date.now().toString().slice(-5)}`,
       type: invForm.type,
+      partyType: partyKind,
+      partyKind,
       partyName,
       isIncompleteData: !isPartyInList(partyName),
       date: invForm.date,
@@ -297,9 +303,39 @@ export function AX_CreateInvoiceModal({
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           <div className="space-y-1">
             <div className="flex items-center justify-between">
-              <label className="text-xs font-bold text-on-surface-variant">
-                {isSaleType ? 'العميل' : 'المورد'}
-              </label>
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs font-bold text-on-surface-variant">الطرف:</span>
+                <div className="inline-flex rounded-full bg-surface-low p-0.5 border border-outline-variant/30">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPartyKind('customer')
+                      setInvForm((prev) => ({ ...prev, partyName: clients[0]?.name || '' }))
+                    }}
+                    className={`px-2.5 py-0.5 rounded-full text-[11px] font-black transition-all cursor-pointer ${
+                      partyKind === 'customer'
+                        ? 'bg-primary text-white shadow-xs'
+                        : 'text-on-surface-variant hover:text-on-surface'
+                    }`}
+                  >
+                    عميل
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPartyKind('supplier')
+                      setInvForm((prev) => ({ ...prev, partyName: suppliers[0]?.companyName || suppliers[0]?.name || '' }))
+                    }}
+                    className={`px-2.5 py-0.5 rounded-full text-[11px] font-black transition-all cursor-pointer ${
+                      partyKind === 'supplier'
+                        ? 'bg-secondary text-white shadow-xs'
+                        : 'text-on-surface-variant hover:text-on-surface'
+                    }`}
+                  >
+                    مورد
+                  </button>
+                </div>
+              </div>
               <div className="flex items-center gap-2">
                 {isIncomplete && (
                   <span className="inline-flex items-center gap-1 text-[10px] font-black px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-700 border border-amber-500/30">
@@ -309,11 +345,11 @@ export function AX_CreateInvoiceModal({
                 )}
                 <button
                   type="button"
-                  onClick={() => isSaleType ? setShowCustomerModal(true) : setShowSupplierModal(true)}
+                  onClick={() => (partyKind === 'customer' ? setShowCustomerModal(true) : setShowSupplierModal(true))}
                   className="inline-flex items-center gap-1 text-[11px] font-black text-primary hover:underline cursor-pointer"
                 >
                   <Plus className="w-3 h-3" />
-                  <span>{isSaleType ? 'إضافة عميل' : 'إضافة مورد'}</span>
+                  <span>{partyKind === 'customer' ? 'إضافة عميل' : 'إضافة مورد'}</span>
                 </button>
               </div>
             </div>
@@ -322,7 +358,7 @@ export function AX_CreateInvoiceModal({
               <input
                 type="text"
                 required
-                placeholder={isSaleType ? 'اكتب اسم العميل أو اختر...' : 'اكتب اسم المورد أو اختر...'}
+                placeholder={partyKind === 'customer' ? 'اكتب اسم العميل أو اختر...' : 'اكتب اسم المورد أو اختر...'}
                 value={invForm.partyName}
                 onChange={(e) => setInvForm({ ...invForm, partyName: e.target.value })}
                 className="w-full px-3 py-2 rounded-2xl bg-surface-low border border-outline-variant/30 text-xs font-bold text-on-surface focus:outline-none focus:border-primary"
@@ -330,7 +366,7 @@ export function AX_CreateInvoiceModal({
               />
               <datalist id="party-suggestions">
                 {partyList.map((p) => (
-                  <option key={p.id} value={p.name} />
+                  <option key={p.id} value={p.name || p.companyName} />
                 ))}
               </datalist>
             </div>
@@ -388,105 +424,39 @@ export function AX_CreateInvoiceModal({
           </div>
         </div>
 
-        <div className="space-y-2 pt-2 border-t border-surface-container">
-          <div className="flex items-center justify-between">
-            <label className="text-xs font-bold text-on-surface-variant">حالة وسداد الفاتورة:</label>
-            <div className="flex items-center gap-1.5">
-              {[
-                ['unpaid', 'غير مدفوع', 'bg-secondary text-white shadow-xs'],
-                ['partial', 'مدفوع جزئي', 'bg-amber-600 text-white shadow-xs'],
-                ['paid', 'مدفوع كلي', 'bg-primary text-white shadow-xs'],
-              ].map(([st, label, activeBg]) => (
-                <button
-                  key={st}
-                  type="button"
-                  onClick={() => setPaymentStatus(st)}
-                  className={`px-3 py-1 rounded-full text-xs font-bold transition-all cursor-pointer ${
-                    paymentStatus === st ? activeBg : 'bg-surface-low text-on-surface'
-                  }`}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-          </div>
+        <AX_InvoicePaymentSection
+          paymentStatus={paymentStatus}
+          setPaymentStatus={setPaymentStatus}
+          paidInput={paidInput}
+          setPaidInput={setPaidInput}
+          selectedTreasuryId={selectedTreasuryId}
+          setSelectedTreasuryId={setSelectedTreasuryId}
+          treasuryAccounts={treasuryAccounts}
+          currentTotal={currentTotal}
+          currentPaid={currentPaid}
+          currentRemaining={currentRemaining}
+        />
 
-          {paymentStatus !== 'unpaid' && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
-              {paymentStatus === 'partial' && (
-                <div>
-                  <label className="text-[11px] font-bold text-on-surface-variant block mb-1">المبلغ المدفوع (ج.م)</label>
-                  <input
-                    type="number"
-                    min="1"
-                    max={currentTotal}
-                    placeholder="المبلغ المدفوع..."
-                    value={paidInput}
-                    onChange={(e) => setPaidInput(e.target.value)}
-                    className="w-full px-3 py-1.5 rounded-xl bg-surface-low border border-outline-variant/30 text-xs font-bold text-on-surface font-mono"
-                  />
-                </div>
-              )}
-              <div className={paymentStatus === 'paid' ? 'sm:col-span-2' : ''}>
-                <label className="text-[11px] font-bold text-on-surface-variant block mb-1">الخزينة المسدد بها</label>
-                <AX_SearchableSelect
-                  value={selectedTreasuryId || treasuryAccounts[0]?.id}
-                  onChange={setSelectedTreasuryId}
-                  options={treasuryAccounts.map((t) => ({ value: t.id, label: t.name, badge: `${(Number(t.balance) || 0).toLocaleString('en-US')} ج.م` }))}
-                  placeholder="اختر الخزينة..."
-                  searchable={false}
-                />
-              </div>
-            </div>
-          )}
-        </div>
-
-        <div className="flex items-center justify-between pt-2 border-t border-surface-container">
-          <div className="flex items-center gap-4">
-            <div>
-              <span className="text-[11px] text-on-surface-variant block font-bold">الإجمالي:</span>
-              <span className="text-sm font-black font-mono text-primary">
-                {currentTotal.toLocaleString('en-US')} ج.م
-              </span>
-            </div>
-            {paymentStatus !== 'unpaid' && (
-              <div>
-                <span className="text-[11px] text-on-surface-variant block font-bold">المسدد:</span>
-                <span className="text-sm font-black font-mono text-emerald-600">
-                  {currentPaid.toLocaleString('en-US')} ج.م
-                </span>
-              </div>
-            )}
-            {paymentStatus === 'partial' && (
-              <div>
-                <span className="text-[11px] text-on-surface-variant block font-bold">المتبقي:</span>
-                <span className="text-sm font-black font-mono text-error">
-                  {currentRemaining.toLocaleString('en-US')} ج.م
-                </span>
-              </div>
-            )}
-          </div>
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-5 py-2 rounded-full bg-surface-container text-on-surface-variant text-xs font-bold cursor-pointer"
-            >
-              إلغاء
-            </button>
-            <button
-              type="submit"
-              disabled={invForm.items.length === 0}
-              className="px-6 py-2 rounded-full bg-primary text-white text-xs font-extrabold shadow-sm hover:bg-primary-dark transition-all disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
-            >
-              حفظ الفاتورة
-            </button>
-          </div>
+        <div className="flex items-center justify-end pt-2 border-t border-surface-container gap-2">
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-5 py-2 rounded-full bg-surface-container text-on-surface-variant text-xs font-bold cursor-pointer"
+          >
+            إلغاء
+          </button>
+          <button
+            type="submit"
+            disabled={invForm.items.length === 0}
+            className="px-6 py-2 rounded-full bg-primary text-white text-xs font-extrabold shadow-sm hover:bg-primary-dark transition-all disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+          >
+            حفظ الفاتورة
+          </button>
         </div>
       </form>
 
-      <AX_CustomerModal isOpen={showCustomerModal} onClose={() => setShowCustomerModal(false)} onSuccess={(c) => { setInvForm((prev) => ({ ...prev, partyName: c.name })); setShowCustomerModal(false) }} />
-      <AX_SupplierModal isOpen={showSupplierModal} onClose={() => setShowSupplierModal(false)} onSuccess={(s) => { setInvForm((prev) => ({ ...prev, partyName: s.companyName || s.name })); setShowSupplierModal(false) }} />
+      <AX_CustomerModal isOpen={showCustomerModal} onClose={() => setShowCustomerModal(false)} onSuccess={(c) => { setPartyKind('customer'); setInvForm((prev) => ({ ...prev, partyName: c.name })); setShowCustomerModal(false) }} />
+      <AX_SupplierModal isOpen={showSupplierModal} onClose={() => setShowSupplierModal(false)} onSuccess={(s) => { setPartyKind('supplier'); setInvForm((prev) => ({ ...prev, partyName: s.companyName || s.name })); setShowSupplierModal(false) }} />
     </div>
   )
 }

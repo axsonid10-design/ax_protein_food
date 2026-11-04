@@ -8,6 +8,7 @@ import {
   Building,
   Target,
   BadgePercent,
+  Receipt,
 } from 'lucide-react'
 
 const MODEL_LABELS = {
@@ -18,9 +19,11 @@ const MODEL_LABELS = {
 }
 
 export function AX_SalesRepsTable({
-  salesReps,
+  salesReps = [],
+  clients = [],
   onOpenLedger,
   onOpenCalculator,
+  onOpenCollection,
   onEditRep,
   onDeleteRep,
 }) {
@@ -35,6 +38,7 @@ export function AX_SalesRepsTable({
               <th className="px-3 whitespace-nowrap">المستهدف (التارجت)</th>
               <th className="px-3 whitespace-nowrap">نظام العمولة</th>
               <th className="px-3 whitespace-nowrap font-mono">الرصيد المستحق</th>
+              <th className="px-3 whitespace-nowrap font-mono">مديونيات التحصيل</th>
               <th className="px-4 whitespace-nowrap text-center">الإجراءات</th>
             </tr>
           </thead>
@@ -42,6 +46,9 @@ export function AX_SalesRepsTable({
             {salesReps.map((r) => {
               const bal = Number(r.netBalance ?? r.currentBalance ?? r.balance ?? 0)
               const target = Number(r.targetAmount ?? r.salesTarget ?? 0)
+              const assignedClients = (clients || []).filter((c) => (c.salesRepName || '').trim() === r.name?.trim())
+              const debtClients = assignedClients.filter((c) => (Number(c.balance) || 0) > 0)
+              const totalClientDebt = debtClients.reduce((sum, c) => sum + (Number(c.balance) || 0), 0)
 
               return (
                 <tr
@@ -84,8 +91,29 @@ export function AX_SalesRepsTable({
                     </span>
                   </td>
 
+                  <td className="px-3 font-mono whitespace-nowrap">
+                    <button
+                      type="button"
+                      onClick={() => onOpenCollection && onOpenCollection(r)}
+                      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-red-50 hover:bg-red-100 text-red-800 transition-all font-black text-xs cursor-pointer border border-red-200"
+                      title="عرض وطباعة كشف تحصيل مديونيات العملاء A4"
+                    >
+                      <Receipt className="w-3 h-3 text-red-700" />
+                      <span>{totalClientDebt.toLocaleString('en-US')} ج.م</span>
+                      <span className="text-[10px] text-red-600 font-normal">({debtClients.length})</span>
+                    </button>
+                  </td>
+
                   <td className="px-4 whitespace-nowrap text-center">
                     <div className="inline-flex items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() => onOpenCollection && onOpenCollection(r)}
+                        title="طباعة كشف تحصيل العملاء (A4)"
+                        className="p-1.5 rounded-full border border-outline-variant/40 hover:border-red-500/40 text-red-800 hover:text-red-900 hover:bg-red-50 transition-all cursor-pointer"
+                      >
+                        <Receipt className="w-3.5 h-3.5" />
+                      </button>
                       <button
                         type="button"
                         onClick={() => onOpenCalculator(r)}

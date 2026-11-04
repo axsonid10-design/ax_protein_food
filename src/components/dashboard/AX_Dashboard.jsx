@@ -147,8 +147,8 @@ export function AX_Dashboard() {
   const totalStockQuantity = inventoryStock.reduce((acc, s) => acc + (Number(s.quantity) || 0), 0)
   const totalStockValue = inventoryStock.reduce((acc, s) => {
     const it = getItem(s.itemId)
-    const cost = Number(it?.buyPrice) || 0
-    return acc + (Number(s.quantity) || 0) * cost
+    const price = Number(it?.sellPrice ?? it?.buyPrice ?? 0)
+    return acc + (Number(s.quantity) || 0) * price
   }, 0)
 
   const totalCashBalance = treasuryAccounts.reduce(
@@ -208,6 +208,7 @@ export function AX_Dashboard() {
         purchasesTotal={purchasesTotal}
         purchasesCount={purchaseInvoices.length}
         purchasesTrend={purchasesTrend}
+        stockValue={totalStockValue}
         stockQuantity={totalStockQuantity}
         cashBalance={totalCashBalance}
         salesCount={salesInvoices.length}

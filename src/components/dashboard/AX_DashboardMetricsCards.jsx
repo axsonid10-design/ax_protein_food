@@ -69,12 +69,12 @@ export function AX_DashboardMetricsCards({
     },
     {
       id: 'stockUnits',
-      title: 'رصيد المخزون',
-      value: Number(stockQuantity || 0).toLocaleString('en-US'),
-      unit: 'وحدة',
+      title: 'قيمة المخزون (سعر البيع)',
+      value: Number(stockValue || 0).toLocaleString('en-US'),
+      unit: 'ج.م',
       icon: Boxes,
       iconColor: 'text-rose-700 bg-rose-500/10',
-      subtitle: `${itemsCount} صنف مسجل`,
+      subtitle: `${Number(stockQuantity || 0).toLocaleString('en-US')} وحدة • ${itemsCount} صنف`,
       trend: null,
     },
     {

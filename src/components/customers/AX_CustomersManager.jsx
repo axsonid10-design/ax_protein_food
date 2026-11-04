@@ -12,6 +12,7 @@ import {
   ChevronLeft,
   Barcode,
   Building,
+  UserCheck,
 } from 'lucide-react'
 import { useAXStore } from '../../store/useAXStore'
 import { AX_CustomersTable } from './AX_CustomersTable'
@@ -26,11 +27,12 @@ import { showToast } from '../common/AX_Toast'
 const PAGE_SIZE = 15
 
 export function AX_CustomersManager() {
-  const { clients = [], deleteClient, profile } = useAXStore()
+  const { clients = [], deleteClient, profile, salesReps = [] } = useAXStore()
 
   const [searchQuery, setSearchQuery] = useState('')
   const [balanceFilter, setBalanceFilter] = useState('all')
   const [selectedCategory, setSelectedCategory] = useState('all')
+  const [selectedSalesRep, setSelectedSalesRep] = useState('all')
 
   const [isAddOpen, setIsAddOpen] = useState(false)
   const [editingCustomer, setEditingCustomer] = useState(null)
@@ -56,6 +58,20 @@ export function AX_CustomersManager() {
     return ['all', ...Array.from(catSet)]
   }, [clients])
 
+  const availableSalesReps = useMemo(() => {
+    const repMap = new Map()
+    clients.forEach((c) => {
+      const rep = (c.salesRepName || '').trim() || 'إدارة مباشرة (بدون مندوب)'
+      repMap.set(rep, (repMap.get(rep) || 0) + 1)
+    })
+    salesReps.forEach((r) => {
+      if (r?.name && !repMap.has(r.name)) {
+        repMap.set(r.name, 0)
+      }
+    })
+    return Array.from(repMap.entries()).map(([name, count]) => ({ name, count }))
+  }, [clients, salesReps])
+
   const filteredCustomers = useMemo(() => {
     return clients.filter((c) => {
       const q = searchQuery.trim().toLowerCase()
@@ -76,6 +92,11 @@ export function AX_CustomersManager() {
         return false
       }
 
+      if (selectedSalesRep !== 'all') {
+        const rep = (c.salesRepName || '').trim() || 'إدارة مباشرة (بدون مندوب)'
+        if (rep !== selectedSalesRep) return false
+      }
+
       const bal = Number(c.balance) || 0
       if (balanceFilter === 'debtor' && bal <= 0) return false
       if (balanceFilter === 'creditor' && bal >= 0) return false
@@ -84,7 +105,7 @@ export function AX_CustomersManager() {
 
       return true
     })
-  }, [clients, searchQuery, balanceFilter, selectedCategory])
+  }, [clients, searchQuery, balanceFilter, selectedCategory, selectedSalesRep])
 
   const totalPages = Math.max(1, Math.ceil(filteredCustomers.length / PAGE_SIZE))
   const paginatedCustomers = useMemo(() => {
@@ -235,6 +256,40 @@ export function AX_CustomersManager() {
           </button>
         </div>
       </div>
+
+      {availableSalesReps.length > 0 && (
+        <div className="flex items-center gap-1.5 overflow-x-auto py-1.5 px-2.5 bg-surface-lowest border border-outline-variant/30 rounded-2xl shadow-xs scrollbar-none">
+          <div className="flex items-center gap-1 text-[11px] font-black text-on-surface flex-shrink-0 pl-2 border-l border-outline-variant/30">
+            <UserCheck className="w-3.5 h-3.5 text-primary" />
+            <span>فلترة بالمندوب:</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => { setSelectedSalesRep('all'); setCurrentPage(1) }}
+            className={`px-3 py-1 rounded-full text-xs font-black whitespace-nowrap transition-all ${
+              selectedSalesRep === 'all'
+                ? 'bg-primary text-white shadow-xs'
+                : 'bg-surface-low text-on-surface-variant hover:bg-surface-container'
+            }`}
+          >
+            كافة المناديب ({clients.length})
+          </button>
+          {availableSalesReps.map((r) => (
+            <button
+              key={r.name}
+              type="button"
+              onClick={() => { setSelectedSalesRep(r.name); setCurrentPage(1) }}
+              className={`px-3 py-1 rounded-full text-xs font-black whitespace-nowrap transition-all ${
+                selectedSalesRep === r.name
+                  ? 'bg-primary text-white shadow-xs'
+                  : 'bg-surface-low text-on-surface-variant hover:bg-surface-container'
+              }`}
+            >
+              {r.name} ({r.count})
+            </button>
+          ))}
+        </div>
+      )}
 
       {categories.length > 2 && (
         <div className="flex items-center gap-1.5 overflow-x-auto py-1 scrollbar-none">

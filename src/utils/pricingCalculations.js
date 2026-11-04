@@ -62,7 +62,7 @@ export function isPriceOverridden(manualPrice, suggestedPrice) {
   if (isNaN(s)) {
     return true
   }
-  return Math.abs(m - s) > 0.009
+  return Math.round(Math.abs(m - s) * 1000) / 1000 > 0.009
 }
 
 export function resolveInvoiceUnitPrice(item, selectedUnit = 'كرتونة', isSale = true) {

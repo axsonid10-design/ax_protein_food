@@ -1,25 +1,9 @@
 import React, { useState, useMemo } from 'react'
-import {
-  X,
-  Building2,
-  Phone,
-  MapPin,
-  FileSpreadsheet,
-  Printer,
-  FileText,
-  DollarSign,
-  Layers,
-  Tag,
-  ArrowDownLeft,
-  ArrowUpRight,
-  Receipt,
-  Calendar,
-  CheckCircle,
-  Clock,
-} from 'lucide-react'
+import { X, Building2, Printer } from 'lucide-react'
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock'
 import { useAXStore } from '../../store/useAXStore'
-import { getSupplyTypeLabel } from './supplierConstants'
+import { AX_SupplierLedgerTable } from './AX_SupplierLedgerTable'
+import { AX_SupplierProfileTab } from './AX_SupplierProfileTab'
 
 export function AX_SupplierDetailsModal({ supplier, isOpen, onClose }) {
   useBodyScrollLock(isOpen)
@@ -31,8 +15,22 @@ export function AX_SupplierDetailsModal({ supplier, isOpen, onClose }) {
     return (invoices || []).filter(
       (inv) =>
         inv &&
-        inv.type === 'purchase' &&
+        (inv.type === 'purchase' || inv.type === 'purchase_return') &&
         (inv.supplierId === supplier.id ||
+          inv.partyId === supplier.id ||
+          inv.partyName === supplier.companyName ||
+          inv.partyName === supplier.name)
+    )
+  }, [supplier, invoices])
+
+  const supplierSales = useMemo(() => {
+    if (!supplier?.id) return []
+    return (invoices || []).filter(
+      (inv) =>
+        inv &&
+        (inv.type === 'sale' || inv.type === 'sale_return') &&
+        (inv.partyId === supplier.id ||
+          inv.supplierId === supplier.id ||
           inv.partyName === supplier.companyName ||
           inv.partyName === supplier.name)
     )
@@ -47,6 +45,18 @@ export function AX_SupplierDetailsModal({ supplier, isOpen, onClose }) {
           tx.partyName === supplier.companyName ||
           tx.partyName === supplier.name) &&
         (tx.type === 'payment' || tx.type === 'cash_out')
+    )
+  }, [supplier, cashTransactions])
+
+  const supplierReceipts = useMemo(() => {
+    if (!supplier?.id) return []
+    return (cashTransactions || []).filter(
+      (tx) =>
+        tx &&
+        (tx.partyId === supplier.id ||
+          tx.partyName === supplier.companyName ||
+          tx.partyName === supplier.name) &&
+        (tx.type === 'receipt' || tx.type === 'cash_in')
     )
   }, [supplier, cashTransactions])
 
@@ -71,18 +81,37 @@ export function AX_SupplierDetailsModal({ supplier, isOpen, onClose }) {
 
     supplierPurchases.forEach((inv) => {
       const invTotal = Number(inv.totalAmount || inv.total) || 0
+      const isReturn = inv.type === 'purchase_return'
       const paid = Number(inv.paidAmount || inv.cashPaid) || 0
-      const unpaid = Math.max(0, invTotal - paid)
 
       entries.push({
         id: inv.id,
         date: inv.createdAt || inv.date || new Date().toISOString(),
-        type: 'purchase_invoice',
+        type: isReturn ? 'purchase_return' : 'purchase_invoice',
         reference: inv.invoiceNumber || inv.code || inv.id,
-        description: `فاتورة شراء وتوريد #${inv.invoiceNumber || inv.code || inv.id.slice(0, 8)}`,
-        credit: invTotal,
-        debit: paid,
-        remaining: unpaid,
+        description: isReturn
+          ? `مردود مشتريات وتوريد #${inv.invoiceNumber || inv.code || inv.id.slice(0, 8)}`
+          : `فاتورة شراء وتوريد #${inv.invoiceNumber || inv.code || inv.id.slice(0, 8)}`,
+        credit: isReturn ? 0 : invTotal,
+        debit: isReturn ? invTotal : paid,
+      })
+    })
+
+    supplierSales.forEach((inv) => {
+      const invTotal = Number(inv.totalAmount || inv.total) || 0
+      const isReturn = inv.type === 'sale_return'
+      const paid = Number(inv.paidAmount || inv.cashPaid) || 0
+
+      entries.push({
+        id: inv.id,
+        date: inv.createdAt || inv.date || new Date().toISOString(),
+        type: isReturn ? 'sale_return' : 'sale_invoice',
+        reference: inv.invoiceNumber || inv.code || inv.id,
+        description: isReturn
+          ? `مردود مبيعات للمورد #${inv.invoiceNumber || inv.code || inv.id.slice(0, 8)}`
+          : `فاتورة مبيعات للمورد (مقاصة) #${inv.invoiceNumber || inv.code || inv.id.slice(0, 8)}`,
+        credit: isReturn ? invTotal : paid,
+        debit: isReturn ? 0 : invTotal,
       })
     })
 
@@ -92,9 +121,21 @@ export function AX_SupplierDetailsModal({ supplier, isOpen, onClose }) {
         date: po.createdAt || po.date || new Date().toISOString(),
         type: 'disbursement',
         reference: po.id,
-        description: po.description || 'سند صرف نقدي / دفعة للمورد',
+        description: po.description || 'سند صرف نقدي / سداد للمورد',
         credit: 0,
         debit: Number(po.amount) || 0,
+      })
+    })
+
+    supplierReceipts.forEach((rc) => {
+      entries.push({
+        id: rc.id,
+        date: rc.createdAt || rc.date || new Date().toISOString(),
+        type: 'receipt',
+        reference: rc.id,
+        description: rc.description || 'سند قبض نقدي / تحصيل من المورد',
+        credit: Number(rc.amount) || 0,
+        debit: 0,
       })
     })
 
@@ -107,23 +148,33 @@ export function AX_SupplierDetailsModal({ supplier, isOpen, onClose }) {
       running += (credit - debit)
       return { ...entry, runningBalance: running }
     })
-  }, [supplier, supplierPurchases, supplierPayouts])
+  }, [supplier, supplierPurchases, supplierSales, supplierPayouts, supplierReceipts])
 
   const totalPurchasesAmount = useMemo(() => {
-    return supplierPurchases.reduce((sum, inv) => sum + (Number(inv.totalAmount || inv.total) || 0), 0)
+    return supplierPurchases.reduce((sum, inv) => {
+      const t = Number(inv.totalAmount || inv.total) || 0
+      return inv.type === 'purchase_return' ? sum - t : sum + t
+    }, 0)
   }, [supplierPurchases])
 
-  const totalPaidAmount = useMemo(() => {
-    const fromInvoices = supplierPurchases.reduce((sum, inv) => sum + (Number(inv.paidAmount || inv.cashPaid) || 0), 0)
+  const totalSalesAmount = useMemo(() => {
+    return supplierSales.reduce((sum, inv) => {
+      const t = Number(inv.totalAmount || inv.total) || 0
+      return inv.type === 'sale_return' ? sum - t : sum + t
+    }, 0)
+  }, [supplierSales])
+
+  const totalSettledAmount = useMemo(() => {
+    const fromPurchasesPaid = supplierPurchases.reduce((sum, inv) => sum + (Number(inv.paidAmount || inv.cashPaid) || 0), 0)
     const fromPayouts = supplierPayouts.reduce((sum, po) => sum + (Number(po.amount) || 0), 0)
-    return fromInvoices + fromPayouts
+    return fromPurchasesPaid + fromPayouts
   }, [supplierPurchases, supplierPayouts])
 
   if (!isOpen || !supplier) return null
 
-  const netBalance = Number(supplier.balance) || 0
-  const isPayable = netBalance > 0
-  const isReceivable = netBalance < 0
+  const netOffsetBalance = ledgerEntries.length > 0 ? ledgerEntries[ledgerEntries.length - 1].runningBalance : (Number(supplier.balance) || 0)
+  const isPayable = netOffsetBalance > 0
+  const isReceivable = netOffsetBalance < 0
 
   const handlePrint = () => {
     window.print()
@@ -151,7 +202,7 @@ export function AX_SupplierDetailsModal({ supplier, isOpen, onClose }) {
                       : 'bg-surface-container text-on-surface-variant'
                   }`}
                 >
-                  {isPayable ? 'دائن (مستحق له)' : isReceivable ? 'مدين (مقدم له)' : 'حساب متوازن'}
+                  {isPayable ? 'دائن (مستحق له)' : isReceivable ? 'مدين (مطلوب منه)' : 'حساب متوازن'}
                 </span>
               </div>
               <p className="text-xs text-on-surface-variant font-bold flex items-center gap-2 mt-0.5">
@@ -192,7 +243,7 @@ export function AX_SupplierDetailsModal({ supplier, isOpen, onClose }) {
           </div>
 
           <div className="bg-surface-container/20 border border-outline-variant/20 rounded-2xl p-3">
-            <span className="text-[11px] font-bold text-on-surface-variant block">إجمالي المشتريات</span>
+            <span className="text-[11px] font-bold text-on-surface-variant block">إجمالي التوريدات (مشترياتنا)</span>
             <span className="text-sm sm:text-base font-black font-mono text-on-surface">
               {totalPurchasesAmount.toLocaleString('en-US')} ج.م
             </span>
@@ -202,26 +253,26 @@ export function AX_SupplierDetailsModal({ supplier, isOpen, onClose }) {
           </div>
 
           <div className="bg-surface-container/20 border border-outline-variant/20 rounded-2xl p-3">
-            <span className="text-[11px] font-bold text-on-surface-variant block">إجمالي المسدد</span>
-            <span className="text-sm sm:text-base font-black font-mono text-emerald-700">
-              {totalPaidAmount.toLocaleString('en-US')} ج.م
+            <span className="text-[11px] font-bold text-on-surface-variant block">مبيعات للمورد (مقاصة)</span>
+            <span className="text-sm sm:text-base font-black font-mono text-amber-700">
+              {totalSalesAmount.toLocaleString('en-US')} ج.م
             </span>
             <span className="text-[10px] text-on-surface-variant block">
-              ({supplierPayouts.length} دفعة وسند)
+              ({supplierSales.length} فاتورة بيع)
             </span>
           </div>
 
           <div className="bg-surface-container/20 border border-outline-variant/20 rounded-2xl p-3">
-            <span className="text-[11px] font-bold text-on-surface-variant block">صافي الرصيد الحالي</span>
+            <span className="text-[11px] font-bold text-on-surface-variant block">صافي الحساب بالمقاصة</span>
             <span
               className={`text-sm sm:text-base font-black font-mono ${
                 isPayable ? 'text-red-800' : isReceivable ? 'text-emerald-700' : 'text-on-surface'
               }`}
             >
-              {Math.abs(netBalance).toLocaleString('en-US')} ج.م
+              {Math.abs(netOffsetBalance).toLocaleString('en-US')} ج.م
             </span>
             <span className="text-[10px] font-bold block text-on-surface-variant">
-              {isPayable ? 'مستحق للمورد (له)' : isReceivable ? 'دفعة مقدمة (لنا)' : 'حساب خالص'}
+              {isPayable ? 'مستحق للمورد (له)' : isReceivable ? 'مطلوب من المورد (عليه)' : 'حساب خالص'}
             </span>
           </div>
         </div>
@@ -251,6 +302,17 @@ export function AX_SupplierDetailsModal({ supplier, isOpen, onClose }) {
           </button>
           <button
             type="button"
+            onClick={() => setActiveTab('sales')}
+            className={`py-1.5 px-3.5 rounded-full text-xs font-black transition-all ${
+              activeTab === 'sales'
+                ? 'bg-primary text-white shadow-xs'
+                : 'bg-surface-low text-on-surface-variant hover:bg-surface-container'
+            }`}
+          >
+            مبيعات للمورد / مقاصة ({supplierSales.length})
+          </button>
+          <button
+            type="button"
             onClick={() => setActiveTab('payouts')}
             className={`py-1.5 px-3.5 rounded-full text-xs font-black transition-all ${
               activeTab === 'payouts'
@@ -258,7 +320,7 @@ export function AX_SupplierDetailsModal({ supplier, isOpen, onClose }) {
                 : 'bg-surface-low text-on-surface-variant hover:bg-surface-container'
             }`}
           >
-            المدفوعات والصرف ({supplierPayouts.length})
+            السندات النقدية ({supplierPayouts.length + supplierReceipts.length})
           </button>
           <button
             type="button"
@@ -274,70 +336,7 @@ export function AX_SupplierDetailsModal({ supplier, isOpen, onClose }) {
         </div>
 
         {activeTab === 'ledger' && (
-          <div className="border border-outline-variant/30 rounded-2xl overflow-hidden shadow-xs">
-            <div className="overflow-x-auto max-h-[360px]">
-              <table className="w-full text-right text-xs">
-                <thead className="bg-surface-container/60 sticky top-0 border-b border-outline-variant/30 font-black">
-                  <tr className="h-10">
-                    <th className="px-3">التاريخ</th>
-                    <th className="px-3">نوع الحركة</th>
-                    <th className="px-4">البيان والوصف</th>
-                    <th className="px-3 font-mono">دائن (استحقاق)</th>
-                    <th className="px-3 font-mono">مدين (مسدد)</th>
-                    <th className="px-3 font-mono">الرصيد التراكمي</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-outline-variant/20">
-                  {ledgerEntries.length === 0 ? (
-                    <tr>
-                      <td colSpan="6" className="text-center py-8 text-on-surface-variant font-bold">
-                        لا توجد حركات مالية مسجلة في كشف الحساب حالياً.
-                      </td>
-                    </tr>
-                  ) : (
-                    ledgerEntries.map((row) => (
-                      <tr key={row.id} className="h-10 hover:bg-surface-container/20">
-                        <td className="px-3 font-mono text-[11px] whitespace-nowrap text-on-surface-variant">
-                          {row.date.split('T')[0]}
-                        </td>
-                        <td className="px-3 whitespace-nowrap">
-                          {row.type === 'opening' && (
-                            <span className="px-2 py-0.5 rounded-full bg-surface-container text-[10px] font-bold">
-                              افتتاحي
-                            </span>
-                          )}
-                          {row.type === 'purchase_invoice' && (
-                            <span className="px-2 py-0.5 rounded-full bg-primary/10 text-primary text-[10px] font-bold">
-                              فاتورة توريد
-                            </span>
-                          )}
-                          {row.type === 'disbursement' && (
-                            <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 text-[10px] font-bold">
-                              سند صرف
-                            </span>
-                          )}
-                        </td>
-                        <td className="px-4 font-bold text-on-surface truncate max-w-[240px]">
-                          {row.description}
-                        </td>
-                        <td className="px-3 font-mono text-red-800 font-bold whitespace-nowrap">
-                          {row.credit > 0 ? `${row.credit.toLocaleString('en-US')} ج.م` : '—'}
-                        </td>
-                        <td className="px-3 font-mono text-emerald-700 font-bold whitespace-nowrap">
-                          {row.debit > 0 ? `${row.debit.toLocaleString('en-US')} ج.م` : '—'}
-                        </td>
-                        <td className="px-3 font-mono font-black whitespace-nowrap">
-                          <span className={row.runningBalance > 0 ? 'text-red-800' : row.runningBalance < 0 ? 'text-emerald-700' : 'text-on-surface-variant'}>
-                            {Math.abs(row.runningBalance).toLocaleString('en-US')} ج.م
-                          </span>
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
+          <AX_SupplierLedgerTable ledgerEntries={ledgerEntries} />
         )}
 
         {activeTab === 'purchases' && (
@@ -379,76 +378,98 @@ export function AX_SupplierDetailsModal({ supplier, isOpen, onClose }) {
           </div>
         )}
 
-        {activeTab === 'payouts' && (
+        {activeTab === 'sales' && (
           <div className="space-y-2 max-h-[360px] overflow-y-auto">
-            {supplierPayouts.length === 0 ? (
+            {supplierSales.length === 0 ? (
               <p className="text-center py-8 text-xs font-bold text-on-surface-variant">
-                لا توجد سندات صرف أو دفعات نقدية مسجلة لهذا المورد.
+                لا توجد فواتير مبيعات مسجلة لهذا المورد حتى الآن.
               </p>
             ) : (
-              supplierPayouts.map((po) => (
-                <div
-                  key={po.id}
-                  className="p-3 bg-surface-lowest border border-outline-variant/30 rounded-2xl flex items-center justify-between text-xs"
-                >
-                  <div>
-                    <span className="font-bold text-on-surface block">{po.description || 'سند صرف نقدي'}</span>
-                    <span className="text-[11px] font-mono text-on-surface-variant">{po.date || po.createdAt?.split('T')[0]}</span>
+              supplierSales.map((inv) => {
+                const total = Number(inv.totalAmount || inv.total) || 0
+                const paid = Number(inv.paidAmount || inv.cashPaid) || 0
+                const remaining = Math.max(0, total - paid)
+                const isRet = inv.type === 'sale_return'
+                return (
+                  <div
+                    key={inv.id}
+                    className="p-3 bg-surface-lowest border border-outline-variant/30 rounded-2xl flex items-center justify-between text-xs"
+                  >
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono font-black text-on-surface">#{inv.code || inv.invoiceNumber || inv.id.slice(0, 8)}</span>
+                        <span className="text-[11px] font-mono text-on-surface-variant">{inv.date}</span>
+                        <span className="px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-800 text-[10px] font-bold">
+                          {isRet ? 'مردود مبيعات' : 'مبيعات (مقاصة)'}
+                        </span>
+                      </div>
+                      <span className="text-[11px] text-on-surface-variant block mt-0.5">
+                        الأصناف: {inv.items ? inv.items.length : 1} صنف • {inv.paymentTerms || 'مبيعات'}
+                      </span>
+                    </div>
+
+                    <div className="text-left font-mono">
+                      <span className="font-black text-amber-800 block">{total.toLocaleString('en-US')} ج.م</span>
+                      <span className="text-[10px] text-on-surface-variant">
+                        مسدد: {paid.toLocaleString('en-US')} • متبقي: {remaining.toLocaleString('en-US')}
+                      </span>
+                    </div>
                   </div>
-                  <span className="font-mono font-black text-emerald-700">
-                    {(Number(po.amount) || 0).toLocaleString('en-US')} ج.م
-                  </span>
-                </div>
-              ))
+                )
+              })
+            )}
+          </div>
+        )}
+
+        {activeTab === 'payouts' && (
+          <div className="space-y-2 max-h-[360px] overflow-y-auto">
+            {supplierPayouts.length === 0 && supplierReceipts.length === 0 ? (
+              <p className="text-center py-8 text-xs font-bold text-on-surface-variant">
+                لا توجد سندات صرف أو قبض مسجلة لهذا المورد.
+              </p>
+            ) : (
+              <>
+                {supplierPayouts.map((po) => (
+                  <div
+                    key={po.id}
+                    className="p-3 bg-surface-lowest border border-outline-variant/30 rounded-2xl flex items-center justify-between text-xs"
+                  >
+                    <div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 text-[10px] font-bold">سند صرف للمورد</span>
+                        <span className="font-bold text-on-surface">{po.description || 'سداد نقدي'}</span>
+                      </div>
+                      <span className="text-[11px] font-mono text-on-surface-variant">{po.date || po.createdAt?.split('T')[0]}</span>
+                    </div>
+                    <span className="font-mono font-black text-emerald-700">
+                      {(Number(po.amount) || 0).toLocaleString('en-US')} ج.م
+                    </span>
+                  </div>
+                ))}
+                {supplierReceipts.map((rc) => (
+                  <div
+                    key={rc.id}
+                    className="p-3 bg-surface-lowest border border-outline-variant/30 rounded-2xl flex items-center justify-between text-xs"
+                  >
+                    <div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 text-[10px] font-bold">سند قبض من المورد</span>
+                        <span className="font-bold text-on-surface">{rc.description || 'تحصيل نقدي'}</span>
+                      </div>
+                      <span className="text-[11px] font-mono text-on-surface-variant">{rc.date || rc.createdAt?.split('T')[0]}</span>
+                    </div>
+                    <span className="font-mono font-black text-blue-700">
+                      {(Number(rc.amount) || 0).toLocaleString('en-US')} ج.م
+                    </span>
+                  </div>
+                ))}
+              </>
             )}
           </div>
         )}
 
         {activeTab === 'profile' && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs bg-surface-container/20 p-4 rounded-2xl border border-outline-variant/20">
-            <div>
-              <span className="text-on-surface-variant font-bold block">اسم الشركة / المنشأة:</span>
-              <span className="font-black text-on-surface">{supplier.companyName || supplier.name}</span>
-            </div>
-            <div>
-              <span className="text-on-surface-variant font-bold block">الشخص المسؤول:</span>
-              <span className="font-black text-on-surface">{supplier.contactPerson || '—'}</span>
-            </div>
-            <div>
-              <span className="text-on-surface-variant font-bold block">رقم الهاتف:</span>
-              <span className="font-mono text-on-surface">{supplier.phone || '—'}</span>
-            </div>
-            <div>
-              <span className="text-on-surface-variant font-bold block">هاتف إضافي:</span>
-              <span className="font-mono text-on-surface">{supplier.phone2 || '—'}</span>
-            </div>
-            <div>
-              <span className="text-on-surface-variant font-bold block">نوع التوريد:</span>
-              <span className="font-bold text-primary">{getSupplyTypeLabel(supplier.supplyType)}</span>
-            </div>
-            <div>
-              <span className="text-on-surface-variant font-bold block">القسم / التصنيف:</span>
-              <span className="font-bold text-on-surface">{supplier.category || 'خامات'}</span>
-            </div>
-            <div>
-              <span className="text-on-surface-variant font-bold block">السجل التجاري:</span>
-              <span className="font-mono text-on-surface">{supplier.commercialRegistration || supplier.commercialRegister || '—'}</span>
-            </div>
-            <div>
-              <span className="text-on-surface-variant font-bold block">البطاقة الضريبية:</span>
-              <span className="font-mono text-on-surface">{supplier.taxNumber || '—'}</span>
-            </div>
-            <div className="sm:col-span-2">
-              <span className="text-on-surface-variant font-bold block">العنوان:</span>
-              <span className="text-on-surface">{supplier.address || '—'}</span>
-            </div>
-            {supplier.notes && (
-              <div className="sm:col-span-2">
-                <span className="text-on-surface-variant font-bold block">ملاحظات:</span>
-                <span className="text-on-surface">{supplier.notes}</span>
-              </div>
-            )}
-          </div>
+          <AX_SupplierProfileTab supplier={supplier} />
         )}
       </div>
     </div>

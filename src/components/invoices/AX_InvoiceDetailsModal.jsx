@@ -1,9 +1,12 @@
-import React from 'react'
+import React, { useState } from 'react'
+import { Printer, X } from 'lucide-react'
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock'
 import { getItemDisplayName } from '../../utils/AX_ItemNameHelper'
+import { AX_InvoicePrintModal } from './AX_InvoicePrintModal'
 
 export function AX_InvoiceDetailsModal({ invoice, onClose }) {
   useBodyScrollLock(Boolean(invoice))
+  const [showPrintModal, setShowPrintModal] = useState(false)
   if (!invoice) return null
 
   const items = invoice.items || []
@@ -76,13 +79,23 @@ export function AX_InvoiceDetailsModal({ invoice, onClose }) {
               )}
             </div>
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="text-on-surface-variant hover:text-on-surface text-xs font-bold px-3 py-1 rounded-full bg-surface-low cursor-pointer"
-          >
-            إغلاق
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setShowPrintModal(true)}
+              className="py-1.5 px-3.5 rounded-full bg-primary hover:bg-primary-dark text-white text-xs font-black shadow-xs flex items-center gap-1.5 transition-all cursor-pointer"
+            >
+              <Printer className="w-3.5 h-3.5" />
+              <span>طباعة A4</span>
+            </button>
+            <button
+              type="button"
+              onClick={onClose}
+              className="w-8 h-8 rounded-full border border-outline-variant/40 flex items-center justify-center text-on-surface-variant hover:bg-surface-container transition-all cursor-pointer"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
         </div>
 
         <div className="space-y-2">
@@ -131,6 +144,12 @@ export function AX_InvoiceDetailsModal({ invoice, onClose }) {
           </div>
         </div>
       </div>
+
+      <AX_InvoicePrintModal
+        invoice={invoice}
+        isOpen={showPrintModal}
+        onClose={() => setShowPrintModal(false)}
+      />
     </div>
   )
 }

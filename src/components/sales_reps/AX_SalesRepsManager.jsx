@@ -17,6 +17,7 @@ import { AX_AddSalesRepModal } from './AX_AddSalesRepModal'
 import { AX_EditSalesRepModal } from './AX_EditSalesRepModal'
 import { AX_SalesRepCommissionModal } from './AX_SalesRepCommissionModal'
 import { AX_SalesRepLedgerModal } from './AX_SalesRepLedgerModal'
+import { AX_SalesRepCollectionModal } from './AX_SalesRepCollectionModal'
 import { AX_ConfirmModal } from '../common/AX_ConfirmModal'
 import { showToast } from '../common/AX_Toast'
 import { AX_SkeletonLoader } from '../common/AX_SkeletonLoader'
@@ -25,7 +26,7 @@ import { AX_SalesRepOperationsService } from '../../services/AX_SalesRepOperatio
 const PAGE_SIZE = 15
 
 export function AX_SalesRepsManager() {
-  const { profile, salesReps = [], isAuthLoading, deleteSalesRep } = useAXStore()
+  const { profile, salesReps = [], clients = [], isAuthLoading, deleteSalesRep } = useAXStore()
 
   const [searchQuery, setSearchQuery] = useState('')
   const [modelFilter, setModelFilter] = useState('all')
@@ -34,6 +35,7 @@ export function AX_SalesRepsManager() {
   const [editingRep, setEditingRep] = useState(null)
   const [calculatorRep, setCalculatorRep] = useState(null)
   const [ledgerRep, setLedgerRep] = useState(null)
+  const [collectionRep, setCollectionRep] = useState(null)
   const [deletingRep, setDeletingRep] = useState(null)
 
   const [currentPage, setCurrentPage] = useState(1)
@@ -226,16 +228,20 @@ export function AX_SalesRepsManager() {
         <>
           <AX_SalesRepsTable
             salesReps={paginatedReps}
+            clients={clients}
             onOpenLedger={setLedgerRep}
             onOpenCalculator={setCalculatorRep}
+            onOpenCollection={setCollectionRep}
             onEditRep={setEditingRep}
             onDeleteRep={setDeletingRep}
           />
 
           <AX_SalesRepsBentoCards
             salesReps={paginatedReps}
+            clients={clients}
             onOpenLedger={setLedgerRep}
             onOpenCalculator={setCalculatorRep}
+            onOpenCollection={setCollectionRep}
             onEditRep={setEditingRep}
             onDeleteRep={setDeletingRep}
           />
@@ -298,6 +304,12 @@ export function AX_SalesRepsManager() {
         rep={ledgerRep}
         isOpen={Boolean(ledgerRep)}
         onClose={() => setLedgerRep(null)}
+      />
+
+      <AX_SalesRepCollectionModal
+        rep={collectionRep}
+        isOpen={Boolean(collectionRep)}
+        onClose={() => setCollectionRep(null)}
       />
 
       <AX_ConfirmModal

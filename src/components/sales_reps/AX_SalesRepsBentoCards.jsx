@@ -9,6 +9,7 @@ import {
   Target,
   BadgePercent,
   Phone,
+  Receipt,
 } from 'lucide-react'
 
 const MODEL_LABELS = {
@@ -19,9 +20,11 @@ const MODEL_LABELS = {
 }
 
 export function AX_SalesRepsBentoCards({
-  salesReps,
+  salesReps = [],
+  clients = [],
   onOpenLedger,
   onOpenCalculator,
+  onOpenCollection,
   onEditRep,
   onDeleteRep,
 }) {
@@ -30,6 +33,9 @@ export function AX_SalesRepsBentoCards({
       {salesReps.map((r) => {
         const bal = Number(r.netBalance ?? r.currentBalance ?? r.balance ?? 0)
         const target = Number(r.targetAmount ?? r.salesTarget ?? 0)
+        const assignedClients = (clients || []).filter((c) => (c.salesRepName || '').trim() === r.name?.trim())
+        const debtClients = assignedClients.filter((c) => (Number(c.balance) || 0) > 0)
+        const totalClientDebt = debtClients.reduce((sum, c) => sum + (Number(c.balance) || 0), 0)
 
         return (
           <div
@@ -73,6 +79,16 @@ export function AX_SalesRepsBentoCards({
                   {bal.toLocaleString('en-US')} ج.م
                 </span>
               </div>
+              <div className="col-span-2 pt-1 border-t border-surface-container flex items-center justify-between text-xs">
+                <span className="text-[10px] font-bold text-on-surface-variant flex items-center gap-1">
+                  <Receipt className="w-3 h-3 text-red-700" />
+                  مديونيات العملاء للتحصيل:
+                </span>
+                <span className="font-mono font-black text-red-800 text-xs">
+                  {totalClientDebt.toLocaleString('en-US')} ج.م
+                  <span className="text-[10px] text-on-surface-variant font-normal mr-1">({debtClients.length} عميل)</span>
+                </span>
+              </div>
             </div>
 
             <div className="flex items-center justify-between gap-1.5 pt-1">
@@ -82,6 +98,14 @@ export function AX_SalesRepsBentoCards({
               </span>
 
               <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => onOpenCollection && onOpenCollection(r)}
+                  className="p-1.5 rounded-full border border-outline-variant/40 hover:bg-surface-container text-red-800 hover:text-red-900 transition-all cursor-pointer"
+                  title="كشف تحصيل مديونيات العملاء (A4)"
+                >
+                  <Receipt className="w-3.5 h-3.5" />
+                </button>
                 <button
                   type="button"
                   onClick={() => onOpenCalculator(r)}
