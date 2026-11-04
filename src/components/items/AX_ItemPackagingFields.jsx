@@ -1,5 +1,6 @@
-import React from 'react'
-import { Package, Boxes, Scale, CircleDot, DollarSign, ChevronDown } from 'lucide-react'
+import React, { useEffect, useState } from 'react'
+import { Package, Boxes, Scale, CircleDot, DollarSign, Sparkles, CheckCircle2, RotateCcw } from 'lucide-react'
+import { calculateSuggestedUnitPrices, isPriceOverridden } from '../../utils/pricingCalculations'
 
 export function AX_ItemPackagingFields({
   unitType,
@@ -26,22 +27,47 @@ export function AX_ItemPackagingFields({
   setGrainBuyPrice,
   grainSellPrice,
   setGrainSellPrice,
+  kgBuyPrice,
+  setKgBuyPrice,
+  kgSellPrice,
+  setKgSellPrice,
 }) {
   const isCarton = unitType === 'كرتونة'
   const hasPieces = Boolean(Number(piecesPerCarton) > 0)
   const hasGrains = Boolean(Number(grainsPerPiece) > 0)
+  const numWeight = Number(weightPerCarton) || (isCarton ? 10 : 0)
+  const hasKgPricing = isCarton || numWeight > 0
 
-  const numBuy = Number(buyPrice) || 0
-  const numSell = Number(sellPrice) || 0
-  const numPieces = Number(piecesPerCarton) || 0
-  const numGrains = Number(grainsPerPiece) || 0
+  const {
+    suggestedPieceSell,
+    suggestedPieceBuy,
+    suggestedKgSell,
+    suggestedKgBuy,
+  } = calculateSuggestedUnitPrices({
+    sellPrice,
+    buyPrice,
+    piecesPerCarton,
+    weightPerCarton,
+    unitType,
+  })
 
-  const suggestedPieceSell = numPieces > 0 && numSell > 0 ? (numSell / numPieces).toFixed(2) : ''
-  const suggestedPieceBuy = numPieces > 0 && numBuy > 0 ? (numBuy / numPieces).toFixed(2) : ''
+  const [userOverrodeKgSell, setUserOverrodeKgSell] = useState(false)
+  const [userOverrodePieceSell, setUserOverrodePieceSell] = useState(false)
 
-  const suggestedGrainSell = numGrains > 0 && Number(pieceSellPrice || suggestedPieceSell) > 0
-    ? (Number(pieceSellPrice || suggestedPieceSell) / numGrains).toFixed(2)
-    : ''
+  useEffect(() => {
+    if (!userOverrodeKgSell && suggestedKgSell && setKgSellPrice && !kgSellPrice) {
+      setKgSellPrice(String(suggestedKgSell))
+    }
+  }, [suggestedKgSell, userOverrodeKgSell, kgSellPrice, setKgSellPrice])
+
+  useEffect(() => {
+    if (!userOverrodePieceSell && suggestedPieceSell && setPieceSellPrice && !pieceSellPrice) {
+      setPieceSellPrice(String(suggestedPieceSell))
+    }
+  }, [suggestedPieceSell, userOverrodePieceSell, pieceSellPrice, setPieceSellPrice])
+
+  const isKgSellCustom = isPriceOverridden(kgSellPrice, suggestedKgSell)
+  const isPieceSellCustom = isPriceOverridden(pieceSellPrice, suggestedPieceSell)
 
   return (
     <div className="space-y-4 pt-2 border-t border-surface-container">
@@ -177,15 +203,113 @@ export function AX_ItemPackagingFields({
           </div>
         </div>
 
+        {hasKgPricing && (
+          <div className="p-3 rounded-2xl bg-surface-low/50 border border-outline-variant/30 space-y-2">
+            <div className="flex items-center justify-between flex-wrap gap-1.5 text-xs font-black text-on-surface">
+              <span className="flex items-center gap-1.5">
+                <Scale className="w-3.5 h-3.5 text-primary" />
+                <span>أسعار الكيلو (سعر تجزئة الكيلو من الكرتونة)</span>
+              </span>
+              <div className="flex items-center gap-2">
+                {isKgSellCustom ? (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/10 text-amber-700 border border-amber-500/30">
+                    <Sparkles className="w-3 h-3 text-amber-600" />
+                    <span>سعر مخصص (تعديل يدوي)</span>
+                    {suggestedKgSell && <span className="font-mono">• المقترح: {suggestedKgSell} ج.م</span>}
+                  </span>
+                ) : suggestedKgSell ? (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-700 border border-emerald-500/30">
+                    <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                    <span>سعر مقترح متطابق ({suggestedKgSell} ج.م)</span>
+                  </span>
+                ) : null}
+                {isKgSellCustom && suggestedKgSell && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setUserOverrodeKgSell(false)
+                      setKgSellPrice?.(String(suggestedKgSell))
+                    }}
+                    className="text-[10px] text-primary hover:underline font-bold inline-flex items-center gap-0.5 cursor-pointer"
+                  >
+                    <RotateCcw className="w-2.5 h-2.5" />
+                    <span>استعادة المقترح</span>
+                  </button>
+                )}
+              </div>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <span className="block text-[11px] font-bold text-on-surface-variant mb-1 text-right">
+                  سعر شراء الكيلو (ج.م)
+                </span>
+                <input
+                  type="number"
+                  min="0"
+                  step="any"
+                  placeholder={suggestedKgBuy ? String(suggestedKgBuy) : '0'}
+                  value={kgBuyPrice || ''}
+                  onChange={(e) => setKgBuyPrice?.(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl bg-surface-lowest border border-outline-variant/40 text-xs font-mono font-bold text-on-surface focus:outline-none focus:border-primary text-right"
+                />
+              </div>
+              <div>
+                <span className="block text-[11px] font-bold text-on-surface-variant mb-1 text-right">
+                  سعر بيع الكيلو (ج.م)
+                </span>
+                <input
+                  type="number"
+                  min="0"
+                  step="any"
+                  placeholder={suggestedKgSell ? String(suggestedKgSell) : '0'}
+                  value={kgSellPrice || ''}
+                  onChange={(e) => {
+                    setUserOverrodeKgSell(true)
+                    setKgSellPrice?.(e.target.value)
+                  }}
+                  className={`w-full px-3 py-2 rounded-xl bg-surface-lowest border text-xs font-mono font-bold text-on-surface focus:outline-none focus:border-primary text-right ${
+                    isKgSellCustom ? 'border-amber-500/50' : 'border-primary/50'
+                  }`}
+                />
+              </div>
+            </div>
+          </div>
+        )}
+
         {hasPieces && (
           <div className="p-3 rounded-2xl bg-surface-low/50 border border-outline-variant/30 space-y-2">
-            <div className="flex items-center justify-between text-xs font-black text-on-surface">
-              <span>أسعار القطعة (محددة بعدد {piecesPerCarton} قطعة)</span>
-              {suggestedPieceSell && (
-                <span className="text-[10px] font-mono text-primary font-bold">
-                  سعر القطعة المقترح: {suggestedPieceSell} ج.م
-                </span>
-              )}
+            <div className="flex items-center justify-between flex-wrap gap-1.5 text-xs font-black text-on-surface">
+              <span className="flex items-center gap-1.5">
+                <Boxes className="w-3.5 h-3.5 text-primary" />
+                <span>أسعار القطعة (محددة بعدد {piecesPerCarton} قطعة)</span>
+              </span>
+              <div className="flex items-center gap-2">
+                {isPieceSellCustom ? (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/10 text-amber-700 border border-amber-500/30">
+                    <Sparkles className="w-3 h-3 text-amber-600" />
+                    <span>سعر مخصص (تعديل يدوي)</span>
+                    {suggestedPieceSell && <span className="font-mono">• المقترح: {suggestedPieceSell} ج.م</span>}
+                  </span>
+                ) : suggestedPieceSell ? (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-700 border border-emerald-500/30">
+                    <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                    <span>سعر مقترح متطابق ({suggestedPieceSell} ج.م)</span>
+                  </span>
+                ) : null}
+                {isPieceSellCustom && suggestedPieceSell && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setUserOverrodePieceSell(false)
+                      setPieceSellPrice?.(String(suggestedPieceSell))
+                    }}
+                    className="text-[10px] text-primary hover:underline font-bold inline-flex items-center gap-0.5 cursor-pointer"
+                  >
+                    <RotateCcw className="w-2.5 h-2.5" />
+                    <span>استعادة المقترح</span>
+                  </button>
+                )}
+              </div>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
@@ -196,30 +320,34 @@ export function AX_ItemPackagingFields({
                   type="number"
                   min="0"
                   step="any"
-                  placeholder={suggestedPieceBuy || '0'}
-                  value={pieceBuyPrice}
-                  onChange={(e) => setPieceBuyPrice(e.target.value)}
+                  placeholder={suggestedPieceBuy ? String(suggestedPieceBuy) : '0'}
+                  value={pieceBuyPrice || ''}
+                  onChange={(e) => setPieceBuyPrice?.(e.target.value)}
                   className="w-full px-3 py-2 rounded-xl bg-surface-lowest border border-outline-variant/40 text-xs font-mono font-bold text-on-surface focus:outline-none focus:border-primary text-right"
                 />
               </div>
               <div>
                 <span className="block text-[11px] font-bold text-on-surface-variant mb-1 text-right">
-                  سعر بيع القطعة (ج.م) *
+                  سعر بيع القطعة (ج.م)
                 </span>
                 <input
                   type="number"
                   min="0"
                   step="any"
-                  placeholder={suggestedPieceSell || '0'}
-                  value={pieceSellPrice}
-                  onChange={(e) => setPieceSellPrice(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl bg-surface-lowest border border-primary/50 text-xs font-mono font-bold text-on-surface focus:outline-none focus:border-primary text-right"
+                  placeholder={suggestedPieceSell ? String(suggestedPieceSell) : '0'}
+                  value={pieceSellPrice || ''}
+                  onChange={(e) => {
+                    setUserOverrodePieceSell(true)
+                    setPieceSellPrice?.(e.target.value)
+                  }}
+                  className={`w-full px-3 py-2 rounded-xl bg-surface-lowest border text-xs font-mono font-bold text-on-surface focus:outline-none focus:border-primary text-right ${
+                    isPieceSellCustom ? 'border-amber-500/50' : 'border-primary/50'
+                  }`}
                 />
               </div>
             </div>
           </div>
         )}
-
       </div>
     </div>
   )

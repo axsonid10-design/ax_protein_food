@@ -10,17 +10,11 @@ import { useAXStore } from '../../store/useAXStore'
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock'
 import { generateUUID } from '../../utils/AX_UUID'
 import { getItemDisplayName } from '../../utils/AX_ItemNameHelper'
+import { getCartonEquivalent } from '../../utils/pricingCalculations'
 
 export function AX_CreateInvoiceModal({
-  isOpen,
-  onClose,
-  items = [],
-  warehouses = [],
-  clients = [],
-  suppliers = [],
-  treasuryAccounts = [],
-  inventoryStock: propInventoryStock,
-  onSave,
+  isOpen, onClose, items = [], warehouses = [], clients = [],
+  suppliers = [], treasuryAccounts = [], inventoryStock: propInventoryStock, onSave,
 }) {
   useBodyScrollLock(isOpen, onClose)
 
@@ -120,8 +114,10 @@ export function AX_CreateInvoiceModal({
   const handleCommitDraftItem = () => {
     if (!draftItem.itemId || Number(draftItem.quantity) <= 0) return
     if (invForm.type === 'sale') {
+      const itObj = items.find((i) => i.id === draftItem.itemId)
       const avail = getItemStock(draftItem.itemId, invForm.warehouseId)
-      if (avail <= 0 || Number(draftItem.quantity) > avail) {
+      const reqCartons = getCartonEquivalent(draftItem.quantity, draftItem.unit || itObj?.unitType || 'كرتونة', itObj)
+      if (avail <= 0 || reqCartons > avail) {
         axToast.error('رصيد الصنف غير متاح في المخزن المحدد')
         return
       }
@@ -140,8 +136,10 @@ export function AX_CreateInvoiceModal({
 
   const handleDirectAddItem = (newItem) => {
     if (invForm.type === 'sale') {
+      const itObj = items.find((i) => i.id === newItem.itemId)
       const avail = getItemStock(newItem.itemId, invForm.warehouseId)
-      if (avail <= 0 || Number(newItem.quantity) > avail) {
+      const reqCartons = getCartonEquivalent(newItem.quantity, newItem.unit || itObj?.unitType || 'كرتونة', itObj)
+      if (avail <= 0 || reqCartons > avail) {
         axToast.error('رصيد الصنف غير متاح في المخزن المحدد')
         return
       }
@@ -158,20 +156,27 @@ export function AX_CreateInvoiceModal({
     else if (expandedRowIndex > idx) setExpandedRowIndex(expandedRowIndex - 1)
   }
 
-  const handleItemRowChange = (idx, field, value) => {
-    if (field === 'quantity' && invForm.type === 'sale') {
-      const row = invForm.items[idx]
-      if (row) {
-        const avail = getItemStock(row.itemId, invForm.warehouseId)
-        if (Number(value) > avail) {
+  const handleItemRowChange = (idx, fieldOrUpdates, value) => {
+    setInvForm((prev) => {
+      const row = prev.items[idx]
+      if (!row) return prev
+      const updates = typeof fieldOrUpdates === 'object' && fieldOrUpdates !== null
+        ? fieldOrUpdates
+        : { [fieldOrUpdates]: value }
+      if (prev.type === 'sale' && updates.quantity !== undefined) {
+        const itemObj = items.find((i) => i.id === row.itemId)
+        const unitToCheck = updates.unit || row.unit || itemObj?.unitType || 'كرتونة'
+        const reqCartons = getCartonEquivalent(updates.quantity, unitToCheck, itemObj)
+        const availCartons = getItemStock(row.itemId, prev.warehouseId)
+        if (availCartons <= 0 || reqCartons > availCartons) {
           axToast.error('رصيد الصنف غير متاح في المخزن المحدد')
-          return
+          return prev
         }
       }
-    }
-    const updated = [...invForm.items]
-    updated[idx] = { ...updated[idx], [field]: value }
-    setInvForm({ ...invForm, items: updated })
+      const updated = [...prev.items]
+      updated[idx] = { ...updated[idx], ...updates }
+      return { ...prev, items: updated }
+    })
   }
 
   const computeSubtotal = () => {
@@ -188,8 +193,10 @@ export function AX_CreateInvoiceModal({
 
     if (invForm.type === 'sale') {
       for (const it of invForm.items) {
+        const itemObj = items.find((i) => i.id === it.itemId)
         const avail = getItemStock(it.itemId, invForm.warehouseId)
-        if (avail <= 0 || Number(it.quantity) > avail) {
+        const req = getCartonEquivalent(it.quantity, it.unit || itemObj?.unitType || 'كرتونة', itemObj)
+        if (avail <= 0 || req > avail) {
           axToast.error('رصيد الصنف غير متاح في المخزن المحدد')
           return
         }
@@ -218,6 +225,10 @@ export function AX_CreateInvoiceModal({
       partyName,
       isIncompleteData: !isPartyInList(partyName),
       date: invForm.date,
+      operationalDate: invForm.date,
+      transactionDate: invForm.date,
+      createdAt: new Date().toISOString(),
+      created_at: new Date().toISOString(),
       warehouseId: invForm.warehouseId,
       items: invForm.items.map((it) => {
         const itemObj = items.find((i) => i.id === it.itemId)
@@ -226,7 +237,7 @@ export function AX_CreateInvoiceModal({
           itemId: it.itemId,
           compositeName: getItemDisplayName(itemObj || it),
           quantity: q,
-          unit: itemObj?.unitType || it.unit || 'كرتونة',
+          unit: it.unit || itemObj?.unitType || 'كرتونة',
           price: p,
           total: q * p,
         }

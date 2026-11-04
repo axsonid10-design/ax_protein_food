@@ -3,6 +3,7 @@ import { Trash2, ChevronDown, ChevronUp, PackagePlus, LayoutGrid, ListPlus } fro
 import { AX_SearchableSelect } from '../common/AX_SearchableSelect'
 import { AX_InvoiceItemsGrid } from './AX_InvoiceItemsGrid'
 import { getItemDisplayName } from '../../utils/AX_ItemNameHelper'
+import { resolveInvoiceUnitPrice, getCartonEquivalent } from '../../utils/pricingCalculations'
 
 export function AX_InvoiceItemsEditor({
   items = [],
@@ -30,6 +31,19 @@ export function AX_InvoiceItemsEditor({
     return Number(row?.quantity) || 0
   }
 
+  const handleUnitChange = (idx, newUnit) => {
+    const row = invoiceItems[idx]
+    if (!row) return
+    const itObj = items.find((i) => i.id === row.itemId)
+    const isSale = invType === 'sale' || invType === 'sale_return'
+    const newPrice = resolveInvoiceUnitPrice(itObj, newUnit, isSale)
+    if (newPrice !== undefined && newPrice !== null) {
+      onItemRowChange(idx, { unit: newUnit, price: newPrice })
+    } else {
+      onItemRowChange(idx, 'unit', newUnit)
+    }
+  }
+
   const handleGridAddItem = (newItem) => {
     if (onAddItem) {
       onAddItem(newItem)
@@ -38,9 +52,10 @@ export function AX_InvoiceItemsEditor({
         onDraftItemChange('itemId', newItem.itemId)
         onDraftItemChange('quantity', newItem.quantity)
         onDraftItemChange('price', newItem.price)
+        if (newItem.unit) onDraftItemChange('unit', newItem.unit)
       }
       if (onCommitDraftItem) {
-        setTimeout(() => onCommitDraftItem(), 10)
+        onCommitDraftItem()
       }
     }
   }
@@ -129,25 +144,57 @@ export function AX_InvoiceItemsEditor({
             </div>
           </div>
 
-          <div className="flex items-center justify-between pt-1">
-            {invType === 'sale' && draftItem?.itemId ? (
-              <span className={`text-[11px] font-mono font-bold px-2 py-0.5 rounded-full border ${
-                getStock(draftItem.itemId) > 0
-                  ? 'bg-emerald-500/10 text-emerald-700 border-emerald-500/30'
-                  : 'bg-rose-500/10 text-rose-700 border-rose-500/30'
-              }`}>
-                المتاح بالمخزن: {getStock(draftItem.itemId)} {items.find((i) => i.id === draftItem.itemId)?.unitType || 'كرتونة'}
-              </span>
-            ) : <span />}
+          <div className="flex items-center justify-between pt-1 flex-wrap gap-2">
+            <div className="flex items-center gap-1.5">
+              {draftItem?.itemId && (
+                <div className="flex items-center gap-1">
+                  <span className="text-[10px] font-bold text-on-surface-variant">الوحدة:</span>
+                  {['كرتونة', 'كيلو', Number(items.find((i) => i.id === draftItem.itemId)?.piecesPerCarton) > 0 ? 'قطعة' : null].filter(Boolean).map((u) => {
+                    const selObj = items.find((i) => i.id === draftItem.itemId)
+                    const activeDraftUnit = draftItem?.unit || selObj?.unitType || 'كرتونة'
+                    return (
+                      <button
+                        key={u}
+                        type="button"
+                        onClick={() => {
+                          onDraftItemChange('unit', u)
+                          const p = resolveInvoiceUnitPrice(selObj, u, invType === 'sale' || invType === 'sale_return')
+                          onDraftItemChange('price', p)
+                        }}
+                        className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold border transition-all cursor-pointer ${
+                          activeDraftUnit === u
+                            ? 'bg-primary text-white border-primary shadow-xs'
+                            : 'bg-surface-lowest border-outline-variant/30 text-on-surface hover:bg-surface-container'
+                        }`}
+                      >
+                        {u}
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
 
-            <button
-              type="button"
-              onClick={onCommitDraftItem}
-              className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full bg-primary text-white text-xs font-black hover:bg-primary-dark transition-all cursor-pointer shadow-sm"
-            >
-              <PackagePlus className="w-3.5 h-3.5" />
-              <span>إدراج البند بالفاتورة</span>
-            </button>
+            <div className="flex items-center gap-2">
+              {invType === 'sale' && draftItem?.itemId ? (
+                <span className={`text-[11px] font-mono font-bold px-2 py-0.5 rounded-full border ${
+                  getStock(draftItem.itemId) > 0
+                    ? 'bg-emerald-500/10 text-emerald-700 border-emerald-500/30'
+                    : 'bg-rose-500/10 text-rose-700 border-rose-500/30'
+                }`}>
+                  المتاح بالمخزن: {getStock(draftItem.itemId)} {items.find((i) => i.id === draftItem.itemId)?.unitType || 'كرتونة'}
+                </span>
+              ) : <span />}
+
+              <button
+                type="button"
+                onClick={onCommitDraftItem}
+                className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full bg-primary text-white text-xs font-black hover:bg-primary-dark transition-all cursor-pointer shadow-sm"
+              >
+                <PackagePlus className="w-3.5 h-3.5" />
+                <span>إدراج البند بالفاتورة</span>
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -166,6 +213,8 @@ export function AX_InvoiceItemsEditor({
             const itObj = items.find((i) => i.id === row.itemId)
             const isExpanded = expandedRowIndex === idx
             const rowTotal = (Number(row.quantity) || 0) * (Number(row.price) || 0)
+            const currentUnit = row.unit || itObj?.unitType || 'كرتونة'
+            const availableUnits = ['كرتونة', 'كيلو', Number(itObj?.piecesPerCarton) > 0 ? 'قطعة' : null].filter(Boolean)
 
             return (
               <div
@@ -181,11 +230,11 @@ export function AX_InvoiceItemsEditor({
                       {getItemDisplayName(itObj || row)}
                     </span>
                     <span className="text-on-surface-variant text-[11px] font-mono">
-                      ({row.quantity} {itObj?.unitType || row.unit || 'كرتونة'} × {row.price} ج.م)
+                      ({row.quantity} {currentUnit} × {row.price} ج.م)
                     </span>
                     {invType === 'sale' && (
                       <span className={`text-[10px] font-mono font-bold px-1.5 py-0.5 rounded border shrink-0 ${
-                        getStock(row.itemId) >= Number(row.quantity)
+                        getStock(row.itemId) >= getCartonEquivalent(row.quantity, currentUnit, itObj)
                           ? 'bg-emerald-500/10 text-emerald-700 border-emerald-500/20'
                           : 'bg-rose-500/10 text-rose-700 border-rose-500/30'
                       }`}>
@@ -218,27 +267,56 @@ export function AX_InvoiceItemsEditor({
                 </div>
 
                 {isExpanded && (
-                  <div className="grid grid-cols-2 gap-2 pt-2 border-t border-surface-container">
-                    <div>
-                      <label className="text-[10px] font-bold text-on-surface-variant block">الكمية</label>
-                      <input
-                        type="number"
-                        min="1"
-                        value={row.quantity}
-                        onChange={(e) => onItemRowChange(idx, 'quantity', e.target.value)}
-                        className="w-full px-2 py-1 rounded-lg bg-surface-lowest text-xs font-mono font-bold border border-outline-variant/30"
-                      />
+                  <div className="space-y-2 pt-2 border-t border-surface-container">
+                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                      <span className="text-[10px] font-bold text-on-surface-variant">
+                        وحدة القياس والبيع:
+                      </span>
+                      <div className="flex items-center gap-1">
+                        {availableUnits.map((u) => (
+                          <button
+                            key={u}
+                            type="button"
+                            onClick={() => handleUnitChange(idx, u)}
+                            className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold border transition-all cursor-pointer ${
+                              currentUnit === u
+                                ? 'bg-primary text-white border-primary shadow-xs font-black'
+                                : 'bg-surface-lowest border-outline-variant/30 text-on-surface hover:bg-surface-container'
+                            }`}
+                          >
+                            {u}
+                          </button>
+                        ))}
+                      </div>
                     </div>
-                    <div>
-                      <label className="text-[10px] font-bold text-on-surface-variant block">السعر (ج.م)</label>
-                      <input
-                        type="number"
-                        min="0.1"
-                        step="any"
-                        value={row.price}
-                        onChange={(e) => onItemRowChange(idx, 'price', e.target.value)}
-                        className="w-full px-2 py-1 rounded-lg bg-surface-lowest text-xs font-mono font-bold border border-outline-variant/30"
-                      />
+
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="text-[10px] font-bold text-on-surface-variant block">
+                          الكمية ({currentUnit})
+                        </label>
+                        <input
+                          type="number"
+                          min="1"
+                          step="any"
+                          value={row.quantity}
+                          onChange={(e) => onItemRowChange(idx, 'quantity', e.target.value)}
+                          className="w-full px-2 py-1 rounded-lg bg-surface-lowest text-xs font-mono font-bold border border-outline-variant/30"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-bold text-on-surface-variant block">
+                          السعر (ج.م / {currentUnit})
+                        </label>
+                        <input
+                          type="number"
+                          min="0.1"
+                          step="any"
+                          value={row.price}
+                          onChange={(e) => onItemRowChange(idx, 'price', e.target.value)}
+                          className="w-full px-2 py-1 rounded-lg bg-surface-lowest text-xs font-mono font-bold border border-outline-variant/30"
+                        />
+                      </div>
                     </div>
                   </div>
                 )}

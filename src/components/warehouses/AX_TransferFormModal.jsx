@@ -1,7 +1,9 @@
 import React, { useState } from 'react'
-import { ArrowLeftRight, Plus, Trash2, X, Check } from 'lucide-react'
+import { ArrowLeftRight, Plus, Trash2, X, Check, AlertTriangle } from 'lucide-react'
 import { useAXStore } from '../../store/useAXStore'
 import { AX_SearchableSelect } from '../common/AX_SearchableSelect'
+import { AX_CompanyDatePicker } from '../common/AX_CompanyDatePicker'
+import { checkTransferAuditDiscrepancy } from '../../store/transferAuditHelpers'
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock'
 import { generateUUID } from '../../utils/AX_UUID'
 
@@ -10,6 +12,7 @@ export function AX_TransferFormModal({ isOpen, onClose }) {
 
   const warehouses = useAXStore((state) => state.warehouses) || []
   const items = useAXStore((state) => state.items) || []
+  const stockAudits = useAXStore((state) => state.stockAudits) || []
   const addTransfer = useAXStore((state) => state.addTransfer)
 
   const allDestinations = warehouses.map((w) => ({
@@ -22,10 +25,17 @@ export function AX_TransferFormModal({ isOpen, onClose }) {
 
   const [fromId, setFromId] = useState(warehouses[0]?.id || '')
   const [toId, setToId] = useState(warehouses[1]?.id || '')
+  const [operationalDate, setOperationalDate] = useState(() => new Date().toISOString().split('T')[0])
   const [transferItems, setTransferItems] = useState([
     { itemId: items[0]?.id || '', quantity: '', unit: 'كرتونة' },
   ])
   const [notes, setNotes] = useState('')
+
+  const liveDiscrepancy = checkTransferAuditDiscrepancy(
+    { fromId, toId, date: operationalDate },
+    stockAudits,
+    warehouses
+  )
 
   if (!isOpen) return null
 
@@ -80,9 +90,14 @@ export function AX_TransferFormModal({ isOpen, onClose }) {
       toName: toObj?.name || toId,
       items: validItems,
       status: 'pending',
+      date: operationalDate,
+      operationalDate,
+      createdAt: new Date().toISOString(),
       requestedAt: new Date().toISOString(),
       confirmedAt: null,
       notes: notes.trim(),
+      isAuditDiscrepancy: liveDiscrepancy.isAuditDiscrepancy,
+      auditDiscrepancyNote: liveDiscrepancy.auditDiscrepancyNote,
     }
 
     addTransfer(newTransfer)
@@ -141,6 +156,22 @@ export function AX_TransferFormModal({ isOpen, onClose }) {
               />
             </div>
           </div>
+
+          <div className="relative z-20">
+            <label className="block text-xs font-black text-on-surface mb-1">تاريخ العملية</label>
+            <AX_CompanyDatePicker
+              value={operationalDate}
+              onChange={setOperationalDate}
+              placeholder="اختر تاريخ التحويل..."
+            />
+          </div>
+
+          {liveDiscrepancy.isAuditDiscrepancy && (
+            <div className="p-3 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-900 text-xs font-bold flex items-start gap-2">
+              <AlertTriangle className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
+              <span>{liveDiscrepancy.auditDiscrepancyNote}</span>
+            </div>
+          )}
 
           <div className="space-y-2 pt-1 border-t border-surface-container relative z-10">
             <div className="flex items-center justify-between">

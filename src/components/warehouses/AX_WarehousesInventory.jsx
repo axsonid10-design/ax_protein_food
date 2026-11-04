@@ -1,17 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import {
-  Boxes,
-  ArrowLeftRight,
-  Warehouse,
-  Plus,
-  Clock,
-  Search,
-  PackageCheck,
-  Tag,
-  ClipboardCheck,
-  Ban,
-  Edit3,
-  Trash2,
+  Boxes, ArrowLeftRight, Warehouse, Plus, Clock, Search,
+  PackageCheck, Tag, ClipboardCheck, Ban, Edit3, Trash2, AlertTriangle,
 } from 'lucide-react'
 import { useAXStore } from '../../store/useAXStore'
 import { AX_TransferInspectionModal } from './AX_TransferInspectionModal'
@@ -21,18 +11,10 @@ import { AX_EditWarehouseModal } from './AX_EditWarehouseModal'
 import { AX_StockAuditModal } from './AX_StockAuditModal'
 import { AX_ConfirmModal } from '../common/AX_ConfirmModal'
 
-const getWarehouseTypeLabel = (type) => {
-  const map = {
-    cold_store: 'تجميد وحفظ',
-    raw_materials: 'خامات وتوريد',
-    processing: 'تقطيع وتجهيز',
-    finished_goods: 'مصنعات وتعبئة',
-    van: 'سيارة توزيع',
-    branch: 'فرع مبيعات',
-    main: 'رئيسي',
-  }
-  return map[type] || type || 'مخزن'
-}
+const getWarehouseTypeLabel = (type) => ({
+  cold_store: 'تجميد وحفظ', raw_materials: 'خامات وتوريد', processing: 'تقطيع وتجهيز',
+  finished_goods: 'مصنعات وتعبئة', van: 'سيارة توزيع', branch: 'فرع مبيعات', main: 'رئيسي',
+}[type] || type || 'مخزن')
 
 export function AX_WarehousesInventory() {
   const warehouses = useAXStore((state) => state.warehouses) || []
@@ -173,12 +155,27 @@ export function AX_WarehousesInventory() {
                 >
                   <div className="space-y-2 text-right">
                     <div className="flex items-center justify-between">
-                      <span className="font-mono text-xs font-black text-amber-800 bg-amber-500/20 px-2.5 py-0.5 rounded-full">
-                        {trf.code}
-                      </span>
-                      <span className="text-[11px] font-bold text-on-surface-variant">
-                        {trf.requestedAt}
-                      </span>
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="font-mono text-xs font-black text-amber-800 bg-amber-500/20 px-2.5 py-0.5 rounded-full">
+                          {trf.code}
+                        </span>
+                        {trf.isAuditDiscrepancy && (
+                          <span className="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-900 border border-amber-500/30 text-[10px] font-black flex items-center gap-1">
+                            <AlertTriangle className="w-3 h-3 text-amber-700" />
+                            ⚠️ فارق جردي
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-left font-mono">
+                        <span className="text-[11px] font-bold text-on-surface-variant block">
+                          {trf.operationalDate || trf.date || trf.requestedAt}
+                        </span>
+                        {trf.createdAt && (
+                          <span className="text-[10px] text-on-surface-variant/70 block">
+                            قيد: {String(trf.createdAt).slice(11, 16)}
+                          </span>
+                        )}
+                      </div>
                     </div>
 
                     <div className="p-2.5 rounded-xl bg-surface-lowest border border-outline-variant/30 flex items-center justify-between text-xs font-bold">

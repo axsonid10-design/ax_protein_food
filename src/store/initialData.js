@@ -64,3 +64,5 @@ export const initialSalesReps = []
 export const initialSalesRepLedger = []
 
 export const initialNotifications = []
+
+export { initialExpenseCategories } from './expenseCategoryHelpers.js'

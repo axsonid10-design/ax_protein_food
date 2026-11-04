@@ -197,7 +197,14 @@ export function AX_InvoicesManager() {
                           </span>
                         </td>
                         <td className="px-3.5 whitespace-nowrap font-black">{inv.partyName}</td>
-                        <td className="px-3.5 whitespace-nowrap text-on-surface-variant">{inv.date}</td>
+                        <td className="px-3.5 whitespace-nowrap text-on-surface-variant font-mono">
+                          <div>{inv.date || inv.operationalDate}</div>
+                          {inv.createdAt && (
+                            <div className="text-[10px] text-on-surface-variant/70">
+                              قيد: {String(inv.createdAt).slice(11, 16) || String(inv.createdAt).slice(0, 10)}
+                            </div>
+                          )}
+                        </td>
                         <td className="px-3.5 whitespace-nowrap font-mono font-bold text-on-surface-variant">
                           {((Number(inv.transportCost) || 0) + (Number(inv.loadingCost) || 0)).toLocaleString('en-US')} ج.م
                         </td>
@@ -248,7 +255,14 @@ export function AX_InvoicesManager() {
                           {badge.label}
                         </span>
                       </div>
-                      <span className="text-xs text-on-surface-variant">{inv.date}</span>
+                      <div className="text-left font-mono">
+                        <span className="text-xs text-on-surface-variant block">{inv.date || inv.operationalDate}</span>
+                        {inv.createdAt && (
+                          <span className="text-[10px] text-on-surface-variant/70 block">
+                            قيد: {String(inv.createdAt).slice(11, 16)}
+                          </span>
+                        )}
+                      </div>
                     </div>
                     <div className="flex items-center justify-between">
                       <span className="font-black text-sm text-on-surface">{inv.partyName}</span>

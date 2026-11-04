@@ -61,12 +61,21 @@ export function AX_TreasuryTransactionsTable({
                       </span>
                     )}
                   </td>
-                  <td className="px-3.5 whitespace-nowrap font-black">{tx.partyName}</td>
+                  <td className="px-3.5 whitespace-nowrap font-black">
+                    {tx.partyName || (tx.expenseMainCategoryName ? `[${[tx.expenseMainCategoryName, tx.expenseSubCategoryName, tx.expenseSecondaryCategoryName].filter(Boolean).join(' / ')}]` : '-')}
+                  </td>
                   <td className="px-3.5 whitespace-nowrap text-on-surface-variant">{getTreasuryName(tx.treasuryId)}</td>
                   <td className="px-3.5 whitespace-nowrap font-mono font-black text-sm">
                     {(Number(tx.amount) || 0).toLocaleString('en-US')} ج.م
                   </td>
-                  <td className="px-3.5 whitespace-nowrap text-on-surface-variant">{tx.date}</td>
+                  <td className="px-3.5 whitespace-nowrap text-on-surface-variant">
+                    <div>{tx.date}</div>
+                    {tx.createdAt && (
+                      <div className="text-[10px] text-on-surface-variant/70">
+                        قيد: {String(tx.createdAt).slice(11, 16) || String(tx.createdAt).slice(0, 10)}
+                      </div>
+                    )}
+                  </td>
                   <td className="px-3.5 whitespace-nowrap text-on-surface-variant text-[11px] truncate max-w-xs">{tx.notes}</td>
                 </tr>
               )
@@ -86,11 +95,20 @@ export function AX_TreasuryTransactionsTable({
             >
               <div className="flex items-center justify-between">
                 <span className="font-mono text-xs font-bold text-primary">{tx.code}</span>
-                <span className="text-xs text-on-surface-variant">{tx.date}</span>
+                <div className="text-left font-mono">
+                  <span className="text-xs text-on-surface-variant block">{tx.date}</span>
+                  {tx.createdAt && (
+                    <span className="text-[10px] text-on-surface-variant/70 block">
+                      قيد: {String(tx.createdAt).slice(11, 16)}
+                    </span>
+                  )}
+                </div>
               </div>
               <div className="flex items-center justify-between">
                 <div>
-                  <span className="font-black text-sm text-on-surface block">{tx.partyName}</span>
+                  <span className="font-black text-sm text-on-surface block">
+                    {tx.partyName || (tx.expenseMainCategoryName ? `[${[tx.expenseMainCategoryName, tx.expenseSubCategoryName, tx.expenseSecondaryCategoryName].filter(Boolean).join(' / ')}]` : '-')}
+                  </span>
                   <span className="text-[10px] text-on-surface-variant">
                     {tx.type === 'client_receipt' ? 'وارد قبض' : isExpense ? 'مصروف' : isPayroll ? 'أجور' : 'سداد مورد'}
                   </span>

@@ -12,12 +12,14 @@ import {
   Landmark,
   Edit2,
   Trash2,
+  FolderTree,
 } from 'lucide-react'
 import { useAXStore } from '../../store/useAXStore'
 import { AX_SearchableSelect } from '../common/AX_SearchableSelect'
 import { AX_TreasuryTransactionsTable } from './AX_TreasuryTransactionsTable'
 import { AX_AddTreasuryModal } from './AX_AddTreasuryModal'
 import { AX_TreasuryTransactionModal } from './AX_TreasuryTransactionModal'
+import { AX_ExpenseCategoriesModal } from './AX_ExpenseCategoriesModal'
 import { AX_ConfirmModal } from '../common/AX_ConfirmModal'
 import { generateUUID } from '../../utils/AX_UUID'
 
@@ -44,6 +46,7 @@ export function AX_TreasuryLedger() {
   const [showTransactionModal, setShowTransactionModal] = useState(false)
   const [showTransferModal, setShowTransferModal] = useState(false)
   const [showAddTreasuryModal, setShowAddTreasuryModal] = useState(false)
+  const [showExpenseCategoriesModal, setShowExpenseCategoriesModal] = useState(false)
   const [editingAccount, setEditingAccount] = useState(null)
   const [deletingAccount, setDeletingAccount] = useState(null)
   const [blockedNotice, setBlockedNotice] = useState(null)
@@ -56,6 +59,9 @@ export function AX_TreasuryLedger() {
       closeModal()
     } else if (activeModal === 'add_treasury') {
       setShowAddTreasuryModal(true)
+      closeModal()
+    } else if (activeModal === 'manage_expense_categories' || activeModal === 'expense_categories') {
+      setShowExpenseCategoriesModal(true)
       closeModal()
     }
   }, [activeModal, closeModal])
@@ -153,6 +159,15 @@ export function AX_TreasuryLedger() {
           >
             <ArrowLeftRight className="w-4 h-4" />
             <span>تحويل بين الخزن</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setShowExpenseCategoriesModal(true)}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-surface-lowest border border-outline-variant/40 hover:bg-surface-container text-xs font-black text-on-surface shadow-xs transition-all active:scale-95 cursor-pointer"
+          >
+            <FolderTree className="w-4 h-4 text-primary" />
+            <span>إدارة بنود المصروفات</span>
           </button>
 
           <button
@@ -431,6 +446,11 @@ export function AX_TreasuryLedger() {
           setDeletingAccount(null)
         }}
         onCancel={() => setDeletingAccount(null)}
+      />
+
+      <AX_ExpenseCategoriesModal
+        isOpen={showExpenseCategoriesModal}
+        onClose={() => setShowExpenseCategoriesModal(false)}
       />
     </div>
   )

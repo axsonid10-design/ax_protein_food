@@ -64,6 +64,8 @@ export function AX_AddItemModal({
   const [pieceSellPrice, setPieceSellPrice] = useState('')
   const [grainBuyPrice, setGrainBuyPrice] = useState('')
   const [grainSellPrice, setGrainSellPrice] = useState('')
+  const [kgBuyPrice, setKgBuyPrice] = useState('')
+  const [kgSellPrice, setKgSellPrice] = useState('')
   const [errorMsg, setErrorMsg] = useState(null)
 
   const [isQuickWarehouseOpen, setIsQuickWarehouseOpen] = useState(false)
@@ -79,6 +81,7 @@ export function AX_AddItemModal({
       setPiecesPerCarton(''); setGrainsPerPiece(''); setPieceWeight(''); setGrainWeight('')
       setTargetWarehouseId(warehouses[0]?.id || '')
       setBuyPrice(''); setSellPrice(''); setPieceBuyPrice(''); setPieceSellPrice(''); setGrainBuyPrice(''); setGrainSellPrice('')
+      setKgBuyPrice(''); setKgSellPrice('')
       setErrorMsg(null); setIsQuickWarehouseOpen(false); setQuickWhName(''); setQuickWhType('cold_store'); setQuickWhManager('')
     }
   }, [isOpen])
@@ -126,10 +129,14 @@ export function AX_AddItemModal({
       return
     }
 
-    if (Number(piecesPerCarton) > 0 && !pieceSellPrice && Number(pieceSellPrice) !== 0) {
-      setErrorMsg('يرجى تحديد سعر بيع القطعة')
-      return
-    }
+    const numSell = Number(sellPrice) || 0
+    const numBuy = Number(buyPrice) || 0
+    const numPieces = Number(piecesPerCarton) || 0
+    const numWeight = unitType === 'كرتونة' ? (Number(weightPerCarton) || 10) : 1
+    const suggestedPieceSell = numPieces > 0 && numSell > 0 ? Number((numSell / numPieces).toFixed(2)) : null
+    const finalPieceSell = Number(pieceSellPrice) > 0 ? Number(pieceSellPrice) : suggestedPieceSell
+    const suggestedKgSell = numWeight > 0 && numSell > 0 ? Number((numSell / numWeight).toFixed(2)) : null
+    const finalKgSell = Number(kgSellPrice) > 0 ? Number(kgSellPrice) : suggestedKgSell
 
     const finalName = compositeName.trim() || [primaryCategory, subCategory.trim(), secondaryCategory?.trim()].filter(Boolean).join(' ')
     const generatedId = generateUUID()
@@ -147,10 +154,12 @@ export function AX_AddItemModal({
       grainsPerPiece: Number(grainsPerPiece) || null,
       pieceWeight: pieceWeight?.trim() || null,
       grainWeight: grainWeight?.trim() || null,
-      buyPrice: Number(buyPrice) || 0,
-      sellPrice: Number(sellPrice) || 0,
+      buyPrice: numBuy,
+      sellPrice: numSell,
+      kgBuyPrice: Number(kgBuyPrice) || null,
+      kgSellPrice: finalKgSell,
       pieceBuyPrice: Number(pieceBuyPrice) || null,
-      pieceSellPrice: Number(pieceSellPrice) || null,
+      pieceSellPrice: finalPieceSell,
       grainBuyPrice: Number(grainBuyPrice) || null,
       grainSellPrice: Number(grainSellPrice) || null,
       code: code.trim() || `PF-${Date.now().toString().slice(-4)}`,
@@ -362,6 +371,10 @@ export function AX_AddItemModal({
             setGrainBuyPrice={setGrainBuyPrice}
             grainSellPrice={grainSellPrice}
             setGrainSellPrice={setGrainSellPrice}
+            kgBuyPrice={kgBuyPrice}
+            setKgBuyPrice={setKgBuyPrice}
+            kgSellPrice={kgSellPrice}
+            setKgSellPrice={setKgSellPrice}
           />
 
           <div className="pt-3 border-t border-surface-container flex items-center justify-end gap-2.5">

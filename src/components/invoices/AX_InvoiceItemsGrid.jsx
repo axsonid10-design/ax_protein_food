@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react'
 import { Search, Plus, Minus, Check, Layers } from 'lucide-react'
 import { getItemDisplayName } from '../../utils/AX_ItemNameHelper'
+import { resolveInvoiceUnitPrice, getCartonEquivalent } from '../../utils/pricingCalculations'
 import { axToast } from '../common/AX_Toast'
 
 export function AX_InvoiceItemsGrid({
@@ -16,6 +17,7 @@ export function AX_InvoiceItemsGrid({
 }) {
   const [selectedCategory, setSelectedCategory] = useState('all')
   const [searchQuery, setSearchQuery] = useState('')
+  const [selectedUnits, setSelectedUnits] = useState({})
 
   const categories = useMemo(() => {
     const cats = new Set()
@@ -76,56 +78,67 @@ export function AX_InvoiceItemsGrid({
     return Number(row?.quantity) || 0
   }
 
-  const handleCardClick = (item) => {
-    const existing = invoiceItemsMap.get(item.id)
+  const handleCardClick = (item, explicitUnit = null) => {
+    const activeUnit = explicitUnit || selectedUnits[item.id] || item.unitType || 'كرتونة'
+    const existingIdx = invoiceItems.findIndex(
+      (r) => r.itemId === item.id && (r.unit || item.unitType || 'كرتونة') === activeUnit
+    )
     const avail = getStock(item.id)
     if (invType === 'sale') {
-      if (avail <= 0) {
-        axToast.error('رصيد الصنف غير متاح في المخزن المحدد')
-        return
-      }
-      if (existing && existing.quantity + 1 > avail) {
+      const curQty = existingIdx !== -1 ? (Number(invoiceItems[existingIdx]?.quantity) || 0) : 0
+      const nextCartonReq = getCartonEquivalent(curQty + 1, activeUnit, item)
+      if (avail <= 0 || nextCartonReq > avail) {
         axToast.error('رصيد الصنف غير متاح في المخزن المحدد')
         return
       }
     }
-    if (existing) {
-      onUpdateQuantity(existing.index, existing.quantity + 1)
+    if (existingIdx !== -1) {
+      onUpdateQuantity(existingIdx, (Number(invoiceItems[existingIdx].quantity) || 0) + 1)
     } else {
-      const price = isSale ? (item.sellPrice ?? 0) : (item.buyPrice ?? 0)
+      const price = resolveInvoiceUnitPrice(item, activeUnit, isSale)
       onAddItem({
         itemId: item.id,
         quantity: 1,
         price,
+        unit: activeUnit,
       })
     }
   }
 
-  const handleMinusClick = (e, item) => {
+  const handleMinusClick = (e, item, unit) => {
     e.stopPropagation()
-    const existing = invoiceItemsMap.get(item.id)
-    if (!existing) return
-    if (existing.quantity > 1) {
-      onUpdateQuantity(existing.index, existing.quantity - 1)
+    const activeUnit = unit || selectedUnits[item.id] || item.unitType || 'كرتونة'
+    const existingIdx = invoiceItems.findIndex(
+      (r) => r.itemId === item.id && (r.unit || item.unitType || 'كرتونة') === activeUnit
+    )
+    if (existingIdx === -1) return
+    const curQty = Number(invoiceItems[existingIdx].quantity) || 0
+    if (curQty > 1) {
+      onUpdateQuantity(existingIdx, curQty - 1)
     } else {
-      onRemoveItem(existing.index)
+      onRemoveItem(existingIdx)
     }
   }
 
-  const handlePlusClick = (e, item) => {
+  const handlePlusClick = (e, item, unit) => {
     e.stopPropagation()
-    const existing = invoiceItemsMap.get(item.id)
+    const activeUnit = unit || selectedUnits[item.id] || item.unitType || 'كرتونة'
+    const existingIdx = invoiceItems.findIndex(
+      (r) => r.itemId === item.id && (r.unit || item.unitType || 'كرتونة') === activeUnit
+    )
     const avail = getStock(item.id)
     if (invType === 'sale') {
-      if (avail <= 0 || (existing && existing.quantity + 1 > avail)) {
+      const curQty = existingIdx !== -1 ? (Number(invoiceItems[existingIdx]?.quantity) || 0) : 0
+      const nextCartonReq = getCartonEquivalent(curQty + 1, activeUnit, item)
+      if (avail <= 0 || nextCartonReq > avail) {
         axToast.error('رصيد الصنف غير متاح في المخزن المحدد')
         return
       }
     }
-    if (existing) {
-      onUpdateQuantity(existing.index, existing.quantity + 1)
+    if (existingIdx !== -1) {
+      onUpdateQuantity(existingIdx, (Number(invoiceItems[existingIdx].quantity) || 0) + 1)
     } else {
-      handleCardClick(item)
+      handleCardClick(item, activeUnit)
     }
   }
 
@@ -189,16 +202,21 @@ export function AX_InvoiceItemsGrid({
 
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
                 {section.items.map((item) => {
-                  const added = invoiceItemsMap.get(item.id)
-                  const price = isSale ? (item.sellPrice ?? 0) : (item.buyPrice ?? 0)
-                  const isAdded = Boolean(added)
+                  const availableUnits = ['كرتونة', 'كيلو', Number(item.piecesPerCarton) > 0 ? 'قطعة' : null].filter(Boolean)
+                  const activeUnit = selectedUnits[item.id] || item.unitType || 'كرتونة'
+                  const price = resolveInvoiceUnitPrice(item, activeUnit, isSale)
+                  const matchingRow = invoiceItems.find(
+                    (r) => r.itemId === item.id && (r.unit || item.unitType || 'كرتونة') === activeUnit
+                  )
+                  const isAdded = Boolean(matchingRow)
+                  const addedQty = matchingRow ? Number(matchingRow.quantity) || 0 : 0
                   const avail = getStock(item.id)
                   const isOutOfStock = invType === 'sale' && avail <= 0
 
                   return (
                     <div
                       key={item.id}
-                      onClick={() => handleCardClick(item)}
+                      onClick={() => handleCardClick(item, activeUnit)}
                       className={`p-2.5 rounded-2xl border transition-all text-right flex flex-col justify-between select-none cursor-pointer group ${
                         isOutOfStock
                           ? 'bg-surface-low/50 border-rose-500/30 opacity-80'
@@ -209,9 +227,25 @@ export function AX_InvoiceItemsGrid({
                     >
                       <div>
                         <div className="flex items-start justify-between gap-1 mb-1">
-                          <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-md bg-surface-lowest text-on-surface-variant border border-outline-variant/20 shrink-0">
-                            {item.unitType || 'كرتونة'}
-                          </span>
+                          <div className="flex items-center gap-1 flex-wrap">
+                            {availableUnits.map((u) => (
+                              <button
+                                key={u}
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  setSelectedUnits((prev) => ({ ...prev, [item.id]: u }))
+                                }}
+                                className={`text-[9px] font-mono px-1.5 py-0.5 rounded-md border transition-all cursor-pointer ${
+                                  activeUnit === u
+                                    ? 'bg-primary text-white border-primary shadow-xs font-black'
+                                    : 'bg-surface-lowest text-on-surface-variant hover:text-on-surface border-outline-variant/30'
+                                }`}
+                              >
+                                {u}
+                              </button>
+                            ))}
+                          </div>
                           <span className={`text-[10px] font-mono font-bold px-1.5 py-0.5 rounded-md border shrink-0 ${
                             avail > 0
                               ? 'bg-emerald-500/10 text-emerald-700 border-emerald-500/20'
@@ -234,24 +268,25 @@ export function AX_InvoiceItemsGrid({
                       <div className="mt-2 pt-1.5 border-t border-surface-container flex items-center justify-between">
                         <span className="text-xs font-black font-mono text-primary">
                           {Number(price).toLocaleString('en-US')} ج.م
+                          <span className="text-[10px] text-on-surface-variant font-normal mr-0.5">/{activeUnit}</span>
                         </span>
 
                         {isAdded ? (
                           <div className="flex items-center gap-1 bg-surface-lowest rounded-full p-0.5 border border-primary/30">
                             <button
                               type="button"
-                              onClick={(e) => handleMinusClick(e, item)}
+                              onClick={(e) => handleMinusClick(e, item, activeUnit)}
                               className="w-5 h-5 rounded-full bg-surface-low hover:bg-error hover:text-white flex items-center justify-center text-on-surface transition-colors cursor-pointer"
                               title="إنقاص الكمية"
                             >
                               <Minus className="w-2.5 h-2.5" />
                             </button>
                             <span className="font-mono text-xs font-black px-1 text-primary">
-                              {added.quantity}
+                              {addedQty}
                             </span>
                             <button
                               type="button"
-                              onClick={(e) => handlePlusClick(e, item)}
+                              onClick={(e) => handlePlusClick(e, item, activeUnit)}
                               className="w-5 h-5 rounded-full bg-primary hover:bg-primary-dark text-white flex items-center justify-center transition-colors cursor-pointer"
                               title="زيادة الكمية"
                             >
@@ -263,7 +298,7 @@ export function AX_InvoiceItemsGrid({
                             type="button"
                             onClick={(e) => {
                               e.stopPropagation()
-                              handleCardClick(item)
+                              handleCardClick(item, activeUnit)
                             }}
                             className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-primary/10 hover:bg-primary text-primary hover:text-white text-[11px] font-bold transition-all cursor-pointer"
                           >

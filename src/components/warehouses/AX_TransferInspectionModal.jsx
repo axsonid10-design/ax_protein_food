@@ -1,9 +1,10 @@
 import React, { useState } from 'react'
-import { CheckCircle2, Clock, X, ArrowLeftRight, PackageCheck, AlertCircle, Ban } from 'lucide-react'
+import { CheckCircle2, Clock, X, ArrowLeftRight, PackageCheck, AlertCircle, Ban, AlertTriangle, Calendar } from 'lucide-react'
 import { useAXStore } from '../../store/useAXStore'
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock'
 import { AX_ConfirmModal } from '../common/AX_ConfirmModal'
 import { axToast } from '../common/AX_Toast'
+import { formatDualDates } from '../../utils/dateHelpers'
 
 export function AX_TransferInspectionModal({ transfer, isOpen, onClose }) {
   useBodyScrollLock(isOpen && Boolean(transfer))
@@ -12,6 +13,8 @@ export function AX_TransferInspectionModal({ transfer, isOpen, onClose }) {
   const [isCancelConfirmOpen, setIsCancelConfirmOpen] = useState(false)
 
   if (!isOpen || !transfer) return null
+
+  const dates = formatDualDates(transfer)
 
   const transferItems = transfer.items && transfer.items.length > 0
     ? transfer.items
@@ -39,9 +42,15 @@ export function AX_TransferInspectionModal({ transfer, isOpen, onClose }) {
             </span>
             <div className="text-right">
               <h3 className="text-sm sm:text-base font-black text-on-surface">فحص واستلام شحنة التحويل</h3>
-              <span className="font-mono text-xs font-bold text-amber-800 block">
-                {transfer.code} • {transfer.requestedAt}
-              </span>
+              <div className="flex items-center gap-2 flex-wrap text-[11px] font-mono mt-0.5">
+                <span className="font-bold text-amber-800">{transfer.code}</span>
+                <span className="text-on-surface-variant">• تاريخ العملية: {dates.operationalDate || transfer.requestedAt}</span>
+                {dates.isDifferentDate && (
+                  <span className="text-[10px] text-on-surface-variant/80 font-sans">
+                    (أُضيف في: {dates.createdAt})
+                  </span>
+                )}
+              </div>
             </div>
           </div>
 
@@ -65,6 +74,19 @@ export function AX_TransferInspectionModal({ transfer, isOpen, onClose }) {
             <span className="text-primary font-black">{transfer.toName || transfer.toWarehouseId}</span>
           </div>
         </div>
+
+        {transfer.isAuditDiscrepancy && (
+          <div className="p-3 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-900 text-xs font-bold flex items-start gap-2">
+            <AlertTriangle className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
+            <div className="space-y-0.5">
+              <span className="font-black block">تنبيه فارق جردي:</span>
+              <span className="block text-[11px] leading-relaxed">{transfer.auditDiscrepancyNote}</span>
+              <span className="block text-[10px] text-amber-800">
+                لن يتم تعديل أرصدة المخازن التي تم جردها بعد هذا التاريخ حفاظاً على نتائج الجرد الفعلي.
+              </span>
+            </div>
+          </div>
+        )}
 
         <div className="space-y-2">
           <div className="flex items-center justify-between text-xs font-black text-on-surface px-1">

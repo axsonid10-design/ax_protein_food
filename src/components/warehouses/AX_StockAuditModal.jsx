@@ -15,6 +15,7 @@ import {
 import { useAXStore } from '../../store/useAXStore'
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock'
 import { AX_SearchableSelect } from '../common/AX_SearchableSelect'
+import { AX_CompanyDatePicker } from '../common/AX_CompanyDatePicker'
 import { AX_StockAuditCategoryGroup } from './AX_StockAuditCategoryGroup'
 import { generateUUID } from '../../utils/AX_UUID'
 
@@ -32,7 +33,7 @@ export function AX_StockAuditModal({
 
   const [activeWhId, setActiveWhId] = useState(warehouseId || warehouses[0]?.id || 'wh-1')
   const [auditorName, setAuditorName] = useState(() => profile?.name || profile?.full_name || 'مسؤول الجرد والمخازن')
-  const [auditDate, setAuditDate] = useState(() => new Date().toISOString().slice(0, 16).replace('T', ' '))
+  const [auditDate, setAuditDate] = useState(() => new Date().toISOString().split('T')[0])
   const [auditNotes, setAuditNotes] = useState('')
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedCategoryTab, setSelectedCategoryTab] = useState('ALL')
@@ -197,6 +198,11 @@ export function AX_StockAuditModal({
       warehouseName: activeWh?.name || 'المخزن',
       auditorName: auditorName.trim() || 'أمين المخزن',
       date: auditDate,
+      operationalDate: auditDate,
+      transactionDate: auditDate,
+      auditDate: auditDate,
+      createdAt: new Date().toISOString(),
+      created_at: new Date().toISOString(),
       itemsCount: calculatedStats.enrichedRows.length,
       deficitsCount: calculatedStats.deficitCount,
       surplusesCount: calculatedStats.surplusCount,
@@ -303,13 +309,12 @@ export function AX_StockAuditModal({
             <div className="space-y-1">
               <label className="text-on-surface flex items-center gap-1.5">
                 <Clock className="w-3.5 h-3.5 text-primary" />
-                <span>تاريخ ووقت الجرد:</span>
+                <span>تاريخ العملية (الجرد):</span>
               </label>
-              <input
-                type="text"
+              <AX_CompanyDatePicker
                 value={auditDate}
-                onChange={(e) => setAuditDate(e.target.value)}
-                className="w-full h-10 px-3 rounded-xl bg-surface-lowest border border-outline-variant/40 focus:border-primary text-xs font-mono font-bold text-on-surface outline-none"
+                onChange={setAuditDate}
+                placeholder="اختر تاريخ الجرد..."
               />
             </div>
           </div>

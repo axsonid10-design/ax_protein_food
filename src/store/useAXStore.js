@@ -6,7 +6,9 @@ import { AX_SupplierOperationsService } from '../services/AX_SupplierOperationsS
 import { AX_DatabaseSync } from '../services/AX_DatabaseSync.js'
 import { generateUUID } from '../utils/AX_UUID.js'
 import { categoryHelpers } from './categoryHelpers.js'
+import { expenseCategoryHelpers, initialExpenseCategories } from './expenseCategoryHelpers.js'
 import { updateLocalCachePayload, processInvoiceStoreState } from './storeCacheHelper.js'
+import { checkTransferAuditDiscrepancy, calculateTransferStockMovement } from './transferAuditHelpers.js'
 import {
   initialCategories, initialSubCategories, initialSecondaryCategories,
   initialItems, initialWarehouses, initialDistributors, initialInventoryStock,
@@ -44,6 +46,13 @@ export const useAXStore = create((set, get) => ({
   categories: initialCategories,
   subCategories: initialSubCategories,
   secondaryCategories: initialSecondaryCategories,
+  expenseCategories: (() => {
+    try {
+      const s = localStorage.getItem('ax_expense_categories')
+      if (s) return JSON.parse(s)
+    } catch {}
+    return initialExpenseCategories
+  })(),
 
   systemSettings: (() => {
     try { const s = localStorage.getItem('ax_system_settings'); if (s) return JSON.parse(s) } catch {}
@@ -216,6 +225,27 @@ export const useAXStore = create((set, get) => ({
   editSecondaryCategory: (o, n) => { AX_OperationsService.editCategoryInDB({ oldName: o, newName: n, level: 'secondary' }, get().profile); set((state) => categoryHelpers.editSecondaryCategory(state, o, n)) },
   deleteSecondaryCategory: (name) => { AX_OperationsService.deleteCategoryInDB({ name, level: 'secondary' }, get().profile); set((state) => categoryHelpers.deleteSecondaryCategory(state, name)) },
 
+  addExpenseCategory: (cat) => set((state) => {
+    const next = expenseCategoryHelpers.addExpenseCategory(state.expenseCategories, cat)
+    try { localStorage.setItem('ax_expense_categories', JSON.stringify(next)) } catch {}
+    return { expenseCategories: next }
+  }),
+  editExpenseCategory: (id, updates) => set((state) => {
+    const next = expenseCategoryHelpers.editExpenseCategory(state.expenseCategories, id, updates)
+    try { localStorage.setItem('ax_expense_categories', JSON.stringify(next)) } catch {}
+    return { expenseCategories: next }
+  }),
+  deleteExpenseCategory: (id) => set((state) => {
+    const next = expenseCategoryHelpers.deleteExpenseCategory(state.expenseCategories, id)
+    try { localStorage.setItem('ax_expense_categories', JSON.stringify(next)) } catch {}
+    return { expenseCategories: next }
+  }),
+  resetExpenseCategories: () => set(() => {
+    const init = expenseCategoryHelpers.getInitialExpenseCategories()
+    try { localStorage.setItem('ax_expense_categories', JSON.stringify(init)) } catch {}
+    return { expenseCategories: init }
+  }),
+
   addClient: (client) => { AX_CustomerOperationsService.addCustomerInDB(client, get().profile); set((state) => ({ clients: [client, ...state.clients.filter((c) => c.id !== client.id)] })) },
   updateClient: (id, updates) => { AX_CustomerOperationsService.updateCustomerInDB({ id, ...updates }, get().profile); set((state) => ({ clients: state.clients.map((c) => (c.id === id ? { ...c, ...updates } : c)) })) },
   deleteClient: (id) => { AX_CustomerOperationsService.deleteCustomerInDB(id, get().profile); set((state) => ({ clients: state.clients.filter((c) => c.id !== id) })) },
@@ -317,36 +347,31 @@ export const useAXStore = create((set, get) => ({
   confirmTransfer: (transferId) => set((state) => {
     const trf = state.transfers.find((t) => t.id === transferId)
     if (!trf || trf.status === 'confirmed') return state
-
+    const { updatedStock, isAuditDiscrepancy, auditDiscrepancyNote } = calculateTransferStockMovement(trf, state.inventoryStock, state.stockAudits, state.warehouses)
     const newTransfers = state.transfers.map((t) =>
-      t.id === transferId ? { ...t, status: 'confirmed', confirmedAt: new Date().toISOString() } : t
+      t.id === transferId
+        ? {
+            ...t,
+            status: 'confirmed',
+            confirmedAt: new Date().toISOString(),
+            isAuditDiscrepancy: t.isAuditDiscrepancy ?? isAuditDiscrepancy,
+            auditDiscrepancyNote: t.auditDiscrepancyNote || auditDiscrepancyNote,
+          }
+        : t
     )
-
-    let updatedStock = [...state.inventoryStock]
-    const fromTargetId = trf.fromId || trf.fromWarehouseId
-    const toTargetId = trf.toId || trf.toWarehouseId
-    const transferItems = trf.items && trf.items.length > 0 ? trf.items : [{ itemId: trf.itemId, quantity: trf.quantity, unit: trf.unit }]
-
-    transferItems.forEach((item) => {
-      const fromIndex = updatedStock.findIndex((s) => s.warehouseId === fromTargetId && s.itemId === item.itemId)
-      if (fromIndex >= 0) {
-        updatedStock[fromIndex] = { ...updatedStock[fromIndex], quantity: Math.max(0, updatedStock[fromIndex].quantity - item.quantity) }
-      }
-      const toIndex = updatedStock.findIndex((s) => s.warehouseId === toTargetId && s.itemId === item.itemId)
-      if (toIndex >= 0) {
-        updatedStock[toIndex] = { ...updatedStock[toIndex], quantity: updatedStock[toIndex].quantity + item.quantity }
-      } else {
-        updatedStock.push({ warehouseId: toTargetId, itemId: item.itemId, quantity: item.quantity, unit: item.unit })
-      }
-    })
-
     AX_OperationsService.confirmTransferInDB(trf, updatedStock, state.profile?.name)
     return { transfers: newTransfers, inventoryStock: updatedStock }
   }),
 
   addTransfer: (newTrf) => {
-    AX_OperationsService.addTransferInDB(newTrf)
-    set((state) => ({ transfers: [newTrf, ...state.transfers] }))
+    const discrepancy = checkTransferAuditDiscrepancy(newTrf, get().stockAudits, get().warehouses)
+    const enriched = {
+      ...newTrf,
+      isAuditDiscrepancy: newTrf.isAuditDiscrepancy ?? discrepancy.isAuditDiscrepancy,
+      auditDiscrepancyNote: newTrf.auditDiscrepancyNote || discrepancy.auditDiscrepancyNote,
+    }
+    AX_OperationsService.addTransferInDB(enriched)
+    set((state) => ({ transfers: [enriched, ...state.transfers] }))
   },
 
   cancelTransfer: (transferId) => {
@@ -440,60 +465,11 @@ export const useAXStore = create((set, get) => ({
     set((state) => processInvoiceStoreState(state, inv))
   },
 
-  addEmployee: (emp) => {
-    AX_StaffOperationsService.upsertEmployeeInDB(emp)
-    set((state) => {
-      const updated = [emp, ...state.employees.filter((e) => e.id !== emp.id)]
-      try { localStorage.setItem('ax_staff_employees', JSON.stringify(updated)) } catch {}
-      return { employees: updated }
-    })
-  },
-  updateEmployee: (id, updates) => {
-    const cur = get().employees.find((e) => e.id === id)
-    if (cur) AX_StaffOperationsService.upsertEmployeeInDB({ ...cur, ...updates })
-    set((state) => {
-      const updated = state.employees.map((e) => (e.id === id ? { ...e, ...updates } : e))
-      try { localStorage.setItem('ax_staff_employees', JSON.stringify(updated)) } catch {}
-      return { employees: updated }
-    })
-  },
-  deleteEmployee: (id) => {
-    AX_StaffOperationsService.deleteEmployeeInDB(id)
-    set((state) => {
-      const updated = state.employees.filter((e) => e.id !== id)
-      try { localStorage.setItem('ax_staff_employees', JSON.stringify(updated)) } catch {}
-      return { employees: updated }
-    })
-  },
-  toggleEmployeeStatus: (id) => set((state) => {
-    const updated = state.employees.map((e) => (e.id === id ? { ...e, status: e.status === 'active' ? 'suspended' : 'active' } : e))
-    try { localStorage.setItem('ax_staff_employees', JSON.stringify(updated)) } catch {}
-    return { employees: updated }
-  }),
-  addStaffInvite: async (invite) => {
-    const res = await AX_StaffOperationsService.addStaffInviteInDB(invite)
-    const saved = res?.data || invite
-    set((state) => {
-      const updated = [saved, ...state.staffInvites.filter((i) => i.id !== saved.id)]
-      try { localStorage.setItem('ax_staff_invites', JSON.stringify(updated)) } catch {}
-      return { staffInvites: updated }
-    })
-    return res
-  },
-  revokeStaffInvite: async (inviteId) => {
-    await AX_StaffOperationsService.revokeStaffInviteInDB(inviteId)
-    set((state) => {
-      const updated = state.staffInvites.filter((i) => i.id !== inviteId)
-      try { localStorage.setItem('ax_staff_invites', JSON.stringify(updated)) } catch {}
-      return { staffInvites: updated }
-    })
-  },
-  updateStaffPermissions: async (userId, updates) => {
-    await AX_StaffOperationsService.updateStaffPermissionsInDB(userId, updates)
-    set((state) => {
-      const updated = state.employees.map((e) => (e.id === userId ? { ...e, ...updates } : e))
-      try { localStorage.setItem('ax_staff_employees', JSON.stringify(updated)) } catch {}
-      return { employees: updated }
-    })
-  },
+  addEmployee: (emp) => { AX_StaffOperationsService.upsertEmployeeInDB(emp); set((state) => { const updated = [emp, ...state.employees.filter((e) => e.id !== emp.id)]; try { localStorage.setItem('ax_staff_employees', JSON.stringify(updated)) } catch {}; return { employees: updated } }) },
+  updateEmployee: (id, updates) => { const cur = get().employees.find((e) => e.id === id); if (cur) AX_StaffOperationsService.upsertEmployeeInDB({ ...cur, ...updates }); set((state) => { const updated = state.employees.map((e) => (e.id === id ? { ...e, ...updates } : e)); try { localStorage.setItem('ax_staff_employees', JSON.stringify(updated)) } catch {}; return { employees: updated } }) },
+  deleteEmployee: (id) => { AX_StaffOperationsService.deleteEmployeeInDB(id); set((state) => { const updated = state.employees.filter((e) => e.id !== id); try { localStorage.setItem('ax_staff_employees', JSON.stringify(updated)) } catch {}; return { employees: updated } }) },
+  toggleEmployeeStatus: (id) => set((state) => { const updated = state.employees.map((e) => (e.id === id ? { ...e, status: e.status === 'active' ? 'suspended' : 'active' } : e)); try { localStorage.setItem('ax_staff_employees', JSON.stringify(updated)) } catch {}; return { employees: updated } }),
+  addStaffInvite: async (invite) => { const res = await AX_StaffOperationsService.addStaffInviteInDB(invite); const saved = res?.data || invite; set((state) => { const updated = [saved, ...state.staffInvites.filter((i) => i.id !== saved.id)]; try { localStorage.setItem('ax_staff_invites', JSON.stringify(updated)) } catch {}; return { staffInvites: updated } }); return res },
+  revokeStaffInvite: async (inviteId) => { await AX_StaffOperationsService.revokeStaffInviteInDB(inviteId); set((state) => { const updated = state.staffInvites.filter((i) => i.id !== inviteId); try { localStorage.setItem('ax_staff_invites', JSON.stringify(updated)) } catch {}; return { staffInvites: updated } }) },
+  updateStaffPermissions: async (userId, updates) => { await AX_StaffOperationsService.updateStaffPermissionsInDB(userId, updates); set((state) => { const updated = state.employees.map((e) => (e.id === userId ? { ...e, ...updates } : e)); try { localStorage.setItem('ax_staff_employees', JSON.stringify(updated)) } catch {}; return { employees: updated } }) },
 }))

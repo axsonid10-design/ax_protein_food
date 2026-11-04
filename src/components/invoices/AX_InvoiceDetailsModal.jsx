@@ -69,6 +69,12 @@ export function AX_InvoiceDetailsModal({ invoice, onClose }) {
             <h3 className="text-base font-black text-on-surface mt-0.5">
               تفاصيل الفاتورة — {invoice.partyName}
             </h3>
+            <div className="flex items-center gap-3 text-xs font-mono text-on-surface-variant mt-1">
+              <span>تاريخ الفاتورة: <strong className="text-on-surface">{invoice.date || invoice.operationalDate || '—'}</strong></span>
+              {(invoice.createdAt || invoice.created_at) && (
+                <span>تاريخ القيد: <strong className="text-on-surface">{invoice.createdAt || invoice.created_at}</strong></span>
+              )}
+            </div>
           </div>
           <button
             type="button"
