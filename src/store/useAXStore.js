@@ -3,20 +3,16 @@ import { AX_OperationsService } from '../services/AX_OperationsService.js'
 import { AX_StaffOperationsService } from '../services/AX_StaffOperationsService.js'
 import { AX_CustomerOperationsService } from '../services/AX_CustomerOperationsService.js'
 import { AX_SupplierOperationsService } from '../services/AX_SupplierOperationsService.js'
+import { AX_SalesRepOperationsService } from '../services/AX_SalesRepOperationsService.js'
 import { AX_DatabaseSync } from '../services/AX_DatabaseSync.js'
 import { offlineDB } from '../services/offlineDB.js'
 import { generateUUID } from '../utils/AX_UUID.js'
 import { categoryHelpers } from './categoryHelpers.js'
 import { expenseCategoryHelpers, initialExpenseCategories } from './expenseCategoryHelpers.js'
-import { updateLocalCachePayload, processInvoiceStoreState } from './storeCacheHelper.js'
+import { updateLocalCachePayload, processInvoiceStoreState, saveSalesRepState, updateSalesRepState, deleteSalesRepState } from './storeCacheHelper.js'
 import { checkTransferAuditDiscrepancy, calculateTransferStockMovement } from './transferAuditHelpers.js'
 import {
-  initialCategories, initialSubCategories, initialSecondaryCategories,
-  initialItems, initialWarehouses, initialDistributors, initialInventoryStock,
-  initialTransfers, initialStockAudits, initialTreasuryAccounts,
-  initialCashTransactions, initialPendingCashTransfers, initialManufacturingOrders,
-  initialInvoices, initialClients, initialSuppliers, initialSalesReps,
-  initialSalesRepLedger, initialNotifications,
+  initialCategories, initialSubCategories, initialSecondaryCategories, initialItems, initialWarehouses, initialDistributors, initialInventoryStock, initialTransfers, initialStockAudits, initialTreasuryAccounts, initialCashTransactions, initialPendingCashTransfers, initialManufacturingOrders, initialInvoices, initialClients, initialSuppliers, initialSalesReps, initialSalesRepLedger, initialNotifications,
 } from './initialData.js'
 
 export const useAXStore = create((set, get) => ({
@@ -255,12 +251,9 @@ export const useAXStore = create((set, get) => ({
   updateSupplier: (id, updates) => { AX_SupplierOperationsService.updateSupplierInDB({ id, ...updates }, get().profile); set((state) => ({ suppliers: state.suppliers.map((s) => (s.id === id ? { ...s, ...updates } : s)) })) },
   deleteSupplier: (id) => { AX_SupplierOperationsService.deleteSupplierInDB(id, get().profile); set((state) => ({ suppliers: state.suppliers.filter((s) => s.id !== id) })) },
 
-  addSalesRep: (rep) => set((state) => ({ salesReps: [rep, ...(state.salesReps || []).filter((r) => r.id !== rep.id)] })),
-  updateSalesRep: (id, updates) => set((state) => ({ salesReps: (state.salesReps || []).map((r) => (r.id === id ? { ...r, ...updates } : r)) })),
-  deleteSalesRep: (id) => set((state) => ({
-    salesReps: (state.salesReps || []).filter((r) => r.id !== id),
-    salesRepLedger: (state.salesRepLedger || []).filter((tx) => tx.repId !== id),
-  })),
+  addSalesRep: (rep) => { AX_SalesRepOperationsService.addSalesRepInDB(rep, get().profile); set((state) => saveSalesRepState(state, rep)) },
+  updateSalesRep: (id, updates) => { AX_SalesRepOperationsService.updateSalesRepInDB({ id, ...updates }, get().profile); set((state) => updateSalesRepState(state, id, updates)) },
+  deleteSalesRep: (id) => { AX_SalesRepOperationsService.deleteSalesRepInDB(id, get().profile); set((state) => deleteSalesRepState(state, id)) },
 
   addSalesRepTransaction: (arg1, arg2) => set((state) => {
     const rawTx = typeof arg1 === 'string' ? { ...arg2, repId: arg1 } : arg1
@@ -285,7 +278,7 @@ export const useAXStore = create((set, get) => ({
       const nextBal = cur + delta
       return { ...r, currentBalance: nextBal, netBalance: nextBal, balance: nextBal }
     })
-    return { salesRepLedger: updatedLedger, salesReps: updatedReps }
+    updateLocalCachePayload('salesReps', updatedReps); updateLocalCachePayload('salesRepLedger', updatedLedger); return { salesRepLedger: updatedLedger, salesReps: updatedReps }
   }),
 
   updateSystemSettings: (newSettings) => set((state) => {

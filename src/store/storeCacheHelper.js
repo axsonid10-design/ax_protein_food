@@ -132,3 +132,24 @@ export const processInvoiceStoreState = (state, inv) => {
     cashTransactions: updatedCashTx,
   }
 }
+
+
+export const saveSalesRepState = (state, rep) => {
+  const updated = [rep, ...(state.salesReps || []).filter((r) => r.id !== rep.id)]
+  updateLocalCachePayload('salesReps', updated)
+  return { salesReps: updated }
+}
+
+export const updateSalesRepState = (state, id, updates) => {
+  const updated = (state.salesReps || []).map((r) => (r.id === id ? { ...r, ...updates } : r))
+  updateLocalCachePayload('salesReps', updated)
+  return { salesReps: updated }
+}
+
+export const deleteSalesRepState = (state, id) => {
+  const updatedReps = (state.salesReps || []).filter((r) => r.id !== id)
+  const updatedLedger = (state.salesRepLedger || []).filter((tx) => tx.repId !== id)
+  updateLocalCachePayload('salesReps', updatedReps)
+  updateLocalCachePayload('salesRepLedger', updatedLedger)
+  return { salesReps: updatedReps, salesRepLedger: updatedLedger }
+}

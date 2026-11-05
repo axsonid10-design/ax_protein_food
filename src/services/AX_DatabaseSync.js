@@ -244,6 +244,24 @@ export const AX_DatabaseSync = {
           name: d.name,
           vanNumber: d.van_number,
         }))
+        payload.salesReps = distributors.map((d) => ({
+          id: d.id,
+          name: d.name || '',
+          phone: d.phone || '',
+          assignedBranch: d.van_number || 'المخزن الرئيسي',
+          vanNumber: d.van_number || '',
+          targetAmount: Number(d.target_amount ?? d.sales_target ?? 0),
+          salesTarget: Number(d.target_amount ?? d.sales_target ?? 0),
+          commissionModel: d.commission_model || 'volume_rate',
+          stepAmount: Number(d.step_amount || 1000),
+          stepRate: Number(d.step_rate || 50),
+          openingBalance: Number(d.opening_balance || 0),
+          netBalance: Number(d.balance || 0),
+          currentBalance: Number(d.balance || 0),
+          balance: Number(d.balance || 0),
+          status: d.status || 'active',
+          createdAt: d.created_at || new Date().toISOString(),
+        }))
       }
 
       if (Array.isArray(notifs)) {

@@ -1,4 +1,5 @@
 import { supabase, isSupabaseConfigured } from './supabaseClient.js'
+import { offlineDB } from './offlineDB.js'
 import { generateUUID } from '../utils/AX_UUID.js'
 
 export const AX_SalesRepOperationsService = {
@@ -11,19 +12,28 @@ export const AX_SalesRepOperationsService = {
         name: (rep.name || '').trim(),
         phone: (rep.phone || '').trim(),
         balance: Number(rep.currentBalance ?? rep.netBalance ?? rep.balance ?? 0),
-        status: 'active',
-        van_number: (rep.assignedBranch || '').trim(),
+        status: rep.status || 'active',
+        van_number: (rep.assignedBranch || rep.vanNumber || '').trim(),
+        target_amount: Number(rep.targetAmount ?? rep.salesTarget ?? 0),
+        commission_model: rep.commissionModel || 'volume_rate',
+        step_amount: Number(rep.stepAmount || 1000),
+        step_rate: Number(rep.stepRate || 50),
+        opening_balance: Number(rep.openingBalance || 0),
+        metadata: rep.metadata || {},
         created_at: rep.createdAt || new Date().toISOString(),
       }
 
-      try {
-        await supabase.from('ax_distributors').insert(row)
-      } catch {}
+      const { error } = await supabase.from('ax_distributors').upsert(row, { onConflict: 'id' })
+      if (error) {
+        try {
+          await offlineDB.enqueue('ax_distributors', 'upsert', row)
+        } catch {}
+      }
 
       try {
         await supabase.from('ax_activity_logs').insert({
           id: generateUUID(),
-          table_name: 'ax_sales_reps',
+          table_name: 'ax_distributors',
           action: 'INSERT',
           record_id: repId,
           new_data: { ...row, repData: rep },
@@ -44,16 +54,25 @@ export const AX_SalesRepOperationsService = {
         name: (rep.name || '').trim(),
         phone: (rep.phone || '').trim(),
         balance: Number(rep.currentBalance ?? rep.netBalance ?? rep.balance ?? 0),
+        van_number: (rep.assignedBranch || rep.vanNumber || '').trim(),
+        target_amount: Number(rep.targetAmount ?? rep.salesTarget ?? 0),
+        commission_model: rep.commissionModel || 'volume_rate',
+        step_amount: Number(rep.stepAmount || 1000),
+        step_rate: Number(rep.stepRate || 50),
+        status: rep.status || 'active',
       }
 
-      try {
-        await supabase.from('ax_distributors').update(row).eq('id', rep.id)
-      } catch {}
+      const { error } = await supabase.from('ax_distributors').update(row).eq('id', rep.id)
+      if (error) {
+        try {
+          await offlineDB.enqueue('ax_distributors', 'update', { id: rep.id, ...row })
+        } catch {}
+      }
 
       try {
         await supabase.from('ax_activity_logs').insert({
           id: generateUUID(),
-          table_name: 'ax_sales_reps',
+          table_name: 'ax_distributors',
           action: 'UPDATE',
           record_id: rep.id,
           new_data: { ...row, repData: rep },
@@ -70,14 +89,17 @@ export const AX_SalesRepOperationsService = {
   deleteSalesRepInDB: async (repId, userProfile = null) => {
     if (!isSupabaseConfigured() || !supabase?.from || !repId) return { success: false }
     try {
-      try {
-        await supabase.from('ax_distributors').delete().eq('id', repId)
-      } catch {}
+      const { error } = await supabase.from('ax_distributors').delete().eq('id', repId)
+      if (error) {
+        try {
+          await offlineDB.enqueue('ax_distributors', 'delete', { id: repId })
+        } catch {}
+      }
 
       try {
         await supabase.from('ax_activity_logs').insert({
           id: generateUUID(),
-          table_name: 'ax_sales_reps',
+          table_name: 'ax_distributors',
           action: 'DELETE',
           record_id: repId,
           new_data: { id: repId },
