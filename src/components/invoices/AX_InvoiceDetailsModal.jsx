@@ -1,9 +1,10 @@
 import React, { useState } from 'react'
-import { Printer, X, RotateCcw } from 'lucide-react'
+import { Printer, X, RotateCcw, Edit3, Trash2 } from 'lucide-react'
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock'
 import { getItemDisplayName } from '../../utils/AX_ItemNameHelper'
 import { AX_InvoicePrintModal } from './AX_InvoicePrintModal'
 import { AX_InvoiceReturnModal } from './AX_InvoiceReturnModal'
+import { AX_ConfirmModal } from '../common/AX_ConfirmModal'
 
 export function AX_InvoiceDetailsModal({
   invoice,
@@ -11,10 +12,13 @@ export function AX_InvoiceDetailsModal({
   warehouses = [],
   treasuryAccounts = [],
   onSaveReturn,
+  onEdit,
+  onDelete,
 }) {
   useBodyScrollLock(Boolean(invoice))
   const [showPrintModal, setShowPrintModal] = useState(false)
   const [showReturnModal, setShowReturnModal] = useState(false)
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   if (!invoice) return null
 
   const items = invoice.items || []
@@ -89,7 +93,32 @@ export function AX_InvoiceDetailsModal({
               )}
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5 flex-wrap justify-end">
+            {onEdit && (
+              <button
+                type="button"
+                onClick={() => {
+                  onEdit(invoice)
+                  onClose()
+                }}
+                className="py-1.5 px-3 rounded-full bg-surface-low hover:bg-surface-container text-on-surface text-xs font-black border border-outline-variant/30 flex items-center gap-1 transition-all cursor-pointer"
+                title="تعديل بيانات الفاتورة"
+              >
+                <Edit3 className="w-3.5 h-3.5 text-secondary" />
+                <span>تعديل</span>
+              </button>
+            )}
+            {onDelete && (
+              <button
+                type="button"
+                onClick={() => setShowDeleteConfirm(true)}
+                className="py-1.5 px-3 rounded-full bg-error/10 hover:bg-error/20 text-error text-xs font-black border border-error/20 flex items-center gap-1 transition-all cursor-pointer"
+                title="حذف الفاتورة والتراجع عن أثرها المحاسبي"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>حذف</span>
+              </button>
+            )}
             {isEligibleForReturn && (
               <button
                 type="button"
@@ -183,6 +212,21 @@ export function AX_InvoiceDetailsModal({
           setShowReturnModal(false)
           onClose()
         }}
+      />
+
+      <AX_ConfirmModal
+        isOpen={showDeleteConfirm}
+        onClose={() => setShowDeleteConfirm(false)}
+        onConfirm={() => {
+          onDelete?.(invoice.id)
+          setShowDeleteConfirm(false)
+          onClose()
+        }}
+        title="تأكيد حذف الفاتورة"
+        message={`هل أنت متأكد من حذف الفاتورة (${invoice.code})؟ سيتم عكس كميات المخزون وتعديل رصيد ${invoice.partyName} والخزينة تلقائياً.`}
+        confirmText="نعم، حذف الفاتورة"
+        cancelText="إلغاء"
+        type="danger"
       />
     </div>
   )

@@ -14,8 +14,8 @@ export const processInvoiceStoreState = (state, inv) => {
   const isPurchaseReturn = inv.type === 'purchase_return'
   const partyKind = inv.partyKind || inv.partyType || (inv.type === 'sale' || isSaleReturn ? 'customer' : 'supplier')
   const isCustomerRelated = partyKind === 'customer'
-  let updatedClients = [...state.clients]
-  let updatedSuppliers = [...state.suppliers]
+  let updatedClients = [...(state.clients || [])]
+  let updatedSuppliers = [...(state.suppliers || [])]
 
   if (isCustomerRelated) {
     const cIdx = updatedClients.findIndex((c) => c.name === inv.partyName)
@@ -60,9 +60,9 @@ export const processInvoiceStoreState = (state, inv) => {
     }
   }
 
-  let updatedStock = [...state.inventoryStock]
+  let updatedStock = [...(state.inventoryStock || [])]
   inv.items?.forEach((item) => {
-    const sIdx = updatedStock.findIndex((s) => s.warehouseId === inv.warehouseId && s.itemId === item.itemId)
+    const sIdx = updatedStock.findIndex((s) => s.warehouseId === inv.warehouseId && s.itemId === (item.itemId || item.id))
     const delta = isSaleReturn ? item.quantity : (isPurchaseReturn ? -item.quantity : (inv.type === 'sale' ? -item.quantity : item.quantity))
     if (sIdx >= 0) {
       updatedStock[sIdx] = {
@@ -79,8 +79,8 @@ export const processInvoiceStoreState = (state, inv) => {
     }
   })
 
-  let updatedTreasuries = [...state.treasuryAccounts]
-  let updatedCashTx = [...state.cashTransactions]
+  let updatedTreasuries = [...(state.treasuryAccounts || [])]
+  let updatedCashTx = [...(state.cashTransactions || [])]
 
   if (inv.paidAmount > 0) {
     const tIdx = updatedTreasuries.findIndex((t) => t.id === inv.treasuryId)
@@ -152,4 +152,115 @@ export const deleteSalesRepState = (state, id) => {
   updateLocalCachePayload('salesReps', updatedReps)
   updateLocalCachePayload('salesRepLedger', updatedLedger)
   return { salesReps: updatedReps, salesRepLedger: updatedLedger }
+}
+
+
+export const revertInvoiceStoreState = (state, inv) => {
+  if (!inv) return state
+  const isSaleReturn = inv.type === 'sale_return'
+  const isPurchaseReturn = inv.type === 'purchase_return'
+  const partyKind = inv.partyKind || inv.partyType || (inv.type === 'sale' || isSaleReturn ? 'customer' : 'supplier')
+  const isCustomerRelated = partyKind === 'customer'
+
+  let updatedClients = [...(state.clients || [])]
+  let updatedSuppliers = [...(state.suppliers || [])]
+
+  if (isCustomerRelated) {
+    const cIdx = updatedClients.findIndex((c) => c.name === inv.partyName || c.id === inv.partyId)
+    const balanceDelta = isSaleReturn ? inv.remainingAmount : -inv.remainingAmount
+    if (cIdx >= 0) {
+      updatedClients[cIdx] = {
+        ...updatedClients[cIdx],
+        balance: (updatedClients[cIdx].balance || 0) + balanceDelta,
+      }
+    }
+  } else {
+    const sIdx = updatedSuppliers.findIndex((s) => s.name === inv.partyName || s.companyName === inv.partyName || s.id === inv.partyId)
+    const isSupplierBuying = inv.type === 'sale' || isSaleReturn
+    const balanceDelta = isSupplierBuying
+      ? (isSaleReturn ? -inv.remainingAmount : inv.remainingAmount)
+      : (isPurchaseReturn ? inv.remainingAmount : -inv.remainingAmount)
+    if (sIdx >= 0) {
+      updatedSuppliers[sIdx] = {
+        ...updatedSuppliers[sIdx],
+        balance: (updatedSuppliers[sIdx].balance || 0) + balanceDelta,
+      }
+    }
+  }
+
+  let updatedStock = [...(state.inventoryStock || [])]
+  inv.items?.forEach((item) => {
+    const sIdx = updatedStock.findIndex((s) => s.warehouseId === inv.warehouseId && s.itemId === (item.itemId || item.id))
+    const delta = isSaleReturn ? -item.quantity : (isPurchaseReturn ? item.quantity : (inv.type === 'sale' ? item.quantity : -item.quantity))
+    if (sIdx >= 0) {
+      updatedStock[sIdx] = {
+        ...updatedStock[sIdx],
+        quantity: Math.max(0, (updatedStock[sIdx].quantity || 0) + delta),
+      }
+    } else if (delta > 0) {
+      updatedStock.push({
+        warehouseId: inv.warehouseId,
+        itemId: item.itemId || item.id,
+        quantity: delta,
+        unit: item.unit || 'كرتونة',
+      })
+    }
+  })
+
+  let updatedTreasuries = [...(state.treasuryAccounts || [])]
+  let updatedCashTx = [...(state.cashTransactions || [])]
+
+  if (inv.paidAmount > 0) {
+    const tIdx = updatedTreasuries.findIndex((t) => t.id === inv.treasuryId)
+    const trIndex = tIdx >= 0 ? tIdx : 0
+    const isCashOut = (inv.type === 'purchase' && !isPurchaseReturn) || isSaleReturn
+    const cashDelta = isCashOut ? inv.paidAmount : -inv.paidAmount
+
+    if (updatedTreasuries[trIndex]) {
+      updatedTreasuries[trIndex] = {
+        ...updatedTreasuries[trIndex],
+        balance: (updatedTreasuries[trIndex].balance || 0) + cashDelta,
+      }
+    }
+
+    if (inv.code) {
+      updatedCashTx = updatedCashTx.filter((tx) => !tx.notes?.includes(inv.code) && !tx.description?.includes(inv.code))
+    }
+  }
+
+  return {
+    clients: updatedClients,
+    suppliers: updatedSuppliers,
+    inventoryStock: updatedStock,
+    treasuryAccounts: updatedTreasuries,
+    cashTransactions: updatedCashTx,
+  }
+}
+
+export const deleteInvoiceStoreState = (state, invoiceId) => {
+  const inv = (state.invoices || []).find((i) => i.id === invoiceId)
+  if (!inv) return state
+  const reverted = revertInvoiceStoreState(state, inv)
+  const nextInvoices = (state.invoices || []).filter((i) => i.id !== invoiceId)
+
+  updateLocalCachePayload('invoices', nextInvoices)
+  updateLocalCachePayload('inventoryStock', reverted.inventoryStock)
+  updateLocalCachePayload('treasuryAccounts', reverted.treasuryAccounts)
+  updateLocalCachePayload('clients', reverted.clients)
+  updateLocalCachePayload('suppliers', reverted.suppliers)
+  updateLocalCachePayload('cashTransactions', reverted.cashTransactions)
+
+  return {
+    ...reverted,
+    invoices: nextInvoices,
+  }
+}
+
+export const updateInvoiceStoreState = (state, invoiceIdOrInv, updatedInvData) => {
+  const invoiceId = typeof invoiceIdOrInv === 'string' ? invoiceIdOrInv : invoiceIdOrInv?.id
+  const updatedInv = typeof invoiceIdOrInv === 'string' ? updatedInvData : invoiceIdOrInv
+  const oldInv = (state.invoices || []).find((i) => i.id === invoiceId)
+  const cleanState = oldInv ? { ...state, ...revertInvoiceStoreState(state, oldInv), invoices: (state.invoices || []).filter((i) => i.id !== invoiceId) } : state
+  const fullUpdatedInv = { ...oldInv, ...updatedInv, id: invoiceId }
+  return processInvoiceStoreState(cleanState, fullUpdatedInv)
 }

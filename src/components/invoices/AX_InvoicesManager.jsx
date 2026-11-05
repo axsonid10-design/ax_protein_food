@@ -5,14 +5,18 @@ import {
   ChevronRight,
   ChevronLeft,
   RotateCcw,
+  Edit3,
+  Trash2,
 } from 'lucide-react'
 import { useAXStore } from '../../store/useAXStore'
 import { AX_InvoiceDetailsModal } from './AX_InvoiceDetailsModal'
 import { AX_CreateInvoiceModal } from './AX_CreateInvoiceModal'
+import { AX_EditInvoiceModal } from './AX_EditInvoiceModal'
 import { AX_InvoicesStatementTab } from './AX_InvoicesStatementTab'
 import { AX_InvoiceTimeframeFilter } from './AX_InvoiceTimeframeFilter'
 import { AX_InvoiceReturnModal } from './AX_InvoiceReturnModal'
-import { filterByDateRange } from '../../utils/reportCalculations'
+import { AX_ConfirmModal } from '../common/AX_ConfirmModal'
+import { getInvoiceTypeTheme } from './invoiceThemeHelper'
 
 export function AX_InvoicesManager() {
   const {
@@ -24,6 +28,8 @@ export function AX_InvoicesManager() {
     treasuryAccounts,
     inventoryStock,
     addInvoice,
+    updateInvoice,
+    deleteInvoice,
   } = useAXStore()
 
   const [activeSubView, setActiveSubView] = useState('invoices')
@@ -35,6 +41,8 @@ export function AX_InvoicesManager() {
 
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [selectedInvoiceForModal, setSelectedInvoiceForModal] = useState(null)
+  const [selectedInvoiceForEdit, setSelectedInvoiceForEdit] = useState(null)
+  const [invoiceToDelete, setInvoiceToDelete] = useState(null)
   const [invoiceForReturn, setInvoiceForReturn] = useState(null)
   const [invoicePage, setInvoicePage] = useState(1)
 
@@ -51,27 +59,20 @@ export function AX_InvoicesManager() {
   const PAGE_SIZE = 15
 
   const filteredInvoices = (invoices || []).filter((inv) => {
-    if (typeFilter !== 'all' && inv.type !== typeFilter) {
-      return false
-    }
-
+    if (typeFilter !== 'all' && inv.type !== typeFilter) return false
     if (timeframe === 'all') return true
 
     const rawDate = inv.date || inv.operationalDate || inv.createdAt
     if (!rawDate) return false
-    const itemDate = String(rawDate).split('T')[0]
+    const itemDate = String(rawDate).slice(0, 10)
     const now = new Date()
     const todayStr = now.toISOString().split('T')[0]
 
-    if (timeframe === 'today') {
-      return itemDate === todayStr
-    }
+    if (timeframe === 'day') return itemDate === todayStr
 
     if (timeframe === 'week') {
-      const past7 = new Date()
-      past7.setDate(now.getDate() - 7)
-      const past7Str = past7.toISOString().split('T')[0]
-      return itemDate >= past7Str && itemDate <= todayStr
+      const pastWeek = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+      return itemDate >= pastWeek && itemDate <= todayStr
     }
 
     if (timeframe === 'month') {
@@ -84,14 +85,10 @@ export function AX_InvoicesManager() {
       return itemDate >= startOfYear && itemDate <= todayStr
     }
 
-    if (timeframe === 'specific_day') {
-      return specificDate ? itemDate === specificDate : true
-    }
+    if (timeframe === 'specific_day') return specificDate ? itemDate === specificDate : true
 
     if (timeframe === 'custom') {
-      if (customStart && customEnd) {
-        return itemDate >= customStart && itemDate <= customEnd
-      }
+      if (customStart && customEnd) return itemDate >= customStart && itemDate <= customEnd
       if (customStart) return itemDate >= customStart
       if (customEnd) return itemDate <= customEnd
       return true
@@ -102,47 +99,7 @@ export function AX_InvoicesManager() {
 
   const totalInvoices = filteredInvoices.length
   const totalInvPages = Math.max(1, Math.ceil(totalInvoices / PAGE_SIZE))
-  const paginatedInvoices = filteredInvoices.slice(
-    (invoicePage - 1) * PAGE_SIZE,
-    invoicePage * PAGE_SIZE
-  )
-
-  const getTypeTheme = (type) => {
-    switch (type) {
-      case 'sale_return':
-        return {
-          label: 'مردود مبيعات',
-          badgeClass: 'bg-purple-500/10 text-purple-700 border-purple-500/30',
-          rowClass: 'border-r-4 border-r-purple-600 bg-purple-600/[0.03] hover:bg-purple-600/[0.07]',
-          cardClass: 'border-r-4 border-r-purple-600 bg-purple-600/[0.04] border-outline-variant/30 hover:border-purple-600/50',
-          codeClass: 'text-purple-700',
-        }
-      case 'purchase_return':
-        return {
-          label: 'مردود مشتريات',
-          badgeClass: 'bg-rose-500/10 text-rose-700 border-rose-500/30',
-          rowClass: 'border-r-4 border-r-rose-600 bg-rose-600/[0.03] hover:bg-rose-600/[0.07]',
-          cardClass: 'border-r-4 border-r-rose-600 bg-rose-600/[0.04] border-outline-variant/30 hover:border-rose-600/50',
-          codeClass: 'text-rose-700',
-        }
-      case 'purchase':
-        return {
-          label: 'فاتورة مشتريات',
-          badgeClass: 'bg-amber-500/10 text-amber-700 border-amber-500/30',
-          rowClass: 'border-r-4 border-r-amber-500 bg-amber-500/[0.03] hover:bg-amber-500/[0.06]',
-          cardClass: 'border-r-4 border-r-amber-500 bg-amber-500/[0.03] border-outline-variant/30 hover:border-amber-500/50',
-          codeClass: 'text-amber-700',
-        }
-      default:
-        return {
-          label: 'فاتورة بيع',
-          badgeClass: 'bg-primary/10 text-primary border-primary/30',
-          rowClass: 'border-r-4 border-r-primary bg-primary/[0.02] hover:bg-primary/[0.05]',
-          cardClass: 'border-r-4 border-r-primary bg-primary/[0.02] border-outline-variant/30 hover:border-primary/50',
-          codeClass: 'text-primary',
-        }
-    }
-  }
+  const paginatedInvoices = filteredInvoices.slice((invoicePage - 1) * PAGE_SIZE, invoicePage * PAGE_SIZE)
 
   return (
     <div className="space-y-6">
@@ -213,25 +170,13 @@ export function AX_InvoicesManager() {
 
             <AX_InvoiceTimeframeFilter
               timeframe={timeframe}
-              setTimeframe={(tf) => {
-                setTimeframe(tf)
-                setInvoicePage(1)
-              }}
+              setTimeframe={(tf) => { setTimeframe(tf); setInvoicePage(1); }}
               specificDate={specificDate}
-              setSpecificDate={(d) => {
-                setSpecificDate(d)
-                setInvoicePage(1)
-              }}
+              setSpecificDate={(d) => { setSpecificDate(d); setInvoicePage(1); }}
               customStart={customStart}
-              setCustomStart={(s) => {
-                setCustomStart(s)
-                setInvoicePage(1)
-              }}
+              setCustomStart={(s) => { setCustomStart(s); setInvoicePage(1); }}
               customEnd={customEnd}
-              setCustomEnd={(e) => {
-                setCustomEnd(e)
-                setInvoicePage(1)
-              }}
+              setCustomEnd={(e) => { setCustomEnd(e); setInvoicePage(1); }}
             />
           </div>
 
@@ -258,7 +203,7 @@ export function AX_InvoicesManager() {
                   </tr>
                 ) : (
                   paginatedInvoices.map((inv) => {
-                    const theme = getTypeTheme(inv.type)
+                    const theme = getInvoiceTypeTheme(inv.type)
                     const canReturn = inv.type === 'sale' || inv.type === 'purchase'
 
                     return (
@@ -305,6 +250,22 @@ export function AX_InvoicesManager() {
                             )}
                             <button
                               type="button"
+                              onClick={() => setSelectedInvoiceForEdit(inv)}
+                              className="p-1.5 rounded-full hover:bg-secondary/10 text-secondary transition-colors cursor-pointer"
+                              title="تعديل الفاتورة"
+                            >
+                              <Edit3 className="w-4 h-4" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setInvoiceToDelete(inv)}
+                              className="p-1.5 rounded-full hover:bg-error/10 text-error transition-colors cursor-pointer"
+                              title="حذف الفاتورة"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                            <button
+                              type="button"
                               onClick={() => setSelectedInvoiceForModal(inv)}
                               className="p-1.5 rounded-full hover:bg-surface-container text-primary transition-colors cursor-pointer"
                               title="عرض تفاصيل الفاتورة"
@@ -328,7 +289,7 @@ export function AX_InvoicesManager() {
               </div>
             ) : (
               paginatedInvoices.map((inv) => {
-                const theme = getTypeTheme(inv.type)
+                const theme = getInvoiceTypeTheme(inv.type)
                 const canReturn = inv.type === 'sale' || inv.type === 'purchase'
 
                 return (
@@ -343,24 +304,21 @@ export function AX_InvoicesManager() {
                           {theme.label}
                         </span>
                       </div>
-                      <div className="text-left font-mono">
-                        <span className="text-xs text-on-surface-variant block">{inv.date || inv.operationalDate}</span>
-                        {inv.createdAt && (
-                          <span className="text-[10px] text-on-surface-variant/70 block">
-                            قيد: {String(inv.createdAt).slice(11, 16)}
-                          </span>
-                        )}
-                      </div>
+                      <span className="text-xs font-bold text-on-surface-variant font-mono">
+                        {inv.date || inv.operationalDate}
+                      </span>
                     </div>
+
                     <div className="flex items-center justify-between">
                       <span className="font-black text-sm text-on-surface">{inv.partyName}</span>
                       <span className="font-mono font-black text-primary text-sm">
                         {(Number(inv.total) || 0).toLocaleString('en-US')} ج.م
                       </span>
                     </div>
+
                     <div className="text-[11px] text-on-surface-variant flex items-center justify-between pt-2 border-t border-surface-container">
                       <span>نقل ومشال: {((Number(inv.transportCost) || 0) + (Number(inv.loadingCost) || 0)).toLocaleString('en-US')} ج.م</span>
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-1.5 flex-wrap">
                         {canReturn && (
                           <button
                             type="button"
@@ -368,7 +326,7 @@ export function AX_InvoicesManager() {
                               e.stopPropagation()
                               setInvoiceForReturn(inv)
                             }}
-                            className="px-2.5 py-1 rounded-full bg-purple-500/10 text-purple-700 font-black text-[10px] flex items-center gap-1 cursor-pointer"
+                            className="px-2 py-1 rounded-full bg-purple-500/10 text-purple-700 font-black text-[10px] flex items-center gap-1 cursor-pointer"
                           >
                             <RotateCcw className="w-3 h-3" />
                             <span>مردود</span>
@@ -376,8 +334,30 @@ export function AX_InvoicesManager() {
                         )}
                         <button
                           type="button"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setSelectedInvoiceForEdit(inv)
+                          }}
+                          className="px-2 py-1 rounded-full bg-secondary/10 text-secondary font-black text-[10px] flex items-center gap-1 cursor-pointer"
+                        >
+                          <Edit3 className="w-3 h-3" />
+                          <span>تعديل</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setInvoiceToDelete(inv)
+                          }}
+                          className="px-2 py-1 rounded-full bg-error/10 text-error font-black text-[10px] flex items-center gap-1 cursor-pointer"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                          <span>حذف</span>
+                        </button>
+                        <button
+                          type="button"
                           onClick={() => setSelectedInvoiceForModal(inv)}
-                          className="font-bold text-secondary cursor-pointer"
+                          className="font-bold text-primary cursor-pointer text-xs"
                         >
                           عرض ←
                         </button>
@@ -400,7 +380,6 @@ export function AX_InvoicesManager() {
                   onClick={() => setInvoicePage((p) => Math.max(1, p - 1))}
                   disabled={invoicePage === 1}
                   className="p-1.5 rounded-full bg-surface-low border border-outline-variant/30 disabled:opacity-40 hover:bg-surface-container transition-all cursor-pointer"
-                  title="الصفحة السابقة"
                 >
                   <ChevronRight className="w-4 h-4" />
                 </button>
@@ -412,7 +391,6 @@ export function AX_InvoicesManager() {
                   onClick={() => setInvoicePage((p) => Math.min(totalInvPages, p + 1))}
                   disabled={invoicePage === totalInvPages}
                   className="p-1.5 rounded-full bg-surface-low border border-outline-variant/30 disabled:opacity-40 hover:bg-surface-container transition-all cursor-pointer"
-                  title="الصفحة التالية"
                 >
                   <ChevronLeft className="w-4 h-4" />
                 </button>
@@ -433,7 +411,6 @@ export function AX_InvoicesManager() {
         type="button"
         onClick={() => setShowCreateModal(true)}
         className="fixed bottom-20 lg:bottom-6 left-6 z-30 flex items-center gap-2 px-5 py-3 rounded-full bg-secondary hover:bg-secondary-hover text-white font-black text-xs sm:text-sm shadow-level3 active:scale-95 transition-all cursor-pointer"
-        title="إنشاء فاتورة جديدة"
       >
         <Plus className="w-4 h-4 sm:w-5 sm:h-5" />
         <span>فاتورة جديدة</span>
@@ -445,6 +422,11 @@ export function AX_InvoicesManager() {
         warehouses={warehouses}
         treasuryAccounts={treasuryAccounts}
         onSaveReturn={addInvoice}
+        onEdit={(inv) => setSelectedInvoiceForEdit(inv)}
+        onDelete={(id) => {
+          const inv = (invoices || []).find((i) => i.id === id)
+          if (inv) setInvoiceToDelete(inv)
+        }}
       />
 
       <AX_InvoiceReturnModal
@@ -466,6 +448,36 @@ export function AX_InvoicesManager() {
         treasuryAccounts={treasuryAccounts}
         inventoryStock={inventoryStock}
         onSave={addInvoice}
+      />
+
+      <AX_EditInvoiceModal
+        isOpen={Boolean(selectedInvoiceForEdit)}
+        onClose={() => setSelectedInvoiceForEdit(null)}
+        invoice={selectedInvoiceForEdit}
+        items={items}
+        warehouses={warehouses}
+        clients={clients}
+        suppliers={suppliers}
+        treasuryAccounts={treasuryAccounts}
+        inventoryStock={inventoryStock}
+        onSave={updateInvoice}
+      />
+
+      <AX_ConfirmModal
+        isOpen={Boolean(invoiceToDelete)}
+        onClose={() => setInvoiceToDelete(null)}
+        onConfirm={() => {
+          if (invoiceToDelete) deleteInvoice(invoiceToDelete.id)
+          setInvoiceToDelete(null)
+          if (selectedInvoiceForModal?.id === invoiceToDelete?.id) {
+            setSelectedInvoiceForModal(null)
+          }
+        }}
+        title="تأكيد حذف الفاتورة"
+        message={`هل أنت متأكد من حذف الفاتورة (${invoiceToDelete?.code})؟ سيتم عكس كميات المخزون وتعديل رصيد ${invoiceToDelete?.partyName} والخزينة تلقائياً.`}
+        confirmText="نعم، حذف الفاتورة"
+        cancelText="إلغاء"
+        type="danger"
       />
     </div>
   )

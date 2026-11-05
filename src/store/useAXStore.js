@@ -9,7 +9,7 @@ import { offlineDB } from '../services/offlineDB.js'
 import { generateUUID } from '../utils/AX_UUID.js'
 import { categoryHelpers } from './categoryHelpers.js'
 import { expenseCategoryHelpers, initialExpenseCategories } from './expenseCategoryHelpers.js'
-import { updateLocalCachePayload, processInvoiceStoreState, saveSalesRepState, updateSalesRepState, deleteSalesRepState } from './storeCacheHelper.js'
+import { updateLocalCachePayload, processInvoiceStoreState, saveSalesRepState, updateSalesRepState, deleteSalesRepState, updateInvoiceStoreState, deleteInvoiceStoreState } from './storeCacheHelper.js'
 import { checkTransferAuditDiscrepancy, calculateTransferStockMovement } from './transferAuditHelpers.js'
 import {
   initialCategories, initialSubCategories, initialSecondaryCategories, initialItems, initialWarehouses, initialDistributors, initialInventoryStock, initialTransfers, initialStockAudits, initialTreasuryAccounts, initialCashTransactions, initialPendingCashTransfers, initialManufacturingOrders, initialInvoices, initialClients, initialSuppliers, initialSalesReps, initialSalesRepLedger, initialNotifications,
@@ -476,10 +476,9 @@ export const useAXStore = create((set, get) => ({
     })
   },
 
-  addInvoice: (inv) => {
-    AX_OperationsService.addInvoiceInDB(inv, get().profile)
-    set((state) => processInvoiceStoreState(state, inv))
-  },
+  addInvoice: (inv) => { AX_OperationsService.addInvoiceInDB(inv, get().profile); set((state) => processInvoiceStoreState(state, inv)) },
+  updateInvoice: (id, updates) => { const oldInv = (get().invoices || []).find((i) => i.id === id); if (oldInv) AX_OperationsService.updateInvoiceInDB(oldInv, { ...oldInv, ...updates, id }, get().profile); set((state) => updateInvoiceStoreState(state, id, updates)) },
+  deleteInvoice: (id) => { const inv = (get().invoices || []).find((i) => i.id === id); if (inv) AX_OperationsService.deleteInvoiceInDB(inv, get().profile); set((state) => deleteInvoiceStoreState(state, id)) },
 
   addEmployee: (emp) => { AX_StaffOperationsService.upsertEmployeeInDB(emp); set((state) => { const updated = [emp, ...state.employees.filter((e) => e.id !== emp.id)]; try { localStorage.setItem('ax_staff_employees', JSON.stringify(updated)) } catch {}; return { employees: updated } }) },
   updateEmployee: (id, updates) => { const cur = get().employees.find((e) => e.id === id); if (cur) AX_StaffOperationsService.upsertEmployeeInDB({ ...cur, ...updates }); set((state) => { const updated = state.employees.map((e) => (e.id === id ? { ...e, ...updates } : e)); try { localStorage.setItem('ax_staff_employees', JSON.stringify(updated)) } catch {}; return { employees: updated } }) },
