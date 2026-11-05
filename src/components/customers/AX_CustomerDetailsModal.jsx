@@ -20,6 +20,7 @@ import {
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock'
 import { useAXStore } from '../../store/useAXStore'
 import { getTransformedUrl } from '../../services/imageKitService'
+import { getCustomerAdjustments } from './customerAdjustmentHelpers'
 
 export function AX_CustomerDetailsModal({ customer, isOpen, onClose }) {
   useBodyScrollLock(isOpen)
@@ -79,6 +80,21 @@ export function AX_CustomerDetailsModal({ customer, isOpen, onClose }) {
         description: rc.notes || 'سند تحصيل نقدي',
         debit: 0,
         credit: Number(rc.amount) || 0,
+      })
+    })
+
+    const customerAdjustments = getCustomerAdjustments(customer.id)
+    customerAdjustments.forEach((adj) => {
+      const delta = Number(adj.delta) || 0
+      entries.push({
+        id: adj.id,
+        date: adj.date || adj.createdAt || new Date().toISOString(),
+        type: 'balance_adjustment',
+        reference: adj.id.slice(0, 8),
+        description: adj.description || 'تسوية رصيد / جرد رصيد',
+        notes: adj.notes,
+        debit: delta > 0 ? delta : 0,
+        credit: delta < 0 ? Math.abs(delta) : 0,
       })
     })
 
@@ -294,7 +310,7 @@ export function AX_CustomerDetailsModal({ customer, isOpen, onClose }) {
                     ledgerEntries.map((row) => (
                       <tr key={row.id} className="hover:bg-surface-container/30 transition-colors">
                         <td className="py-2.5 px-3 font-mono text-on-surface-variant whitespace-nowrap">
-                          {row.date ? String(row.date).split('T')[0] : '—'}
+                          {row.date ? (row.type === 'balance_adjustment' ? String(row.date).replace('T', ' ').slice(0, 16) : String(row.date).split('T')[0]) : '—'}
                         </td>
                         <td className="py-2.5 px-3 font-bold text-on-surface">
                           <div className="flex items-center gap-1.5">
@@ -304,6 +320,11 @@ export function AX_CustomerDetailsModal({ customer, isOpen, onClose }) {
                               <ArrowDownLeft className="w-3.5 h-3.5 text-emerald-600 flex-shrink-0" />
                             )}
                             <span>{row.description}</span>
+                            {row.type === 'balance_adjustment' && (
+                              <span className="px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-800 text-[10px] font-bold">
+                                تسوية معتمدة
+                              </span>
+                            )}
                           </div>
                         </td>
                         <td className="py-2.5 px-3 font-mono font-bold text-red-800">

@@ -1,12 +1,20 @@
 import React, { useState } from 'react'
-import { Printer, X } from 'lucide-react'
+import { Printer, X, RotateCcw } from 'lucide-react'
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock'
 import { getItemDisplayName } from '../../utils/AX_ItemNameHelper'
 import { AX_InvoicePrintModal } from './AX_InvoicePrintModal'
+import { AX_InvoiceReturnModal } from './AX_InvoiceReturnModal'
 
-export function AX_InvoiceDetailsModal({ invoice, onClose }) {
+export function AX_InvoiceDetailsModal({
+  invoice,
+  onClose,
+  warehouses = [],
+  treasuryAccounts = [],
+  onSaveReturn,
+}) {
   useBodyScrollLock(Boolean(invoice))
   const [showPrintModal, setShowPrintModal] = useState(false)
+  const [showReturnModal, setShowReturnModal] = useState(false)
   if (!invoice) return null
 
   const items = invoice.items || []
@@ -18,6 +26,8 @@ export function AX_InvoiceDetailsModal({ invoice, onClose }) {
   const remainingAmount = Number(invoice.remainingAmount) || 0
   const status = invoice.status || (remainingAmount > 0 ? (paidAmount > 0 ? 'partial' : 'unpaid') : 'paid')
   const paymentTerms = invoice.paymentTerms || (status === 'paid' ? 'مدفوع كلي' : status === 'partial' ? 'مدفوع جزئي' : 'غير مدفوع')
+
+  const isEligibleForReturn = invoice.type === 'sale' || invoice.type === 'purchase'
 
   const getTypeLabel = (type) => {
     switch (type) {
@@ -50,7 +60,7 @@ export function AX_InvoiceDetailsModal({ invoice, onClose }) {
       <div className="bg-surface-lowest border border-outline-variant/30 rounded-3xl p-6 shadow-level3 max-w-xl w-full space-y-4 max-h-[90vh] overflow-y-auto overscroll-contain">
         <div className="flex items-center justify-between border-b border-surface-container pb-3">
           <div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <span className="font-mono text-xs font-bold text-primary">
                 {invoice.code}
               </span>
@@ -80,6 +90,17 @@ export function AX_InvoiceDetailsModal({ invoice, onClose }) {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            {isEligibleForReturn && (
+              <button
+                type="button"
+                onClick={() => setShowReturnModal(true)}
+                className="py-1.5 px-3 rounded-full bg-purple-700 hover:bg-purple-800 text-white text-xs font-black shadow-xs flex items-center gap-1.5 transition-all cursor-pointer"
+                title="تحويل الفاتورة أو بنود منها إلى مردود"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                <span>تسجيل مردود</span>
+              </button>
+            )}
             <button
               type="button"
               onClick={() => setShowPrintModal(true)}
@@ -149,6 +170,19 @@ export function AX_InvoiceDetailsModal({ invoice, onClose }) {
         invoice={invoice}
         isOpen={showPrintModal}
         onClose={() => setShowPrintModal(false)}
+      />
+
+      <AX_InvoiceReturnModal
+        isOpen={showReturnModal}
+        onClose={() => setShowReturnModal(false)}
+        invoice={invoice}
+        warehouses={warehouses}
+        treasuryAccounts={treasuryAccounts}
+        onSaveReturn={(ret) => {
+          onSaveReturn?.(ret)
+          setShowReturnModal(false)
+          onClose()
+        }}
       />
     </div>
   )

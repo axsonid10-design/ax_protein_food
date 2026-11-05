@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import {
   Building,
   Phone,
@@ -10,10 +10,20 @@ import {
   Image as ImageIcon,
   X,
   UserCheck,
+  UserPlus,
+  Plus,
+  Edit2,
 } from 'lucide-react'
-import { GOVERNORATES, DEFAULT_CATEGORIES } from './customerConstants'
+import { GOVERNORATES } from './customerConstants'
 import { getTransformedUrl } from '../../services/imageKitService'
 import { AX_CompanyDatePicker } from '../common/AX_CompanyDatePicker'
+import { AX_SearchableSelect } from '../common/AX_SearchableSelect'
+import { AX_AddSalesRepModal } from '../sales_reps/AX_AddSalesRepModal'
+import {
+  loadCustomerCategories,
+  addCustomerCategory,
+  editCustomerCategory,
+} from './customerCategoryHelpers'
 
 export function AX_CustomerFormFields({
   name, setName,
@@ -36,6 +46,47 @@ export function AX_CustomerFormFields({
   attachments, isUploading, handleFileUpload, handleRemoveAttachment,
   notes, setNotes,
 }) {
+  const [isAddRepOpen, setIsAddRepOpen] = useState(false)
+  const prevRepsRef = useRef(salesReps)
+
+  const [categories, setCategories] = useState(() => loadCustomerCategories())
+  const [isAddCatOpen, setIsAddCatOpen] = useState(false)
+  const [newCatName, setNewCatName] = useState('')
+  const [isEditCatOpen, setIsEditCatOpen] = useState(false)
+  const [editCatName, setEditCatName] = useState('')
+
+  useEffect(() => {
+    if (isAddRepOpen && salesReps.length > prevRepsRef.current.length) {
+      const added = salesReps.find(
+        (r) => !prevRepsRef.current.some((p) => (p.id && p.id === r.id) || p.name === r.name)
+      ) || salesReps[salesReps.length - 1]
+      if (added?.name) {
+        setSalesRepName(added.name)
+      }
+    }
+    prevRepsRef.current = salesReps
+  }, [salesReps, isAddRepOpen, setSalesRepName])
+
+  useEffect(() => {
+    const handleCategoriesUpdate = (e) => {
+      if (Array.isArray(e.detail)) setCategories(e.detail)
+    }
+    window.addEventListener('ax_customer_categories_updated', handleCategoriesUpdate)
+    return () => window.removeEventListener('ax_customer_categories_updated', handleCategoriesUpdate)
+  }, [])
+
+  const salesRepOptions = [
+    { value: '', label: 'إدارة مباشرة (بدون مندوب)' },
+    ...salesReps.map((r) => ({
+      value: r.name,
+      label: r.name,
+      sublabel: r.phone || r.assignedBranch || 'مندوب مبيعات',
+    })),
+  ]
+
+  const categoryOptions = categories.map((c) => ({ value: c, label: c }))
+  const governorateOptions = GOVERNORATES.map((g) => ({ value: g, label: g }))
+
   return (
     <>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -93,25 +144,32 @@ export function AX_CustomerFormFields({
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div className="space-y-1">
-          <label className="text-xs font-bold text-on-surface flex items-center gap-1.5">
-            <UserCheck className="w-3.5 h-3.5 text-primary" />
-            تبعية المندوب
-          </label>
-          <input
-            type="text"
-            list="customer-sales-reps-list"
+          <div className="flex items-center justify-between">
+            <label className="text-xs font-bold text-on-surface flex items-center gap-1.5">
+              <UserCheck className="w-3.5 h-3.5 text-primary" />
+              تبعية المندوب
+            </label>
+            <button
+              type="button"
+              onClick={() => {
+                prevRepsRef.current = salesReps
+                setIsAddRepOpen(true)
+              }}
+              className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full border border-primary/40 bg-primary/10 text-primary hover:bg-primary hover:text-white transition-all text-[11px] font-bold cursor-pointer"
+              title="إضافة مندوب مبيعات جديد"
+            >
+              <UserPlus className="w-3 h-3" />
+              <span>+ مندوب جديد</span>
+            </button>
+          </div>
+          <AX_SearchableSelect
             value={salesRepName}
-            onChange={(e) => setSalesRepName(e.target.value)}
-            placeholder="اختر أو اكتب اسم المندوب المسؤول"
-            className="w-full px-3.5 py-2 rounded-full border border-outline-variant/60 focus:border-primary text-xs sm:text-sm font-semibold bg-surface-lowest text-on-surface outline-none"
+            onChange={(val) => setSalesRepName(val)}
+            placeholder="اختر المندوب المسؤول..."
+            options={salesRepOptions}
           />
-          <datalist id="customer-sales-reps-list">
-            <option value="إدارة مباشرة (بدون مندوب)" />
-            {salesReps.map((r) => (
-              <option key={r.id || r.name} value={r.name} />
-            ))}
-          </datalist>
         </div>
+
         <div className="space-y-1">
           <label className="text-xs font-bold text-on-surface flex items-center gap-1.5">
             <FileText className="w-3.5 h-3.5 text-primary" />
@@ -130,15 +188,12 @@ export function AX_CustomerFormFields({
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <div className="space-y-1">
           <label className="text-xs font-bold text-on-surface">المحافظة</label>
-          <select
+          <AX_SearchableSelect
             value={governorate}
-            onChange={(e) => setGovernorate(e.target.value)}
-            className="w-full px-3.5 py-2 rounded-full border border-outline-variant/60 focus:border-primary text-xs font-semibold bg-surface-lowest text-on-surface outline-none cursor-pointer"
-          >
-            {GOVERNORATES.map((g) => (
-              <option key={g} value={g}>{g}</option>
-            ))}
-          </select>
+            onChange={(val) => setGovernorate(val)}
+            placeholder="اختر المحافظة..."
+            options={governorateOptions}
+          />
         </div>
         <div className="space-y-1">
           <label className="text-xs font-bold text-on-surface">المدينة / المركز</label>
@@ -177,19 +232,121 @@ export function AX_CustomerFormFields({
       </div>
 
       <div className="space-y-1">
-        <label className="text-xs font-bold text-on-surface flex items-center gap-1.5">
-          <Tag className="w-3.5 h-3.5 text-primary" />
-          تصنيف النشاط
-        </label>
-        <select
+        <div className="flex items-center justify-between">
+          <label className="text-xs font-bold text-on-surface flex items-center gap-1.5">
+            <Tag className="w-3.5 h-3.5 text-primary" />
+            تصنيف النشاط
+          </label>
+          <div className="flex items-center gap-1">
+            {primaryCategory && (
+              <button
+                type="button"
+                onClick={() => {
+                  setEditCatName(primaryCategory)
+                  setIsEditCatOpen((prev) => !prev)
+                  setIsAddCatOpen(false)
+                }}
+                className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full border border-outline-variant/40 bg-surface-lowest text-on-surface-variant hover:text-primary transition-all text-[11px] font-bold cursor-pointer"
+                title="تعديل اسم التصنيف المحدد"
+              >
+                <Edit2 className="w-2.5 h-2.5" />
+                <span>تعديل</span>
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => {
+                setNewCatName('')
+                setIsAddCatOpen((prev) => !prev)
+                setIsEditCatOpen(false)
+              }}
+              className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full border border-primary/40 bg-primary/10 text-primary hover:bg-primary hover:text-white transition-all text-[11px] font-bold cursor-pointer"
+              title="إضافة تصنيف نشاط جديد"
+            >
+              <Plus className="w-3 h-3" />
+              <span>+ تصنيف جديد</span>
+            </button>
+          </div>
+        </div>
+
+        <AX_SearchableSelect
           value={primaryCategory}
-          onChange={(e) => handlePrimaryCategoryChange(e.target.value)}
-          className="w-full px-3.5 py-2 rounded-full border border-outline-variant/60 focus:border-primary text-xs font-semibold bg-surface-lowest text-on-surface outline-none cursor-pointer"
-        >
-          {Object.keys(DEFAULT_CATEGORIES).map((c) => (
-            <option key={c} value={c}>{c}</option>
-          ))}
-        </select>
+          onChange={(val) => handlePrimaryCategoryChange(val)}
+          placeholder="اختر تصنيف النشاط..."
+          options={categoryOptions}
+        />
+
+        {isAddCatOpen && (
+          <div className="p-3 bg-surface-low border border-primary/30 rounded-2xl space-y-2 mt-1">
+            <span className="text-xs font-black text-on-surface block">إضافة تصنيف نشاط جديد</span>
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                value={newCatName}
+                onChange={(e) => setNewCatName(e.target.value)}
+                placeholder="مثال: مطابخ إعاشة ومستشفيات"
+                className="flex-1 px-3 py-1.5 rounded-full border border-outline-variant/50 text-xs font-bold bg-surface-lowest outline-none focus:border-primary"
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  if (newCatName.trim()) {
+                    const updated = addCustomerCategory(newCatName.trim())
+                    setCategories(updated)
+                    handlePrimaryCategoryChange(newCatName.trim())
+                    setIsAddCatOpen(false)
+                    setNewCatName('')
+                  }
+                }}
+                className="px-3.5 py-1.5 rounded-full bg-primary text-white text-xs font-black shadow-xs hover:bg-primary-dark transition-all cursor-pointer"
+              >
+                إضافة
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsAddCatOpen(false)}
+                className="px-3 py-1.5 rounded-full border border-outline-variant/40 text-xs font-bold text-on-surface-variant hover:bg-surface-container cursor-pointer"
+              >
+                إلغاء
+              </button>
+            </div>
+          </div>
+        )}
+
+        {isEditCatOpen && (
+          <div className="p-3 bg-surface-low border border-amber-500/30 rounded-2xl space-y-2 mt-1">
+            <span className="text-xs font-black text-on-surface block">تعديل اسم التصنيف الحالي</span>
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                value={editCatName}
+                onChange={(e) => setEditCatName(e.target.value)}
+                className="flex-1 px-3 py-1.5 rounded-full border border-outline-variant/50 text-xs font-bold bg-surface-lowest outline-none focus:border-primary"
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  if (editCatName.trim() && primaryCategory) {
+                    const updated = editCustomerCategory(primaryCategory, editCatName.trim())
+                    setCategories(updated)
+                    handlePrimaryCategoryChange(editCatName.trim())
+                    setIsEditCatOpen(false)
+                  }
+                }}
+                className="px-3.5 py-1.5 rounded-full bg-primary text-white text-xs font-black shadow-xs hover:bg-primary-dark transition-all cursor-pointer"
+              >
+                حفظ التعديل
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsEditCatOpen(false)}
+                className="px-3 py-1.5 rounded-full border border-outline-variant/40 text-xs font-bold text-on-surface-variant hover:bg-surface-container cursor-pointer"
+              >
+                إلغاء
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-surface-low/50 p-2.5 rounded-2xl border border-outline-variant/30">
@@ -214,7 +371,7 @@ export function AX_CustomerFormFields({
             <button
               type="button"
               onClick={() => setOpeningBalanceType('debit')}
-              className={`flex-1 py-1.5 px-3 rounded-full text-xs font-extrabold transition-all ${
+              className={`flex-1 py-1.5 px-3 rounded-full text-xs font-extrabold transition-all cursor-pointer ${
                 openingBalanceType === 'debit'
                   ? 'bg-red-800 text-white shadow-xs'
                   : 'bg-surface-lowest border border-outline-variant/50 text-on-surface-variant'
@@ -225,7 +382,7 @@ export function AX_CustomerFormFields({
             <button
               type="button"
               onClick={() => setOpeningBalanceType('credit')}
-              className={`flex-1 py-1.5 px-3 rounded-full text-xs font-extrabold transition-all ${
+              className={`flex-1 py-1.5 px-3 rounded-full text-xs font-extrabold transition-all cursor-pointer ${
                 openingBalanceType === 'credit'
                   ? 'bg-emerald-700 text-white shadow-xs'
                   : 'bg-surface-lowest border border-outline-variant/50 text-on-surface-variant'
@@ -237,10 +394,7 @@ export function AX_CustomerFormFields({
         </div>
         <div className="space-y-1">
           <label className="text-xs font-bold text-on-surface">تاريخ رصيد أول المدة</label>
-          <AX_CompanyDatePicker
-            value={openingBalanceDate}
-            onChange={setOpeningBalanceDate}
-          />
+          <AX_CompanyDatePicker value={openingBalanceDate} onChange={setOpeningBalanceDate} />
         </div>
       </div>
 
@@ -292,7 +446,7 @@ export function AX_CustomerFormFields({
                 <button
                   type="button"
                   onClick={() => handleRemoveAttachment(idx)}
-                  className="absolute inset-0 bg-black/60 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                  className="absolute inset-0 bg-black/60 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
                 >
                   <X className="w-3.5 h-3.5" />
                 </button>
@@ -312,6 +466,8 @@ export function AX_CustomerFormFields({
           className="w-full px-3.5 py-1.5 rounded-2xl border border-outline-variant/60 focus:border-primary text-xs bg-surface-lowest text-on-surface outline-none resize-none"
         />
       </div>
+
+      <AX_AddSalesRepModal isOpen={isAddRepOpen} onClose={() => setIsAddRepOpen(false)} />
     </>
   )
 }

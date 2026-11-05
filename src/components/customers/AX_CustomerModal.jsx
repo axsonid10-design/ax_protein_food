@@ -14,6 +14,10 @@ import { showToast } from '../common/AX_Toast'
 import { generateUUID } from '../../utils/AX_UUID'
 import { DEFAULT_CATEGORIES } from './customerConstants'
 import { AX_CustomerFormFields } from './AX_CustomerFormFields'
+import {
+  createCustomerBalanceAdjustment,
+  saveCustomerAdjustment,
+} from './customerAdjustmentHelpers'
 
 export function AX_CustomerModal({ isOpen, onClose, customer = null, onSuccess }) {
   useBodyScrollLock(isOpen, onClose)
@@ -123,8 +127,23 @@ export function AX_CustomerModal({ isOpen, onClose, customer = null, onSuccess }
       const isIncomplete = !phone.trim() && !address.trim() && !city.trim()
 
       if (isEditMode) {
+        const previousBal = Number(customer.balance) || 0
         const parsedBal = currentBalance !== '' ? Number(currentBalance) : customer.balance
         const finalBal = isNaN(parsedBal) ? 0 : (parsedBal === 0 ? 0 : parsedBal)
+
+        if (Math.abs(finalBal - previousBal) > 0.0001) {
+          const adj = createCustomerBalanceAdjustment({
+            customer,
+            previousBalance: previousBal,
+            newBalance: finalBal,
+            notes,
+            user: profile,
+          })
+          if (adj) {
+            saveCustomerAdjustment(adj)
+          }
+        }
+
         const updated = {
           ...customer,
           name: name.trim(),

@@ -39,3 +39,72 @@ body {
 ::-webkit-scrollbar-thumb:hover {
   background: #991b1b;
 }
+
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 8mm;
+  }
+
+  body {
+    background-color: #ffffff !important;
+    background-image: none !important;
+    color: #0f172a !important;
+    font-size: 11pt !important;
+  }
+
+  header,
+  nav,
+  aside,
+  button,
+  .print-hidden,
+  .no-print {
+    display: none !important;
+  }
+
+  .print-visible {
+    display: block !important;
+  }
+
+  table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+    page-break-inside: auto;
+  }
+
+  tr {
+    page-break-inside: avoid;
+    page-break-after: auto;
+  }
+
+  thead {
+    display: table-header-group;
+  }
+
+  tfoot {
+    display: table-footer-group;
+  }
+
+  .shadow-level1,
+  .shadow-level2,
+  .shadow-level3,
+  .shadow-xs,
+  .shadow-sm,
+  .shadow-md {
+    box-shadow: none !important;
+  }
+
+  .bg-surface-lowest,
+  .bg-surface-low,
+  .bg-surface-container {
+    background-color: #ffffff !important;
+  }
+
+  .border,
+  .border-b,
+  .border-t,
+  .border-r,
+  .border-l {
+    border-color: #cbd5e1 !important;
+  }
+}

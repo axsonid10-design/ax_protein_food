@@ -90,7 +90,7 @@ export function AX_SuppliersManager() {
 
       const bal = Number(s.balance) || 0
       if (balanceFilter === 'payable' && bal <= 0) return false
-      if (balanceFilter === 'receivable' && bal >= 0) return false
+      if ((balanceFilter === 'receivable' || balanceFilter === 'overpayment') && bal >= 0) return false
       if (balanceFilter === 'zero' && bal !== 0) return false
 
       return true
@@ -117,11 +117,22 @@ export function AX_SuppliersManager() {
     }, 0)
   }, [suppliers])
 
+  const totalOverpayments = useMemo(() => {
+    return suppliers.reduce((sum, s) => {
+      const bal = Number(s.balance) || 0
+      return bal < 0 ? sum + Math.abs(bal) : sum
+    }, 0)
+  }, [suppliers])
+
   const totalPayableCount = useMemo(() => {
     return suppliers.filter((s) => (Number(s.balance) || 0) > 0).length
   }, [suppliers])
 
   const totalReceivableCount = useMemo(() => {
+    return suppliers.filter((s) => (Number(s.balance) || 0) < 0).length
+  }, [suppliers])
+
+  const totalOverpaidCount = useMemo(() => {
     return suppliers.filter((s) => (Number(s.balance) || 0) < 0).length
   }, [suppliers])
 
@@ -159,7 +170,7 @@ export function AX_SuppliersManager() {
         </button>
       </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5">
         <div className="bg-surface-lowest border border-outline-variant/30 rounded-2xl p-3 shadow-xs">
           <span className="text-[11px] font-bold text-on-surface-variant block">إجمالي الموردين</span>
           <span className="text-sm sm:text-base font-black font-mono text-on-surface">{suppliers.length}</span>
@@ -179,6 +190,13 @@ export function AX_SuppliersManager() {
           <span className="text-[10px] text-on-surface-variant block font-bold">({totalReceivableCount} مورد)</span>
         </div>
         <div className="bg-surface-lowest border border-outline-variant/30 rounded-2xl p-3 shadow-xs">
+          <span className="text-[11px] font-bold text-on-surface-variant block">مدفوعات زائدة للموردين</span>
+          <span className="text-sm sm:text-base font-black font-mono text-emerald-700">
+            {totalOverpayments.toLocaleString('en-US')} ج.م
+          </span>
+          <span className="text-[10px] text-on-surface-variant block font-bold">({totalOverpaidCount} مورد مسدد له بالزيادة)</span>
+        </div>
+        <div className="bg-surface-lowest border border-outline-variant/30 rounded-2xl p-3 shadow-xs col-span-2 sm:col-span-1">
           <span className="text-[11px] font-bold text-on-surface-variant block">حسابات متوازنة (صفر)</span>
           <span className="text-sm sm:text-base font-black font-mono text-on-surface-variant">{totalZeroCount}</span>
         </div>
@@ -232,6 +250,17 @@ export function AX_SuppliersManager() {
             }`}
           >
             مقدم له ({totalReceivableCount})
+          </button>
+          <button
+            type="button"
+            onClick={() => { setBalanceFilter('overpayment'); setCurrentPage(1) }}
+            className={`px-3 py-1.5 rounded-full text-xs font-black whitespace-nowrap transition-all cursor-pointer ${
+              balanceFilter === 'overpayment'
+                ? 'bg-emerald-600 text-white shadow-xs'
+                : 'bg-surface-low text-on-surface-variant hover:bg-surface-container'
+            }`}
+          >
+            مدفوعات زائدة ({totalOverpaidCount})
           </button>
           <button
             type="button"

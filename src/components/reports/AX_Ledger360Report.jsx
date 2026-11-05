@@ -1,22 +1,14 @@
 import React, { useState, useMemo } from 'react'
 import {
-  User,
-  Building2,
-  FileText,
-  DollarSign,
-  Printer,
   FileSpreadsheet,
+  Printer,
   ChevronDown,
   ChevronUp,
   ChevronRight,
   ChevronLeft,
-  ArrowDownLeft,
-  ArrowUpRight,
-  Search,
 } from 'lucide-react'
 import {
   formatCurrency,
-  formatNumber,
   filterByDateRange,
   exportToCsv,
 } from '../../utils/reportCalculations'
@@ -32,9 +24,7 @@ export function AX_Ledger360Report({
   customEnd = '',
 }) {
   const [partyType, setPartyType] = useState('client')
-  const [selectedPartyId, setSelectedPartyId] = useState(() => {
-    return clients[0]?.id || ''
-  })
+  const [selectedPartyId, setSelectedPartyId] = useState(() => clients[0]?.id || '')
   const [expandedRowId, setExpandedRowId] = useState(null)
   const [currentPage, setCurrentPage] = useState(1)
   const pageSize = 15
@@ -48,30 +38,44 @@ export function AX_Ledger360Report({
     }
 
     const partyName = currentParty.name
-
-    const partyInvoices = invoices.filter((inv) => {
-      return inv.partyName === partyName
-    })
-
-    const partyCash = cashTransactions.filter((tx) => {
-      return tx.partyName === partyName
-    })
-
+    const partyInvoices = invoices.filter((inv) => inv.partyName === partyName)
+    const partyCash = cashTransactions.filter((tx) => tx.partyName === partyName)
     const unifiedList = []
 
+    const recordedInvoiceCodes = new Set(
+      partyInvoices.filter((i) => (Number(i.paidAmount) || 0) > 0).map((i) => i.code)
+    )
+
     partyInvoices.forEach((inv) => {
-      const isSale = inv.type === 'sale'
       const amount = Number(inv.total) || 0
       const paid = Number(inv.paidAmount) || 0
+
+      let typeLabel = 'فاتورة بيع'
+      let debit = 0
+      let credit = 0
+
+      if (inv.type === 'sale') {
+        typeLabel = 'فاتورة بيع'
+        debit = amount
+      } else if (inv.type === 'sale_return') {
+        typeLabel = 'مردود مبيعات'
+        credit = amount
+      } else if (inv.type === 'purchase') {
+        typeLabel = 'فاتورة شراء'
+        credit = amount
+      } else if (inv.type === 'purchase_return') {
+        typeLabel = 'مردود مشتريات'
+        debit = amount
+      }
 
       unifiedList.push({
         id: inv.id,
         code: inv.code,
         date: inv.date || '2026-10-28',
-        type: isSale ? 'فاتورة بيع' : 'فاتورة شراء',
+        type: typeLabel,
         category: 'invoice',
-        debit: isSale ? amount : 0,
-        credit: isSale ? 0 : amount,
+        debit,
+        credit,
         items: inv.items || [],
         transport: Number(inv.transportCost) || 0,
         loading: Number(inv.loadingCost) || 0,
@@ -79,14 +83,21 @@ export function AX_Ledger360Report({
       })
 
       if (paid > 0) {
+        const isClientIn = inv.type === 'sale'
+        const isClientOut = inv.type === 'sale_return'
+        const isSupplierOut = inv.type === 'purchase'
+        const paidLabel = isClientIn ? 'تحصيل من عميل' : isClientOut ? 'رد نقدي لعميل' : isSupplierOut ? 'سداد لمورد' : 'استرداد نقدي من مورد'
+        const paidDebit = isClientOut || isSupplierOut ? paid : 0
+        const paidCredit = isClientIn || (!isClientOut && !isSupplierOut) ? paid : 0
+
         unifiedList.push({
           id: `${inv.id}-paid`,
           code: `سداد-${inv.code}`,
           date: inv.date || '2026-10-28',
-          type: isSale ? 'تحصيل من عميل' : 'سداد لمورد',
+          type: paidLabel,
           category: 'payment',
-          debit: isSale ? 0 : paid,
-          credit: isSale ? paid : 0,
+          debit: paidDebit,
+          credit: paidCredit,
           items: [],
           notes: `سداد مسجل على الفاتورة ${inv.code}`,
         })
@@ -94,7 +105,10 @@ export function AX_Ledger360Report({
     })
 
     partyCash.forEach((tx) => {
-      const isClientReceipt = tx.type === 'client_receipt'
+      const isLinkedToInvoice = tx.notes && Array.from(recordedInvoiceCodes).some((code) => tx.notes.includes(code))
+      if (isLinkedToInvoice) return
+
+      const isClientReceipt = tx.type === 'client_receipt' || tx.type === 'in'
       const amt = Number(tx.amount) || 0
 
       unifiedList.push({
@@ -111,7 +125,6 @@ export function AX_Ledger360Report({
     })
 
     unifiedList.sort((a, b) => new Date(a.date) - new Date(b.date))
-
     const filtered = filterByDateRange(unifiedList, 'date', timeframe, customStart, customEnd)
 
     let running = 0
@@ -122,14 +135,10 @@ export function AX_Ledger360Report({
       totalDebit += item.debit
       totalCredit += item.credit
       running += item.debit - item.credit
-
-      return {
-        ...item,
-        balance: running,
-      }
+      return { ...item, balance: running }
     })
 
-    const initialBalance = currentParty.balance ? Number(currentParty.balance) * 0.4 : 0
+    const initialBalance = Math.max(0, (Number(currentParty.balance) || 0) - running)
     const finalBalance = initialBalance + running
 
     return {
@@ -161,10 +170,6 @@ export function AX_Ledger360Report({
     exportToCsv(`كشف_حساب_${currentParty?.name || 'طرف'}_${new Date().toISOString().split('T')[0]}`, headers, data)
   }
 
-  const handlePrint = () => {
-    window.print()
-  }
-
   return (
     <div className="space-y-4">
       <div className="bg-surface-lowest p-3.5 sm:p-4 rounded-2xl border border-outline-variant/30 space-y-3">
@@ -189,7 +194,7 @@ export function AX_Ledger360Report({
             </button>
             <button
               type="button"
-              onClick={handlePrint}
+              onClick={() => window.print()}
               className="px-3.5 py-1.5 rounded-full bg-primary text-white hover:bg-primary-dark text-xs font-bold flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer shadow-xs"
             >
               <Printer className="w-3.5 h-3.5" />
@@ -206,7 +211,7 @@ export function AX_Ledger360Report({
                 setPartyType('client')
                 setSelectedPartyId(clients[0]?.id || '')
               }}
-              className={`px-3 py-1 rounded-full text-xs font-bold transition-all ${
+              className={`px-3 py-1 rounded-full text-xs font-bold transition-all cursor-pointer ${
                 partyType === 'client' ? 'bg-primary text-white shadow-xs' : 'text-on-surface hover:text-primary'
               }`}
             >
@@ -218,7 +223,7 @@ export function AX_Ledger360Report({
                 setPartyType('supplier')
                 setSelectedPartyId(suppliers[0]?.id || '')
               }}
-              className={`px-3 py-1 rounded-full text-xs font-bold transition-all ${
+              className={`px-3 py-1 rounded-full text-xs font-bold transition-all cursor-pointer ${
                 partyType === 'supplier' ? 'bg-primary text-white shadow-xs' : 'text-on-surface hover:text-primary'
               }`}
             >
@@ -288,15 +293,15 @@ export function AX_Ledger360Report({
         <div className="hidden lg:block overflow-x-auto">
           <table className="w-full text-right text-xs">
             <thead>
-              <tr className="bg-surface-low/80 border-b border-surface-container text-on-surface-variant font-black">
-                <th className="py-3 px-3.5 whitespace-nowrap">التاريخ</th>
-                <th className="py-3 px-3.5 whitespace-nowrap">رقم المستند</th>
-                <th className="py-3 px-3.5 whitespace-nowrap">نوع الحركة</th>
-                <th className="py-3 px-3.5">البيان والملاحظات</th>
-                <th className="py-3 px-3.5 text-left whitespace-nowrap">مدين (+)</th>
-                <th className="py-3 px-3.5 text-left whitespace-nowrap">دائن (-)</th>
-                <th className="py-3 px-3.5 text-left whitespace-nowrap">الرصيد التراكمي</th>
-                <th className="py-3 px-3.5 text-center whitespace-nowrap">تفاصيل</th>
+              <tr className="bg-surface-low/80 border-b border-surface-container text-on-surface-variant font-black h-11">
+                <th className="px-3.5 whitespace-nowrap">التاريخ</th>
+                <th className="px-3.5 whitespace-nowrap">رقم المستند</th>
+                <th className="px-3.5 whitespace-nowrap">نوع الحركة</th>
+                <th className="px-3.5">البيان والملاحظات</th>
+                <th className="px-3.5 text-left whitespace-nowrap">مدين (+)</th>
+                <th className="px-3.5 text-left whitespace-nowrap">دائن (-)</th>
+                <th className="px-3.5 text-left whitespace-nowrap">الرصيد التراكمي</th>
+                <th className="px-3.5 text-center whitespace-nowrap">تفاصيل</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-surface-container/60 font-bold">
@@ -314,13 +319,13 @@ export function AX_Ledger360Report({
                   return (
                     <React.Fragment key={tx.id}>
                       <tr className="hover:bg-surface-low/40 transition-colors h-11">
-                        <td className="py-2.5 px-3.5 font-mono text-on-surface-variant whitespace-nowrap">
+                        <td className="px-3.5 font-mono text-on-surface-variant whitespace-nowrap">
                           {tx.date}
                         </td>
-                        <td className="py-2.5 px-3.5 font-mono font-black text-primary whitespace-nowrap">
+                        <td className="px-3.5 font-mono font-black text-primary whitespace-nowrap">
                           {tx.code}
                         </td>
-                        <td className="py-2.5 px-3.5 whitespace-nowrap">
+                        <td className="px-3.5 whitespace-nowrap">
                           <span
                             className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
                               tx.category === 'invoice'
@@ -331,19 +336,19 @@ export function AX_Ledger360Report({
                             {tx.type}
                           </span>
                         </td>
-                        <td className="py-2.5 px-3.5 text-on-surface-variant text-[11px] max-w-[220px] truncate">
+                        <td className="px-3.5 text-on-surface-variant text-[11px] max-w-[220px] truncate">
                           {tx.notes}
                         </td>
-                        <td className="py-2.5 px-3.5 text-left font-mono font-black text-on-surface whitespace-nowrap">
+                        <td className="px-3.5 text-left font-mono font-black text-on-surface whitespace-nowrap">
                           {tx.debit > 0 ? formatCurrency(tx.debit) : '-'}
                         </td>
-                        <td className="py-2.5 px-3.5 text-left font-mono font-black text-emerald-600 whitespace-nowrap">
+                        <td className="px-3.5 text-left font-mono font-black text-emerald-600 whitespace-nowrap">
                           {tx.credit > 0 ? formatCurrency(tx.credit) : '-'}
                         </td>
-                        <td className="py-2.5 px-3.5 text-left font-mono font-black text-on-surface whitespace-nowrap">
+                        <td className="px-3.5 text-left font-mono font-black text-on-surface whitespace-nowrap">
                           {formatCurrency(tx.balance)}
                         </td>
-                        <td className="py-2.5 px-3.5 text-center whitespace-nowrap">
+                        <td className="px-3.5 text-center whitespace-nowrap">
                           {hasItems ? (
                             <button
                               type="button"
@@ -461,3 +466,5 @@ export function AX_Ledger360Report({
     </div>
   )
 }
+
+export default AX_Ledger360Report

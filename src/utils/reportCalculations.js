@@ -41,6 +41,11 @@ export function filterByDateRange(items = [], dateField = 'date', timeframe = 'a
       return itemDateStr >= startOfYear && itemDateStr <= todayStr
     }
 
+    if (timeframe === 'specific_day' || timeframe === 'specific') {
+      const targetDay = customStart || todayStr
+      return itemDateStr === targetDay
+    }
+
     if (timeframe === 'custom') {
       if (customStart && customEnd) {
         return itemDateStr >= customStart && itemDateStr <= customEnd

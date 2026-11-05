@@ -22,13 +22,16 @@ export function AX_SupplierBentoCard({
   const isReceivable = bal < 0
 
   return (
-    <div className="bg-surface-lowest border border-outline-variant/30 rounded-2xl p-3.5 shadow-xs flex flex-col justify-between space-y-3">
+    <div
+      onClick={() => onOpenDetails && onOpenDetails(supplier)}
+      className="bg-surface-lowest border border-outline-variant/30 rounded-2xl p-3.5 shadow-xs flex flex-col justify-between space-y-3 hover:border-primary/50 hover:shadow-sm transition-all cursor-pointer"
+    >
       <div className="flex items-start justify-between gap-2">
         <div className="flex items-center gap-2 min-w-0">
           <div className="w-8 h-8 rounded-full bg-primary/10 text-primary flex items-center justify-center flex-shrink-0">
             <Building2 className="w-4 h-4" />
           </div>
-          <div className="min-w-0 cursor-pointer" onClick={() => onOpenDetails && onOpenDetails(supplier)} title="عرض الملف التفصيلي 360°">
+          <div className="min-w-0" title="عرض الملف التفصيلي 360°">
             <h4 className="text-xs font-black text-on-surface hover:text-primary transition-colors truncate">
               {supplier.companyName || supplier.name}
             </h4>
@@ -39,6 +42,7 @@ export function AX_SupplierBentoCard({
               {supplier.phone && (
                 <a
                   href={`tel:${supplier.phone}`}
+                  onClick={(e) => e.stopPropagation()}
                   className="flex items-center gap-0.5 font-mono text-primary hover:underline"
                   dir="ltr"
                 >
@@ -89,7 +93,10 @@ export function AX_SupplierBentoCard({
         <div className="flex items-center gap-1.5">
           <button
             type="button"
-            onClick={() => onOpenDetails(supplier)}
+            onClick={(e) => {
+              e.stopPropagation()
+              onOpenDetails && onOpenDetails(supplier)
+            }}
             className="p-1.5 rounded-full border border-outline-variant/40 hover:bg-surface-container text-on-surface-variant hover:text-primary transition-all cursor-pointer"
             title="كشف حساب 360°"
           >
@@ -97,7 +104,10 @@ export function AX_SupplierBentoCard({
           </button>
           <button
             type="button"
-            onClick={() => onEditSupplier(supplier)}
+            onClick={(e) => {
+              e.stopPropagation()
+              onEditSupplier && onEditSupplier(supplier)
+            }}
             className="p-1.5 rounded-full border border-outline-variant/40 hover:bg-surface-container text-on-surface-variant hover:text-primary transition-all cursor-pointer"
             title="تعديل"
           >
@@ -105,7 +115,10 @@ export function AX_SupplierBentoCard({
           </button>
           <button
             type="button"
-            onClick={() => onDeleteSupplier(supplier)}
+            onClick={(e) => {
+              e.stopPropagation()
+              onDeleteSupplier && onDeleteSupplier(supplier)
+            }}
             className="p-1.5 rounded-full border border-outline-variant/40 hover:bg-red-50 text-on-surface-variant hover:text-red-700 transition-all cursor-pointer"
             title="حذف"
           >

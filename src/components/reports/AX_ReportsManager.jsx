@@ -62,15 +62,46 @@ export function AX_ReportsManager() {
     const grossProfit = totalSales - totalCogs
     const totalCash = treasuryAccounts.reduce((sum, acc) => sum + (Number(acc.balance) || 0), 0)
     const totalClientDebts = clients.reduce((sum, c) => sum + (Number(c.balance) || 0), 0)
+    const totalSupplierLiabilities = suppliers.reduce((sum, s) => sum + (Number(s.balance) || 0), 0)
+
+    let inventoryValuation = 0
+    ;(inventoryStock || []).forEach((stock) => {
+      const it = items.find((i) => i.id === stock.itemId)
+      const cost = Number(it?.buyPrice) || 0
+      inventoryValuation += (Number(stock.quantity) || 0) * cost
+    })
+
+    const filteredOrders = filterByDateRange(disassemblyOrders, 'date', timeframe, customStart, customEnd)
+    let totalInputWeight = 0
+    let totalOutputWeight = 0
+    filteredOrders.forEach((o) => {
+      totalInputWeight += Number(o.inputQuantity || o.inputWeight || o.sourceWeight) || 0
+      const outputs = o.outputs || o.items || []
+      outputs.forEach((out) => {
+        totalOutputWeight += Number(out.quantity || out.weight) || 0
+      })
+    })
+    const totalWasteWeight = Math.max(0, totalInputWeight - totalOutputWeight)
+    const wasteRate = totalInputWeight > 0 ? ((totalWasteWeight / totalInputWeight) * 100).toFixed(1) : 0
+
+    const filteredInvoices = filterByDateRange(invoices, 'date', timeframe, customStart, customEnd)
+    const totalOperationsCount = filteredInvoices.length + filteredOrders.length
 
     return {
       totalSales,
       grossProfit,
       totalCash,
       totalClientDebts,
+      totalSupplierLiabilities,
+      inventoryValuation,
+      totalWasteWeight,
+      wasteRate,
+      disassemblyOrdersCount: filteredOrders.length,
+      totalOperationsCount,
+      invoicesCount: filteredInvoices.length,
       salesCount: filteredSales.length,
     }
-  }, [invoices, items, treasuryAccounts, clients, timeframe, customStart, customEnd])
+  }, [invoices, items, treasuryAccounts, clients, suppliers, inventoryStock, disassemblyOrders, timeframe, customStart, customEnd])
 
   const reportTabs = [
     { id: 'pnl', label: 'الأرباح والخسائر (P&L)', icon: TrendingUp },
@@ -106,6 +137,7 @@ export function AX_ReportsManager() {
               { id: 'this_month', label: 'هذا الشهر' },
               { id: 'this_year', label: 'هذا العام' },
               { id: 'all', label: 'كافة الفترات' },
+              { id: 'specific_day', label: 'يوم محدد' },
               { id: 'custom', label: 'نطاق مخصص' },
             ].map((tf) => (
               <button
@@ -123,6 +155,17 @@ export function AX_ReportsManager() {
             ))}
           </div>
         </div>
+
+        {timeframe === 'specific_day' && (
+          <div className="p-3 bg-surface-low rounded-2xl border border-outline-variant/30 max-w-sm animate-in fade-in">
+            <AX_CompanyDatePicker
+              label="اختر التاريخ المحدد:"
+              value={customStart}
+              onChange={setCustomStart}
+              placeholder="اختر اليوم..."
+            />
+          </div>
+        )}
 
         {timeframe === 'custom' && (
           <div className="p-3 bg-surface-low rounded-2xl border border-outline-variant/30 grid grid-cols-1 sm:grid-cols-2 gap-3 animate-in fade-in">
@@ -148,7 +191,7 @@ export function AX_ReportsManager() {
               {formatCurrency(executiveKpis.totalSales)}
             </span>
             <span className="text-[10px] font-bold text-on-surface-variant block">
-              عدد {executiveKpis.salesCount} فاتورة
+              عدد {executiveKpis.salesCount} فاتورة بيع
             </span>
           </div>
 
@@ -179,6 +222,46 @@ export function AX_ReportsManager() {
             </span>
             <span className="text-[10px] font-bold text-rose-700 block">
               أرصدة آجلة مستحقة
+            </span>
+          </div>
+
+          <div className="p-3 rounded-2xl bg-surface-low border border-outline-variant/30 space-y-0.5">
+            <span className="text-[10px] font-bold text-on-surface-variant block">مستحقات الموردين</span>
+            <span className="text-sm sm:text-base font-black font-mono text-amber-700 block">
+              {formatCurrency(executiveKpis.totalSupplierLiabilities)}
+            </span>
+            <span className="text-[10px] font-bold text-amber-700 block">
+              التزامات قائمة للتوريد
+            </span>
+          </div>
+
+          <div className="p-3 rounded-2xl bg-surface-low border border-outline-variant/30 space-y-0.5">
+            <span className="text-[10px] font-bold text-on-surface-variant block">تقييم المخزون بالتكلفة</span>
+            <span className="text-sm sm:text-base font-black font-mono text-blue-700 block">
+              {formatCurrency(executiveKpis.inventoryValuation)}
+            </span>
+            <span className="text-[10px] font-bold text-blue-700 block">
+              كافة المخازن وثلاجات التبريد
+            </span>
+          </div>
+
+          <div className="p-3 rounded-2xl bg-surface-low border border-outline-variant/30 space-y-0.5">
+            <span className="text-[10px] font-bold text-on-surface-variant block">هالك تشغيل اللحوم</span>
+            <span className="text-sm sm:text-base font-black font-mono text-purple-700 block">
+              {executiveKpis.wasteRate}%
+            </span>
+            <span className="text-[10px] font-bold text-purple-700 block">
+              {Number(executiveKpis.totalWasteWeight).toLocaleString('en-US')} كجم هالك ({executiveKpis.disassemblyOrdersCount} أمر)
+            </span>
+          </div>
+
+          <div className="p-3 rounded-2xl bg-surface-low border border-outline-variant/30 space-y-0.5">
+            <span className="text-[10px] font-bold text-on-surface-variant block">إجمالي حركات الفترة</span>
+            <span className="text-sm sm:text-base font-black font-mono text-on-surface block">
+              {executiveKpis.totalOperationsCount}
+            </span>
+            <span className="text-[10px] font-bold text-on-surface-variant block">
+              {executiveKpis.invoicesCount} فاتورة • {executiveKpis.disassemblyOrdersCount} تشغيل
             </span>
           </div>
         </div>

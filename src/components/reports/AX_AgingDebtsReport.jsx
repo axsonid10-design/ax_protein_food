@@ -50,7 +50,8 @@ export function AX_AgingDebtsReport({
       if (partyInvoices.length > 0) {
         const now = new Date()
         partyInvoices.forEach((inv) => {
-          const invDate = new Date(inv.date || '2026-10-01')
+          const rawDate = inv.date || inv.operationalDate || inv.createdAt
+          const invDate = rawDate ? new Date(rawDate) : now
           const diffDays = Math.max(0, Math.floor((now - invDate) / (1000 * 60 * 60 * 24)))
           const rem = Number(inv.remainingAmount) || 0
 
@@ -64,11 +65,27 @@ export function AX_AgingDebtsReport({
             over90 += rem
           }
         })
-      } else {
-        under30 = balance * 0.5
-        d31To60 = balance * 0.3
-        d61To90 = balance * 0.15
-        over90 = balance * 0.05
+
+        const invoicesTotal = under30 + d31To60 + d61To90 + over90
+        const unallocated = balance - invoicesTotal
+        if (unallocated > 0) {
+          under30 += unallocated
+        }
+      } else if (balance > 0) {
+        const now = new Date()
+        const rawCreated = party.createdAt || party.created_at
+        const partyDate = rawCreated ? new Date(rawCreated) : now
+        const diffDays = Math.max(0, Math.floor((now - partyDate) / (1000 * 60 * 60 * 24)))
+
+        if (diffDays <= 30) {
+          under30 = balance
+        } else if (diffDays <= 60) {
+          d31To60 = balance
+        } else if (diffDays <= 90) {
+          d61To90 = balance
+        } else {
+          over90 = balance
+        }
       }
 
       totalUnder30 += under30

@@ -253,6 +253,7 @@ export const AX_OperationsService = {
   deleteTreasuryAccountInDB: async (accountId, userProfile = null) => {
     if (!supabase || typeof supabase.from !== 'function' || !accountId) return { success: false }
     try {
+      await Promise.allSettled([supabase.from('ax_cash_transactions').update({ treasury_id: null }).eq('treasury_id', accountId), supabase.from('ax_cash_transfers').update({ from_treasury_id: null }).eq('from_treasury_id', accountId), supabase.from('ax_cash_transfers').update({ to_treasury_id: null }).eq('to_treasury_id', accountId)])
       const { error } = await supabase.from('ax_treasuries').delete().eq('id', accountId)
       if (error) throw error
       try { await supabase.from('ax_activity_logs').insert({ id: generateUUID(), table_name: 'ax_treasuries', action: 'DELETE', record_id: accountId, user_id: userProfile?.id || null }) } catch {}

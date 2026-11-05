@@ -60,21 +60,28 @@ export function AX_CashFlowReport({
       })
     })
 
+    const recordedCashNotes = new Set(
+      cashTransactions.map((tx) => tx.notes || '').filter(Boolean)
+    )
+
     invoices.forEach((inv) => {
       const paid = Number(inv.paidAmount) || 0
       if (paid > 0) {
-        const isSale = inv.type === 'sale'
-        list.push({
-          id: `inv-cash-${inv.id}`,
-          code: `سداد-${inv.code}`,
-          date: inv.date || '2026-10-28',
-          type: isSale ? 'تحصيل فاتورة بيع' : 'سداد فاتورة شراء',
-          isReceipt: isSale,
-          partyName: inv.partyName,
-          accountName: 'الخزينة الرئيسية (الكاش المركزي)',
-          amount: paid,
-          notes: inv.paymentTerms || '',
-        })
+        const isAlreadyInCash = Array.from(recordedCashNotes).some((note) => note.includes(inv.code))
+        if (!isAlreadyInCash) {
+          const isSale = inv.type === 'sale' || inv.type === 'purchase_return'
+          list.push({
+            id: `inv-cash-${inv.id}`,
+            code: `سداد-${inv.code}`,
+            date: inv.date || inv.operationalDate || '2026-10-28',
+            type: isSale ? 'تحصيل فاتورة' : 'سداد فاتورة',
+            isReceipt: isSale,
+            partyName: inv.partyName,
+            accountName: accountsMap[inv.treasuryId] || 'الخزينة الرئيسية (الكاش المركزي)',
+            amount: paid,
+            notes: inv.paymentTerms || '',
+          })
+        }
       }
     })
 

@@ -4,6 +4,7 @@ import { AX_StaffOperationsService } from '../services/AX_StaffOperationsService
 import { AX_CustomerOperationsService } from '../services/AX_CustomerOperationsService.js'
 import { AX_SupplierOperationsService } from '../services/AX_SupplierOperationsService.js'
 import { AX_DatabaseSync } from '../services/AX_DatabaseSync.js'
+import { offlineDB } from '../services/offlineDB.js'
 import { generateUUID } from '../utils/AX_UUID.js'
 import { categoryHelpers } from './categoryHelpers.js'
 import { expenseCategoryHelpers, initialExpenseCategories } from './expenseCategoryHelpers.js'
@@ -340,18 +341,28 @@ export const useAXStore = create((set, get) => ({
     set((state) => {
       const deletedAccount = state.treasuryAccounts.find((t) => t.id === id)
       const nextTr = state.treasuryAccounts.filter((t) => t.id !== id)
-      const updatedCashTx = (state.cashTransactions || []).map((tx) => {
-        if (tx.treasuryId === id) {
-          return {
-            ...tx,
-            treasuryName: `[حساب محذوف: ${deletedAccount?.name || 'خزينة'}]`,
-            isDeletedAccount: true,
-          }
-        }
-        return tx
-      })
+      const updatedCashTx = (state.cashTransactions || []).map((tx) =>
+        tx.treasuryId === id ? { ...tx, treasuryName: `[حساب محذوف: ${deletedAccount?.name || 'خزينة'}]`, isDeletedAccount: true } : tx
+      )
       updateLocalCachePayload('treasuryAccounts', nextTr)
       updateLocalCachePayload('cashTransactions', updatedCashTx)
+      try {
+        const raw = localStorage.getItem('ax_deleted_treasuries')
+        const list = raw ? JSON.parse(raw) : []
+        if (!list.includes(id)) { list.push(id); localStorage.setItem('ax_deleted_treasuries', JSON.stringify(list)) }
+      } catch {}
+      try {
+        offlineDB.getCachedData('full_database').then((cached) => {
+          if (cached && Array.isArray(cached.treasuryAccounts)) {
+            cached.treasuryAccounts = cached.treasuryAccounts.filter((t) => t.id !== id)
+            if (Array.isArray(cached.cashTransactions)) {
+              cached.cashTransactions = cached.cashTransactions.map((tx) => tx.treasuryId === id ? { ...tx, treasuryName: `[حساب محذوف: ${deletedAccount?.name || 'خزينة'}]`, isDeletedAccount: true } : tx)
+            }
+            offlineDB.cacheData('full_database', cached).catch(() => {})
+          }
+        }).catch(() => {})
+        offlineDB.cacheDeleteItem('treasuryAccounts', id).catch(() => {})
+      } catch {}
       return { treasuryAccounts: nextTr, cashTransactions: updatedCashTx }
     })
   },

@@ -4,6 +4,7 @@ import { useBodyScrollLock } from '../../hooks/useBodyScrollLock'
 import { useAXStore } from '../../store/useAXStore'
 import { AX_SupplierLedgerTable } from './AX_SupplierLedgerTable'
 import { AX_SupplierProfileTab } from './AX_SupplierProfileTab'
+import { AX_SupplierOverpaymentCard } from './AX_SupplierOverpaymentCard'
 
 export function AX_SupplierDetailsModal({ supplier, isOpen, onClose }) {
   useBodyScrollLock(isOpen)
@@ -231,51 +232,15 @@ export function AX_SupplierDetailsModal({ supplier, isOpen, onClose }) {
           </div>
         </div>
 
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-          <div className="bg-surface-container/20 border border-outline-variant/20 rounded-2xl p-3">
-            <span className="text-[11px] font-bold text-on-surface-variant block">رصيد أول المدة</span>
-            <span className="text-sm sm:text-base font-black font-mono text-on-surface">
-              {(Number(supplier.openingBalance) || 0).toLocaleString('en-US')} ج.م
-            </span>
-            <span className="text-[10px] text-on-surface-variant block">
-              {supplier.openingBalanceType === 'payable' ? 'دائن (له)' : 'مدين (مقدم له)'}
-            </span>
-          </div>
-
-          <div className="bg-surface-container/20 border border-outline-variant/20 rounded-2xl p-3">
-            <span className="text-[11px] font-bold text-on-surface-variant block">إجمالي التوريدات (مشترياتنا)</span>
-            <span className="text-sm sm:text-base font-black font-mono text-on-surface">
-              {totalPurchasesAmount.toLocaleString('en-US')} ج.م
-            </span>
-            <span className="text-[10px] text-on-surface-variant block">
-              ({supplierPurchases.length} فاتورة توريد)
-            </span>
-          </div>
-
-          <div className="bg-surface-container/20 border border-outline-variant/20 rounded-2xl p-3">
-            <span className="text-[11px] font-bold text-on-surface-variant block">مبيعات للمورد (مقاصة)</span>
-            <span className="text-sm sm:text-base font-black font-mono text-amber-700">
-              {totalSalesAmount.toLocaleString('en-US')} ج.م
-            </span>
-            <span className="text-[10px] text-on-surface-variant block">
-              ({supplierSales.length} فاتورة بيع)
-            </span>
-          </div>
-
-          <div className="bg-surface-container/20 border border-outline-variant/20 rounded-2xl p-3">
-            <span className="text-[11px] font-bold text-on-surface-variant block">صافي الحساب بالمقاصة</span>
-            <span
-              className={`text-sm sm:text-base font-black font-mono ${
-                isPayable ? 'text-red-800' : isReceivable ? 'text-emerald-700' : 'text-on-surface'
-              }`}
-            >
-              {Math.abs(netOffsetBalance).toLocaleString('en-US')} ج.م
-            </span>
-            <span className="text-[10px] font-bold block text-on-surface-variant">
-              {isPayable ? 'مستحق للمورد (له)' : isReceivable ? 'مطلوب من المورد (عليه)' : 'حساب خالص'}
-            </span>
-          </div>
-        </div>
+        <AX_SupplierOverpaymentCard
+          supplier={supplier}
+          totalPurchasesAmount={totalPurchasesAmount}
+          totalSalesAmount={totalSalesAmount}
+          totalSettledAmount={totalSettledAmount}
+          netOffsetBalance={netOffsetBalance}
+          purchasesCount={supplierPurchases.length}
+          salesCount={supplierSales.length}
+        />
 
         <div className="flex items-center gap-1.5 border-b border-surface-container pb-2 overflow-x-auto print:hidden">
           <button

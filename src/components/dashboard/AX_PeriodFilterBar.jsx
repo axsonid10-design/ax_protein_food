@@ -1,5 +1,4 @@
 import React from 'react'
-import { Calendar } from 'lucide-react'
 import { AX_CompanyDatePicker } from '../common/AX_CompanyDatePicker'
 
 export function AX_PeriodFilterBar({
@@ -39,11 +38,6 @@ export function AX_PeriodFilterBar({
               </button>
             )
           })}
-        </div>
-
-        <div className="hidden sm:flex items-center gap-1.5 px-3 py-1 text-[11px] font-bold text-on-surface-variant">
-          <Calendar className="w-3.5 h-3.5 text-primary" />
-          <span>تحديث لحظي</span>
         </div>
       </div>
 

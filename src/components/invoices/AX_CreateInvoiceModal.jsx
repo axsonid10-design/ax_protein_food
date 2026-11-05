@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react'
-import { Plus, AlertTriangle, RotateCcw } from 'lucide-react'
+import { Plus, AlertTriangle, RotateCcw, Printer } from 'lucide-react'
 import { AX_SearchableSelect } from '../common/AX_SearchableSelect'
 import { AX_CompanyDatePicker } from '../common/AX_CompanyDatePicker'
 import { AX_InvoiceItemsEditor } from './AX_InvoiceItemsEditor'
 import { AX_InvoicePaymentSection } from './AX_InvoicePaymentSection'
 import { AX_CustomerModal } from '../customers/AX_CustomerModal'
 import { AX_SupplierModal } from '../suppliers/AX_SupplierModal'
+import { AX_InvoicePrintModal } from './AX_InvoicePrintModal'
 import { axToast } from '../common/AX_Toast'
 import { useAXStore } from '../../store/useAXStore'
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock'
@@ -39,6 +40,8 @@ export function AX_CreateInvoiceModal({
   const [selectedTreasuryId, setSelectedTreasuryId] = useState(treasuryAccounts[0]?.id || '')
   const [showCustomerModal, setShowCustomerModal] = useState(false)
   const [showSupplierModal, setShowSupplierModal] = useState(false)
+  const [previewInvoice, setPreviewInvoice] = useState(null)
+  const [isPostSavePrint, setIsPostSavePrint] = useState(false)
 
   const [draftItem, setDraftItem] = useState({ itemId: '', quantity: 1, price: 0 })
   const [expandedRowIndex, setExpandedRowIndex] = useState(null)
@@ -69,6 +72,8 @@ export function AX_CreateInvoiceModal({
       setExpandedRowIndex(null)
       setShowCustomerModal(false)
       setShowSupplierModal(false)
+      setPreviewInvoice(null)
+      setIsPostSavePrint(false)
     }
   }, [isOpen])
 
@@ -191,6 +196,53 @@ export function AX_CreateInvoiceModal({
     return computeSubtotal() + (Number(invForm.transportCost) || 0) + (Number(invForm.loadingCost) || 0)
   }
 
+  const buildInvoicePayload = (isDraft = false) => {
+    const sub = computeSubtotal()
+    const tot = computeTotal()
+    const partyName = invForm.partyName.trim()
+
+    let paidAmt = 0
+    if (paymentStatus === 'paid') paidAmt = tot
+    else if (paymentStatus === 'partial') paidAmt = Math.min(tot, Math.max(0, Number(paidInput) || 0))
+    const remAmt = Math.max(0, tot - paidAmt)
+
+    let paymentTerms = paymentStatus === 'paid' ? 'مدفوع كلي' : paymentStatus === 'partial' ? 'مدفوع جزئي' : 'غير مدفوع'
+    if (invForm.type === 'sale_return') paymentTerms = 'مردود مبيعات'
+    if (invForm.type === 'purchase_return') paymentTerms = 'مردود مشتريات'
+
+    const codePrefix = { sale_return: 'RET-SALE', purchase_return: 'RET-PUR', purchase: 'PUR' }[invForm.type] || 'INV'
+
+    return {
+      id: generateUUID(),
+      code: isDraft ? `DRAFT-${Date.now().toString().slice(-4)}` : `${codePrefix}-${Date.now().toString().slice(-5)}`,
+      type: invForm.type,
+      partyType: partyKind,
+      partyKind,
+      partyName: partyName || 'مسودة غير محددة',
+      isIncompleteData: !isPartyInList(partyName),
+      date: invForm.date,
+      operationalDate: invForm.date,
+      transactionDate: invForm.date,
+      createdAt: new Date().toISOString(),
+      created_at: new Date().toISOString(),
+      warehouseId: invForm.warehouseId,
+      items: invForm.items.map((it) => {
+        const itemObj = items.find((i) => i.id === it.itemId)
+        const q = Number(it.quantity) || 0, p = Number(it.price) || 0
+        return { itemId: it.itemId, compositeName: getItemDisplayName(itemObj || it), quantity: q, unit: it.unit || itemObj?.unitType || 'كرتونة', price: p, total: q * p }
+      }),
+      transportCost: Number(invForm.transportCost) || 0,
+      loadingCost: Number(invForm.loadingCost) || 0,
+      subtotal: sub,
+      total: tot,
+      paidAmount: paidAmt,
+      remainingAmount: remAmt,
+      status: paymentStatus,
+      paymentTerms,
+      treasuryId: selectedTreasuryId || treasuryAccounts[0]?.id || null,
+    }
+  }
+
   const handleSubmit = (e) => {
     e.preventDefault()
     if (invForm.items.length === 0) return
@@ -207,60 +259,10 @@ export function AX_CreateInvoiceModal({
       }
     }
 
-    const sub = computeSubtotal()
-    const tot = computeTotal()
-    const partyName = invForm.partyName.trim()
-
-    let paidAmt = 0
-    if (paymentStatus === 'paid') paidAmt = tot
-    else if (paymentStatus === 'partial') paidAmt = Math.min(tot, Math.max(0, Number(paidInput) || 0))
-    const remAmt = Math.max(0, tot - paidAmt)
-
-    let paymentTerms = paymentStatus === 'paid' ? 'مدفوع كلي' : paymentStatus === 'partial' ? 'مدفوع جزئي' : 'غير مدفوع'
-    if (invForm.type === 'sale_return') paymentTerms = 'مردود مبيعات'
-    if (invForm.type === 'purchase_return') paymentTerms = 'مردود مشتريات'
-
-    const codePrefix = { sale_return: 'RET-SALE', purchase_return: 'RET-PUR', purchase: 'PUR' }[invForm.type] || 'INV'
-
-    const newInv = {
-      id: generateUUID(),
-      code: `${codePrefix}-${Date.now().toString().slice(-5)}`,
-      type: invForm.type,
-      partyType: partyKind,
-      partyKind,
-      partyName,
-      isIncompleteData: !isPartyInList(partyName),
-      date: invForm.date,
-      operationalDate: invForm.date,
-      transactionDate: invForm.date,
-      createdAt: new Date().toISOString(),
-      created_at: new Date().toISOString(),
-      warehouseId: invForm.warehouseId,
-      items: invForm.items.map((it) => {
-        const itemObj = items.find((i) => i.id === it.itemId)
-        const q = Number(it.quantity) || 0, p = Number(it.price) || 0
-        return {
-          itemId: it.itemId,
-          compositeName: getItemDisplayName(itemObj || it),
-          quantity: q,
-          unit: it.unit || itemObj?.unitType || 'كرتونة',
-          price: p,
-          total: q * p,
-        }
-      }),
-      transportCost: Number(invForm.transportCost) || 0,
-      loadingCost: Number(invForm.loadingCost) || 0,
-      subtotal: sub,
-      total: tot,
-      paidAmount: paidAmt,
-      remainingAmount: remAmt,
-      status: paymentStatus,
-      paymentTerms,
-      treasuryId: selectedTreasuryId || treasuryAccounts[0]?.id || null,
-    }
-
+    const newInv = buildInvoicePayload(false)
     onSave(newInv)
-    onClose()
+    setPreviewInvoice(newInv)
+    setIsPostSavePrint(true)
   }
 
   const isIncomplete = invForm.partyName && !isPartyInList(invForm.partyName)
@@ -446,6 +448,20 @@ export function AX_CreateInvoiceModal({
             إلغاء
           </button>
           <button
+            type="button"
+            disabled={invForm.items.length === 0}
+            onClick={() => {
+              const draft = buildInvoicePayload(true)
+              setPreviewInvoice(draft)
+              setIsPostSavePrint(false)
+            }}
+            className="px-4 py-2 rounded-full bg-surface-low border border-outline-variant/30 text-on-surface hover:bg-surface-container text-xs font-bold transition-all disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer flex items-center gap-1.5"
+            title="معاينة شكل الفاتورة قبل الحفظ"
+          >
+            <Printer className="w-3.5 h-3.5 text-primary" />
+            <span>معاينة الفاتورة</span>
+          </button>
+          <button
             type="submit"
             disabled={invForm.items.length === 0}
             className="px-6 py-2 rounded-full bg-primary text-white text-xs font-extrabold shadow-sm hover:bg-primary-dark transition-all disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
@@ -457,6 +473,17 @@ export function AX_CreateInvoiceModal({
 
       <AX_CustomerModal isOpen={showCustomerModal} onClose={() => setShowCustomerModal(false)} onSuccess={(c) => { setPartyKind('customer'); setInvForm((prev) => ({ ...prev, partyName: c.name })); setShowCustomerModal(false) }} />
       <AX_SupplierModal isOpen={showSupplierModal} onClose={() => setShowSupplierModal(false)} onSuccess={(s) => { setPartyKind('supplier'); setInvForm((prev) => ({ ...prev, partyName: s.companyName || s.name })); setShowSupplierModal(false) }} />
+      <AX_InvoicePrintModal
+        invoice={previewInvoice}
+        isOpen={Boolean(previewInvoice)}
+        onClose={() => {
+          setPreviewInvoice(null)
+          if (isPostSavePrint) {
+            setIsPostSavePrint(false)
+            onClose()
+          }
+        }}
+      />
     </div>
   )
 }

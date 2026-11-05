@@ -43,7 +43,10 @@ export function AX_CustomerBentoCard({
   }
 
   return (
-    <div className="bg-surface-lowest border border-outline-variant/30 rounded-2xl p-3.5 shadow-xs flex flex-col justify-between space-y-3 hover:border-primary/30 transition-all">
+    <div
+      onClick={handleOpenDetails}
+      className="bg-surface-lowest border border-outline-variant/30 rounded-2xl p-3.5 shadow-xs flex flex-col justify-between space-y-3 hover:border-primary/50 hover:shadow-sm transition-all cursor-pointer"
+    >
       <div className="flex items-start justify-between gap-2">
         <div className="flex items-center gap-2.5 min-w-0">
           {transformedPhoto ? (
@@ -60,12 +63,13 @@ export function AX_CustomerBentoCard({
               <Building className="w-4 h-4" />
             </div>
           )}
-          <div className="min-w-0 cursor-pointer" onClick={handleOpenDetails} title="عرض الملف التفصيلي 360°">
+          <div className="min-w-0" title="عرض الملف التفصيلي 360°">
             <h4 className="text-xs sm:text-sm font-black text-on-surface hover:text-primary transition-colors truncate">{customer.name}</h4>
             <div className="flex items-center gap-2 text-[11px] text-on-surface-variant font-medium">
               {customer.phone ? (
                 <a
                   href={`tel:${customer.phone}`}
+                  onClick={(e) => e.stopPropagation()}
                   className="flex items-center gap-0.5 font-mono text-primary hover:underline"
                 >
                   <Phone className="w-2.5 h-2.5" />
@@ -124,6 +128,7 @@ export function AX_CustomerBentoCard({
           {customer.phone && (
             <a
               href={`tel:${customer.phone}`}
+              onClick={(e) => e.stopPropagation()}
               className="p-1.5 rounded-full border border-outline-variant/40 hover:bg-primary/10 text-on-surface-variant hover:text-primary transition-all"
               title="اتصال هاتفياً"
             >
@@ -132,7 +137,10 @@ export function AX_CustomerBentoCard({
           )}
           <button
             type="button"
-            onClick={handleOpenDetails}
+            onClick={(e) => {
+              e.stopPropagation()
+              handleOpenDetails()
+            }}
             className="p-1.5 rounded-full border border-outline-variant/40 hover:bg-surface-container text-on-surface-variant hover:text-primary transition-all"
             title="الملف التفصيلي 360°"
           >
@@ -140,7 +148,10 @@ export function AX_CustomerBentoCard({
           </button>
           <button
             type="button"
-            onClick={() => onEditCustomer && onEditCustomer(customer)}
+            onClick={(e) => {
+              e.stopPropagation()
+              onEditCustomer && onEditCustomer(customer)
+            }}
             className="p-1.5 rounded-full border border-outline-variant/40 hover:bg-surface-container text-on-surface-variant hover:text-primary transition-all"
             title="تعديل بيانات العميل"
           >
@@ -148,7 +159,10 @@ export function AX_CustomerBentoCard({
           </button>
           <button
             type="button"
-            onClick={() => onDeleteCustomer && onDeleteCustomer(customer)}
+            onClick={(e) => {
+              e.stopPropagation()
+              onDeleteCustomer && onDeleteCustomer(customer)
+            }}
             className="p-1.5 rounded-full border border-outline-variant/40 hover:bg-red-50 text-on-surface-variant hover:text-red-700 transition-all"
             title="حذف العميل"
           >
