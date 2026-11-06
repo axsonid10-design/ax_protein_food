@@ -73,33 +73,41 @@ export function AX_StockAuditModal({
     setAuditRows((prev) =>
       prev.map((r) => {
         if (r.itemId !== itemId) return r
-        const num = val === '' ? '' : Number(val)
-        return { ...r, actualQty: num }
+        return { ...r, inputQty: val }
+      })
+    )
+  }
+
+  const handleUnitChange = (itemId, newUnit) => {
+    setAuditRows((prev) =>
+      prev.map((r) => {
+        if (r.itemId !== itemId) return r
+        return { ...r, auditUnit: newUnit }
       })
     )
   }
 
   const handleMarkItemZero = (itemId) => {
     setAuditRows((prev) =>
-      prev.map((r) => (r.itemId === itemId ? { ...r, actualQty: 0 } : r))
+      prev.map((r) => (r.itemId === itemId ? { ...r, inputQty: 0, actualQty: 0 } : r))
     )
   }
 
   const handleMarkItemMatched = (itemId) => {
     setAuditRows((prev) =>
-      prev.map((r) => (r.itemId === itemId ? { ...r, actualQty: r.systemQty } : r))
+      prev.map((r) => (r.itemId === itemId ? { ...r, auditUnit: r.baseUnit || r.unit, inputQty: r.systemQty, actualQty: r.systemQty } : r))
     )
   }
 
   const handleMarkCategoryMatched = (catName) => {
     setAuditRows((prev) =>
-      prev.map((r) => (r.category === catName ? { ...r, actualQty: r.systemQty } : r))
+      prev.map((r) => (r.category === catName ? { ...r, auditUnit: r.baseUnit || r.unit, inputQty: r.systemQty, actualQty: r.systemQty } : r))
     )
   }
 
   const handleMarkAllMatched = () => {
     setAuditRows((prev) =>
-      prev.map((r) => ({ ...r, actualQty: r.systemQty }))
+      prev.map((r) => ({ ...r, auditUnit: r.baseUnit || r.unit, inputQty: r.systemQty, actualQty: r.systemQty }))
     )
   }
 
@@ -401,6 +409,7 @@ export function AX_StockAuditModal({
                   category={catName}
                   items={catItems}
                   onActualQtyChange={handleActualQtyChange}
+                  onUnitChange={handleUnitChange}
                   onMarkCategoryMatched={handleMarkCategoryMatched}
                   onMarkItemZero={handleMarkItemZero}
                   onMarkItemMatched={handleMarkItemMatched}
