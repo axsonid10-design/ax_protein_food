@@ -366,6 +366,9 @@ export const AX_OperationsService = {
   addTransferInDB: async (newTrf) => {
     if (!supabase || typeof supabase.from !== 'function' || !newTrf?.id) return
     try {
+      const opDate = newTrf.operationalDate || newTrf.date || new Date().toISOString().split('T')[0]
+      const timePart = new Date().toISOString().split('T')[1] || '12:00:00.000Z'
+      const reqIso = `${opDate}T${timePart}`
       await supabase.from('ax_transfers').insert({
         id: newTrf.id,
         code: newTrf.code,
@@ -373,7 +376,8 @@ export const AX_OperationsService = {
         to_warehouse_id: newTrf.toId,
         items: newTrf.items,
         status: newTrf.status || 'pending',
-        requested_at: new Date().toISOString(),
+        date: opDate,
+        requested_at: reqIso,
         notes: newTrf.notes || null,
       })
       const trfTitle = `📦 إذن تحويل مخزني جديد [${newTrf.code}]`

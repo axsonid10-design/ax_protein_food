@@ -61,6 +61,12 @@ export function AX_TransferFormModal({ isOpen, onClose }) {
   const [showReviewModal, setShowReviewModal] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
 
+  useEffect(() => {
+    if (isOpen && !activeDraftId) {
+      setOperationalDate(new Date().toISOString().split('T')[0])
+    }
+  }, [isOpen, activeDraftId])
+
   const handleSelectDraft = (draft) => {
     const p = draft.payload || {}
     if (p.fromId && warehouses.some((w) => w.id === p.fromId)) {

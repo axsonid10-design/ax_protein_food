@@ -265,11 +265,22 @@ export function AX_StockAuditsHistoryModal({
                                     {itName}
                                   </td>
                                   <td className="px-2 text-center text-on-surface-variant text-[11px]">
-                                    {unit}
+                                    {item.auditUnit && item.auditUnit !== unit ? (
+                                      <span>
+                                        {item.auditUnit} <span className="text-[10px] text-primary font-bold">({unit})</span>
+                                      </span>
+                                    ) : (
+                                      unit
+                                    )}
                                   </td>
                                   <td className="px-3 text-center font-mono font-black">{sys}</td>
                                   <td className="px-3 text-center font-mono font-black text-primary">
                                     {act}
+                                    {item.inputQty !== undefined && String(item.inputQty) !== String(act) && (
+                                      <span className="block text-[10px] font-bold text-on-surface-variant">
+                                        (المدخل: {item.inputQty} {item.auditUnit})
+                                      </span>
+                                    )}
                                   </td>
                                   <td className="px-2 text-center font-mono font-black">
                                     <span

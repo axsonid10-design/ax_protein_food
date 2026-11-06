@@ -50,6 +50,8 @@ export async function executeImmediateTransfer(
 
   const nowIso = new Date().toISOString()
   const opDate = operationalDate || nowIso.split('T')[0]
+  const timePart = nowIso.split('T')[1] || '12:00:00.000Z'
+  const opDateTimeIso = `${opDate}T${timePart}`
   const trfCode = `TRF-${Date.now().toString().slice(-5)}`
   const trfId = generateUUID()
 
@@ -74,9 +76,9 @@ export async function executeImmediateTransfer(
     status: 'confirmed',
     date: opDate,
     operationalDate: opDate,
-    createdAt: nowIso,
-    requestedAt: nowIso,
-    confirmedAt: nowIso,
+    createdAt: opDateTimeIso,
+    requestedAt: opDateTimeIso,
+    confirmedAt: opDateTimeIso,
     confirmedBy: userName || 'مدير المنظومة',
     notes: (notes || '').trim(),
     isAuditDiscrepancy: discrepancy.isAuditDiscrepancy,
@@ -99,6 +101,7 @@ export async function executeImmediateTransfer(
         to_warehouse_id: toTargetId,
         items: validItems,
         status: 'confirmed',
+        date: opDate,
         requested_at: newTransfer.requestedAt,
         confirmed_at: newTransfer.confirmedAt,
         confirmed_by: newTransfer.confirmedBy,

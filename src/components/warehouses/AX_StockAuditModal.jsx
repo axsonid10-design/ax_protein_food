@@ -64,10 +64,16 @@ export function AX_StockAuditModal({
   const [auditRows, setAuditRows] = useState([])
 
   useEffect(() => {
+    if (isOpen && !activeDraftId) {
+      setAuditDate(new Date().toISOString().split('T')[0])
+    }
+  }, [isOpen, activeDraftId])
+
+  useEffect(() => {
     if (activeDraftId) return
     const initialRows = buildInitialAuditRows(items, inventoryStock, activeWhId)
     setAuditRows(initialRows)
-  }, [activeWhId, inventoryStock, items, activeDraftId])
+  }, [activeWhId, inventoryStock, items, activeDraftId, isOpen])
 
   const handleActualQtyChange = (itemId, val) => {
     setAuditRows((prev) =>

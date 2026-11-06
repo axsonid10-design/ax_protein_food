@@ -14,6 +14,7 @@ export function buildInitialAuditRows(items = [], inventoryStock = [], warehouse
     const sysQty = stockEntry ? stockEntry.quantity : 0
     const baseUnit = stockEntry?.unit || it.unitType || it.unit_type || 'كرتونة'
     const weightPerCarton = Number(it.weightPerCarton || it.weight_per_carton) || (baseUnit === 'كرتونة' ? 20 : 1)
+    const piecesPerCarton = Number(it.piecesPerCarton || it.pieces_per_carton) || 1
 
     return {
       itemId: it.id,
@@ -22,6 +23,7 @@ export function buildInitialAuditRows(items = [], inventoryStock = [], warehouse
       baseUnit,
       auditUnit: baseUnit,
       weightPerCarton,
+      piecesPerCarton,
       unit: baseUnit,
       costPrice: Number(it.buyPrice ?? it.buy_price) || 0,
       sellPrice: Number(it.sellPrice ?? it.sell_price) || 0,
@@ -43,6 +45,7 @@ export function calculateAuditStats(auditRows = []) {
     const baseUnit = r.baseUnit || r.unit || 'كرتونة'
     const auditUnit = r.auditUnit || baseUnit
     const weightPerCarton = Number(r.weightPerCarton) || 20
+    const piecesPerCarton = Number(r.piecesPerCarton) || 1
 
     const rawInput = r.inputQty !== undefined ? r.inputQty : r.actualQty
     const numInput = rawInput === '' ? 0 : Number(rawInput)
@@ -54,6 +57,16 @@ export function calculateAuditStats(auditRows = []) {
       actualInBase = weightPerCarton > 0 ? numInput / weightPerCarton : numInput
     } else if (baseUnit === 'كيلو' && auditUnit === 'كرتونة') {
       actualInBase = numInput * weightPerCarton
+    } else if (baseUnit === 'كرتونة' && auditUnit === 'قطعة') {
+      actualInBase = piecesPerCarton > 0 ? numInput / piecesPerCarton : numInput
+    } else if (baseUnit === 'قطعة' && auditUnit === 'كرتونة') {
+      actualInBase = numInput * piecesPerCarton
+    } else if (baseUnit === 'كيلو' && auditUnit === 'قطعة') {
+      const pieceWeight = weightPerCarton > 0 && piecesPerCarton > 0 ? weightPerCarton / piecesPerCarton : 1
+      actualInBase = numInput * pieceWeight
+    } else if (baseUnit === 'قطعة' && auditUnit === 'كيلو') {
+      const pieceWeight = weightPerCarton > 0 && piecesPerCarton > 0 ? weightPerCarton / piecesPerCarton : 1
+      actualInBase = pieceWeight > 0 ? numInput / pieceWeight : numInput
     }
 
     actualInBase = Math.round(actualInBase * 100) / 100
@@ -78,6 +91,7 @@ export function calculateAuditStats(auditRows = []) {
       baseUnit,
       auditUnit,
       weightPerCarton,
+      piecesPerCarton,
       actualQty: actualInBase,
       actualQtyNum: actualInBase,
       inputQty: rawInput,

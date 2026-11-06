@@ -110,6 +110,11 @@ export function AX_StockAuditCategoryGroup({
                               وزن الكرتونة: {r.weightPerCarton} كجم
                             </span>
                           )}
+                          {r.piecesPerCarton > 1 && (
+                            <span className="text-[10px] text-primary/80 block font-normal">
+                              الكرتونة: {r.piecesPerCarton} قطعة
+                            </span>
+                          )}
                         </div>
                       </td>
                       <td className="px-2 text-center whitespace-nowrap">
@@ -135,6 +140,17 @@ export function AX_StockAuditCategoryGroup({
                             }`}
                           >
                             كيلو
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => onUnitChange && onUnitChange(r.itemId, 'قطعة')}
+                            className={`px-1.5 py-0.5 rounded transition-all cursor-pointer ${
+                              currentAuditUnit === 'قطعة'
+                                ? 'bg-primary text-white font-black shadow-xs'
+                                : 'text-on-surface-variant hover:text-on-surface font-bold'
+                            }`}
+                          >
+                            قطعة
                           </button>
                         </div>
                       </td>
@@ -269,6 +285,17 @@ export function AX_StockAuditCategoryGroup({
                         }`}
                       >
                         كيلو
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => onUnitChange && onUnitChange(r.itemId, 'قطعة')}
+                        className={`px-1.5 py-0.5 rounded text-[10px] ${
+                          currentAuditUnit === 'قطعة'
+                            ? 'bg-primary text-white font-black'
+                            : 'text-on-surface-variant font-bold'
+                        }`}
+                      >
+                        قطعة
                       </button>
                     </div>
                   </div>
