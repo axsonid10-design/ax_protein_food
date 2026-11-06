@@ -12,12 +12,13 @@ import {
   Building2,
   BadgePercent,
   BarChart3,
+  Trash2,
 } from 'lucide-react'
 import { useAXStore } from '../../store/useAXStore'
 import { hasModuleAccess } from '../../utils/permissionsConfig'
 
 export function AX_MobileNavbar({ activeTab, onSelectTab }) {
-  const { profile, transfers, pendingCashTransfers } = useAXStore()
+  const { profile, transfers, pendingCashTransfers, recycleBin = [] } = useAXStore()
   const activeTabRef = useRef(null)
 
   const pendingStockCount = (transfers || []).filter((t) => t && t.status === 'pending').length
@@ -36,6 +37,7 @@ export function AX_MobileNavbar({ activeTab, onSelectTab }) {
     { id: 'sales_reps', label: 'المناديب', icon: BadgePercent, badge: 0 },
     { id: 'reports', label: 'التقارير', icon: BarChart3, badge: 0 },
     { id: 'staff', label: 'الموظفين', icon: Users, badge: 0 },
+    { id: 'recycle_bin', label: 'المحذوفات', icon: Trash2, badge: (recycleBin || []).length || 0 },
   ]
 
   const visibleTabs = allTabs.filter((tab) => hasModuleAccess(profile, tab.id))

@@ -441,14 +441,7 @@ export function AX_WarehousesInventory() {
         onClose={() => setInspectingTransfer(null)}
       />
 
-      <AX_StockAuditModal
-        isOpen={showAuditModal}
-        onClose={() => setShowAuditModal(false)}
-        warehouseId={selectedWarehouseId}
-        warehouses={warehouses}
-        items={items}
-        inventoryStock={inventoryStock}
-      />
+      <AX_StockAuditModal isOpen={showAuditModal} onClose={() => setShowAuditModal(false)} warehouseId={selectedWarehouseId} warehouses={warehouses} items={items} inventoryStock={inventoryStock} />
 
       <AX_ConfirmModal
         isOpen={Boolean(transferToCancel)}
@@ -467,6 +460,26 @@ export function AX_WarehousesInventory() {
       />
 
       <AX_StockAuditsHistoryModal isOpen={showAuditsHistoryModal} onClose={() => setShowAuditsHistoryModal(false)} audits={stockAudits} warehouses={warehouses} />
+
+      <AX_TransfersHistoryModal
+        isOpen={showTransfersHistoryModal}
+        onClose={() => setShowTransfersHistoryModal(false)}
+        transfers={transfers}
+        warehouses={warehouses}
+        getItem={(id) => items.find((i) => i.id === id)}
+      />
+
+      <AX_ItemMovementCardModal
+        isOpen={Boolean(selectedItemForCard)}
+        onClose={() => setSelectedItemForCard(null)}
+        item={selectedItemForCard}
+        warehouses={warehouses}
+        inventoryStock={inventoryStock}
+        purchaseInvoices={purchaseInvoices}
+        salesInvoices={salesInvoices}
+        transfers={transfers}
+        stockAudits={stockAudits}
+      />
     </div>
   )
 }

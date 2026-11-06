@@ -10,7 +10,11 @@ import {
   ChevronUp,
   Printer,
   Boxes,
+  RotateCcw,
 } from 'lucide-react'
+import { useAXStore } from '../../store/useAXStore'
+import { AX_ConfirmModal } from '../common/AX_ConfirmModal'
+import { axToast } from '../common/AX_Toast'
 
 export function AX_StockAuditsHistoryModal({
   isOpen,
@@ -18,9 +22,30 @@ export function AX_StockAuditsHistoryModal({
   audits = [],
   warehouses = [],
 }) {
+  const rollbackStockAudit = useAXStore((state) => state.rollbackStockAudit)
   const [selectedWhFilter, setSelectedWhFilter] = useState('ALL')
   const [searchQuery, setSearchQuery] = useState('')
   const [expandedAuditId, setExpandedAuditId] = useState(null)
+  const [auditToRollback, setAuditToRollback] = useState(null)
+  const [isRollingBack, setIsRollingBack] = useState(false)
+
+  const handleConfirmRollback = async () => {
+    if (!auditToRollback) return
+    try {
+      setIsRollingBack(true)
+      const res = await rollbackStockAudit(auditToRollback.id)
+      if (res?.success) {
+        axToast.success(`تم إلغاء محضر الجرد [${auditToRollback.code}] واسترجاع كميات الأصناف السابقة`)
+        setAuditToRollback(null)
+      } else {
+        axToast.error(res?.error || 'تعذر إلغاء المحضر')
+      }
+    } catch {
+      axToast.error('حدث خطأ أثناء إلغاء المحضر')
+    } finally {
+      setIsRollingBack(false)
+    }
+  }
 
   const filteredAudits = useMemo(() => {
     const q = searchQuery.trim().toLowerCase()
@@ -280,6 +305,26 @@ export function AX_StockAuditsHistoryModal({
                           </tbody>
                         </table>
                       </div>
+
+                      <div className="flex items-center justify-between pt-2 border-t border-surface-container">
+                        <div className="flex items-center gap-2">
+                          {audit.status === 'cancelled' ? (
+                            <span className="px-3 py-1 rounded-full bg-rose-500/10 text-rose-700 text-xs font-black border border-rose-500/20">
+                              تم إلغاء هذا المحضر واسترجاع أرصدته الدفترية
+                            </span>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => setAuditToRollback(audit)}
+                              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-rose-500/10 hover:bg-rose-500/20 text-rose-700 text-xs font-black border border-rose-500/20 transition-all cursor-pointer active:scale-95"
+                              title="إلغاء هذا المحضر واسترجاع كميات الأصناف الدفترية لما كانت عليه قبل الجرد"
+                            >
+                              <RotateCcw className="w-3.5 h-3.5" />
+                              <span>إلغاء المحضر واسترجاع الأرصدة الأصلية</span>
+                            </button>
+                          )}
+                        </div>
+                      </div>
                     </div>
                   )}
                 </div>
@@ -307,6 +352,17 @@ export function AX_StockAuditsHistoryModal({
           </button>
         </div>
       </div>
+
+      <AX_ConfirmModal
+        isOpen={Boolean(auditToRollback)}
+        title="تأكيد إلغاء محضر الجرد"
+        message={auditToRollback ? `هل أنت متأكد من إلغاء محضر الجرد "${auditToRollback.code}"؟ سيتم إلغاء التسويات وعكس كميات كافة أصناف المحضر فوراً لتعود لأرصدتها السابقة قبل الجرد.` : ''}
+        confirmText="نعم، إلغاء واسترجاع الأرصدة"
+        cancelText="تراجع"
+        isDestructive={true}
+        onConfirm={handleConfirmRollback}
+        onCancel={() => setAuditToRollback(null)}
+      />
     </div>
   )
 }

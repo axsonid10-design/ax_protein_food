@@ -1,5 +1,6 @@
 import { supabase } from './supabaseClient.js'
 import { generateUUID } from '../utils/AX_UUID.js'
+import { AX_RecycleBinService } from './AX_RecycleBinService.js'
 
 export const AX_InvoiceOperationsService = {
   addInvoiceInDB: async (inv, userProfile = null) => {
@@ -19,6 +20,8 @@ export const AX_InvoiceOperationsService = {
         party_type: inv.partyKind || inv.partyType || (dbType === 'sale' ? 'customer' : 'supplier'),
         party_id: inv.partyId || inv.party_id || null,
         warehouse_id: inv.warehouseId || inv.warehouse_id || null,
+        transport_cost: Number(inv.transportCost || inv.transport_cost || 0),
+        loading_cost: Number(inv.loadingCost || inv.loading_cost || 0),
         subtotal: Number(inv.subtotal || 0),
         tax: Number(inv.tax || 0),
         total: Number(inv.total || 0),
@@ -28,8 +31,9 @@ export const AX_InvoiceOperationsService = {
         date: inv.date || new Date().toISOString().split('T')[0],
         payment_terms: inv.paymentTerms || inv.payment_terms || defaultTerms,
         items: inv.items || [],
+        notes: inv.notes || '',
       }
-      const { error: invErr } = await supabase.from('ax_invoices').insert(invoiceRow)
+      const { error: invErr } = await supabase.from('ax_invoices').upsert(invoiceRow, { onConflict: 'id' })
       if (invErr) throw invErr
 
       if (inv.items && inv.items.length > 0 && invoiceRow.warehouse_id) {
@@ -155,6 +159,15 @@ export const AX_InvoiceOperationsService = {
           await supabase.from(targetTable).update({ balance: Number(party.balance || 0) + reversePartyDelta }).eq('id', party.id)
         }
       }
+
+      await AX_RecycleBinService.moveToRecycleBin({
+        entityType: 'invoice',
+        entityId: invId,
+        entityCode: inv.code,
+        entityTitle: `فاتورة ${inv.code || ''} - ${inv.partyName || inv.party_name || ''}`,
+        originalData: inv,
+        userProfile,
+      })
 
       await supabase.from('ax_invoices').delete().eq('id', invId)
       try { await supabase.from('ax_activity_logs').insert({ id: generateUUID(), table_name: 'ax_invoices', action: 'DELETE', record_id: invId, new_data: { id: invId, code: inv.code }, user_id: userProfile?.id || null }) } catch {}

@@ -18,12 +18,13 @@ import {
   Building2,
   BadgePercent,
   BarChart3,
+  Trash2,
 } from 'lucide-react'
 import { useAXStore } from '../../store/useAXStore'
 import { hasModuleAccess } from '../../utils/permissionsConfig'
 
 export function AX_Sidebar({ activeTab, onSelectTab, onOpenMasterControl }) {
-  const { profile, transfers, pendingCashTransfers } = useAXStore()
+  const { profile, transfers, pendingCashTransfers, recycleBin = [] } = useAXStore()
   const [isPinned, setIsPinned] = useState(true)
   const [isHovered, setIsHovered] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
@@ -74,6 +75,7 @@ export function AX_Sidebar({ activeTab, onSelectTab, onOpenMasterControl }) {
       title: 'الإدارة وفريق العمل',
       items: [
         { id: 'staff', label: 'الموظفين', icon: Users },
+        { id: 'recycle_bin', label: 'سجل المحذوفات', icon: Trash2, badge: (recycleBin || []).length || 0 },
       ],
     },
   ]

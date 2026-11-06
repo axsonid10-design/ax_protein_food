@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useMemo } from 'react'
 import {
   Boxes,
   Plus,
@@ -13,6 +13,7 @@ import {
   ChevronLeft,
   ChevronDown,
   Layers,
+  Activity,
 } from 'lucide-react'
 import { useAXStore } from '../../store/useAXStore'
 import { AX_CategorySelect } from './AX_CategorySelect'
@@ -22,6 +23,7 @@ import { axToast } from '../common/AX_Toast'
 import { AX_AddItemModal } from './AX_AddItemModal'
 import { AX_EditItemModal } from './AX_EditItemModal'
 import { AX_BulkAddItemsModal } from './AX_BulkAddItemsModal'
+import { AX_ItemMovementCardModal } from '../warehouses/AX_ItemMovementCardModal'
 import { getCategoryClass } from '../../utils/categoryColors'
 
 export function AX_ItemsCatalog() {
@@ -31,6 +33,10 @@ export function AX_ItemsCatalog() {
     subCategories = {},
     secondaryCategories = [],
     warehouses = [],
+    inventoryStock = [],
+    invoices = [],
+    transfers = [],
+    stockAudits = [],
     addItem,
     addMultipleItems,
     editItem,
@@ -51,11 +57,15 @@ export function AX_ItemsCatalog() {
   const [isSingleAddOpen, setIsSingleAddOpen] = useState(false)
   const [isBulkAddOpen, setIsBulkAddOpen] = useState(false)
   const [itemToEdit, setItemToEdit] = useState(null)
+  const [selectedItemForCard, setSelectedItemForCard] = useState(null)
   const [currentPage, setCurrentPage] = useState(1)
   const [itemToDelete, setItemToDelete] = useState(null)
   const [isDeleting, setIsDeleting] = useState(false)
   const [showCodeColumn, setShowCodeColumn] = useState(false)
   const PAGE_SIZE = 15
+
+  const purchaseInvoices = useMemo(() => (invoices || []).filter((i) => i.type === 'purchase' || i.type === 'purchase_return'), [invoices])
+  const salesInvoices = useMemo(() => (invoices || []).filter((i) => i.type === 'sale' || i.type === 'sale_return'), [invoices])
 
   const handleConfirmDelete = async () => {
     if (!itemToDelete) return
@@ -251,7 +261,13 @@ export function AX_ItemsCatalog() {
                       {item.code}
                     </button>
                   )}
-                  {item.compositeName}
+                  <span
+                    onClick={() => setSelectedItemForCard(item)}
+                    className="cursor-pointer hover:text-primary hover:underline transition-colors"
+                    title="انقر لعرض كارت حركة الصنف 360°"
+                  >
+                    {item.compositeName}
+                  </span>
                   <span className="text-[11px] font-normal text-on-surface-variant mr-1.5 font-mono">
                     ({item.weightPerCarton} كجم)
                   </span>
@@ -288,6 +304,14 @@ export function AX_ItemsCatalog() {
                 <td className="px-3.5 whitespace-nowrap font-mono font-black text-primary">{item.sellPrice} ج.م</td>
                 <td className="px-3.5 whitespace-nowrap text-center">
                   <div className="flex items-center justify-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => setSelectedItemForCard(item)}
+                      className="p-1 rounded-full text-primary hover:bg-primary/10 transition-colors cursor-pointer"
+                      title="عرض كارت حركة الصنف 360°"
+                    >
+                      <Activity className="w-3.5 h-3.5" />
+                    </button>
                     <button
                       type="button"
                       onClick={() => setItemToEdit(item)}
@@ -330,7 +354,13 @@ export function AX_ItemsCatalog() {
             <div className="flex items-start justify-between gap-2">
               <div>
                 <span className="font-mono text-xs font-bold text-primary">{item.code}</span>
-                <h3 className="font-black text-sm text-on-surface mt-0.5">{item.compositeName}</h3>
+                <h3
+                  onClick={() => setSelectedItemForCard(item)}
+                  className="font-black text-sm text-on-surface mt-0.5 cursor-pointer hover:text-primary transition-colors"
+                  title="انقر لعرض كارت حركة الصنف 360°"
+                >
+                  {item.compositeName}
+                </h3>
                 <span className="text-[11px] text-on-surface-variant font-bold block mt-0.5">
                   {item.subCategory}
                   {item.secondaryCategory ? ` • ${item.secondaryCategory}` : ''}
@@ -358,6 +388,14 @@ export function AX_ItemsCatalog() {
                 {item.unitType} ({item.weightPerCarton} كجم)
               </span>
               <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => setSelectedItemForCard(item)}
+                  className="p-1 rounded-full text-primary hover:bg-primary/10 cursor-pointer"
+                  title="عرض كارت حركة الصنف 360°"
+                >
+                  <Activity className="w-4 h-4" />
+                </button>
                 <button
                   type="button"
                   onClick={() => setItemToEdit(item)}
@@ -422,16 +460,24 @@ export function AX_ItemsCatalog() {
       <AX_ConfirmModal
         isOpen={Boolean(itemToDelete)}
         title="تأكيد حذف الصنف"
-        message={
-          itemToDelete
-            ? `هل أنت متأكد من حذف الصنف "${itemToDelete.compositeName}" (${itemToDelete.code})؟ سيتم مسح بيانات الصنف وأرصدته المخزنية نهائياً.`
-            : ''
-        }
+        message={itemToDelete ? `هل أنت متأكد من حذف الصنف "${itemToDelete.compositeName}" (${itemToDelete.code})؟ سيتم نقل الصنف لسجل المحذوفات.` : ''}
         confirmText={isDeleting ? 'جاري الحذف...' : 'نعم، حذف الصنف'}
         cancelText="إلغاء"
         isDestructive={true}
         onConfirm={handleConfirmDelete}
         onCancel={() => !isDeleting && setItemToDelete(null)}
+      />
+
+      <AX_ItemMovementCardModal
+        isOpen={Boolean(selectedItemForCard)}
+        onClose={() => setSelectedItemForCard(null)}
+        item={selectedItemForCard}
+        warehouses={warehouses}
+        inventoryStock={inventoryStock}
+        purchaseInvoices={purchaseInvoices}
+        salesInvoices={salesInvoices}
+        transfers={transfers}
+        stockAudits={stockAudits}
       />
 
       <button

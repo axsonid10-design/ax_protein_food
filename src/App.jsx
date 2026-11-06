@@ -30,6 +30,7 @@ import { AX_SuppliersManager } from './components/suppliers/AX_SuppliersManager'
 import { AX_SalesRepsManager } from './components/sales_reps/AX_SalesRepsManager'
 import { AX_ReportsManager } from './components/reports/AX_ReportsManager'
 import { AX_StaffManager } from './components/staff/AX_StaffManager'
+import { AX_RecycleBin } from './components/recycle/AX_RecycleBin'
 import { AX_StaffOnboardingScreen } from './components/staff/AX_StaffOnboardingScreen'
 import { AX_LoginScreen } from './components/auth/AX_LoginScreen'
 import { AX_BackNavigation } from './utils/AX_BackNavigation'
@@ -257,6 +258,7 @@ export default function App() {
               {activeTab === 'sales_reps' && hasModuleAccess(profile, 'sales_reps') && <AX_SalesRepsManager />}
               {activeTab === 'reports' && hasModuleAccess(profile, 'reports') && <AX_ReportsManager />}
               {activeTab === 'staff' && hasModuleAccess(profile, 'staff') && <AX_StaffManager />}
+              {activeTab === 'recycle_bin' && hasModuleAccess(profile, 'recycle_bin') && <AX_RecycleBin />}
             </AX_ErrorBoundary>
           </div>
 

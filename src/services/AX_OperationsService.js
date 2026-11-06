@@ -434,35 +434,46 @@ export const AX_OperationsService = {
           created_at: session.createdAt || session.created_at || new Date().toISOString(),
         }, { onConflict: 'id' })
       }
-
       for (const adj of adjustedStocks) {
         const whId = adj.warehouseId || adj.warehouse_id
         const itId = adj.itemId || adj.item_id
         const qty = Number(adj.actualQty !== undefined ? adj.actualQty : adj.quantity) || 0
-        const unit = adj.unit || 'كرتونة'
         if (whId && itId) {
-          await supabase.from('ax_inventory_stock').upsert({
-            warehouse_id: whId,
-            item_id: itId,
-            quantity: qty,
-            unit,
-            updated_at: new Date().toISOString(),
-          }, { onConflict: 'warehouse_id,item_id' })
+          await supabase.from('ax_inventory_stock').upsert({ warehouse_id: whId, item_id: itId, quantity: qty, unit: adj.unit || 'كرتونة', updated_at: new Date().toISOString() }, { onConflict: 'warehouse_id,item_id' })
         }
       }
-
       try {
-        await supabase.from('ax_activity_logs').insert({
-          id: generateUUID(),
-          table_name: 'ax_stock_audits',
-          action: 'CONFIRM_AUDIT',
-          record_id: session?.id,
-          new_data: { code: session?.code, warehouseId: session?.warehouseId },
-          user_id: userProfile?.id || null,
-        })
+        await supabase.from('ax_activity_logs').insert({ id: generateUUID(), table_name: 'ax_stock_audits', action: 'CONFIRM_AUDIT', record_id: session?.id, new_data: { code: session?.code, warehouseId: session?.warehouseId }, user_id: userProfile?.id || null })
       } catch {}
     } catch (err) {
       console.error('applyStockAuditInDB error:', err)
+    }
+  },
+  rollbackStockAuditInDB: async (auditId, userProfile = null, auditFallback = null) => {
+    if (!auditId) return { success: false }
+    try {
+      let audit = auditFallback
+      if (supabase && typeof supabase.from === 'function') {
+        const { data } = await supabase.from('ax_stock_audits').select('*').eq('id', auditId).maybeSingle()
+        if (data) audit = data
+      }
+      if (!audit) audit = { id: auditId, warehouse_id: 'wh-1', items: [] }
+      const whId = audit.warehouse_id || audit.warehouseId
+      for (const it of (audit.items || [])) {
+        const itemId = it.itemId || it.item_id
+        const prevQty = Number(it.systemQty !== undefined ? it.systemQty : it.previousQty) || 0
+        if (whId && itemId) {
+          await supabase.from('ax_inventory_stock').upsert({ warehouse_id: whId, item_id: itemId, quantity: prevQty, unit: it.unit || 'كرتونة', updated_at: new Date().toISOString() }, { onConflict: 'warehouse_id,item_id' })
+        }
+      }
+      await supabase.from('ax_stock_audits').update({ status: 'cancelled' }).eq('id', auditId)
+      try {
+        await supabase.from('ax_activity_logs').insert({ id: generateUUID(), table_name: 'ax_stock_audits', action: 'ROLLBACK_AUDIT', record_id: auditId, new_data: { code: audit.code, warehouse_id: whId }, user_id: userProfile?.id || null })
+      } catch {}
+      return { success: true, warehouseId: whId, items: audit.items || [] }
+    } catch (err) {
+      console.error('rollbackStockAuditInDB error:', err)
+      return { success: false, error: err.message }
     }
   },
   recoverUnappliedTransfers,

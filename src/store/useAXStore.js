@@ -8,6 +8,7 @@ import { AX_DatabaseSync } from '../services/AX_DatabaseSync.js'
 import { offlineDB } from '../services/offlineDB.js'
 import { generateUUID } from '../utils/AX_UUID.js'
 import { categoryHelpers } from './categoryHelpers.js'
+import { recycleBinHelpers } from './recycleBinHelpers.js'
 import { expenseCategoryHelpers, initialExpenseCategories } from './expenseCategoryHelpers.js'
 import { updateLocalCachePayload, processInvoiceStoreState, saveSalesRepState, updateSalesRepState, deleteSalesRepState, updateInvoiceStoreState, deleteInvoiceStoreState } from './storeCacheHelper.js'
 import { checkTransferAuditDiscrepancy, calculateTransferStockMovement } from './transferAuditHelpers.js'
@@ -78,7 +79,7 @@ export const useAXStore = create((set, get) => ({
       pendingCashTransfers: c?.pendingCashTransfers || initialPendingCashTransfers, manufacturingOrders: c?.manufacturingOrders || initialManufacturingOrders,
       invoices: c?.invoices || initialInvoices, clients: c?.clients || initialClients, suppliers: c?.suppliers || initialSuppliers,
       salesReps: c?.salesReps || initialSalesReps, salesRepLedger: c?.salesRepLedger || initialSalesRepLedger,
-      notifications: c?.notifications || initialNotifications,
+      notifications: c?.notifications || initialNotifications, recycleBin: c?.recycleBin || [],
     }
   })(),
 
@@ -205,10 +206,12 @@ export const useAXStore = create((set, get) => ({
   },
 
   deleteItem: (id) => {
+    const it = (get().items || []).find((i) => i.id === id)
     AX_OperationsService.deleteItemInDB(id, get().profile)
     set((state) => ({
       items: state.items.filter((i) => i.id !== id),
       inventoryStock: state.inventoryStock.filter((s) => s.itemId !== id),
+      recycleBin: it ? [{ id: generateUUID(), entityType: 'item', entityId: id, entityCode: it.code, entityTitle: `صنف: ${it.compositeName || it.code}`, originalData: it, deletedAt: new Date().toISOString() }, ...(state.recycleBin || [])] : state.recycleBin,
     }))
   },
 
@@ -479,7 +482,10 @@ export const useAXStore = create((set, get) => ({
 
   addInvoice: (inv) => { AX_OperationsService.addInvoiceInDB(inv, get().profile); set((state) => processInvoiceStoreState(state, inv)) },
   updateInvoice: (id, updates) => { const oldInv = (get().invoices || []).find((i) => i.id === id); if (oldInv) AX_OperationsService.updateInvoiceInDB(oldInv, { ...oldInv, ...updates, id }, get().profile); set((state) => updateInvoiceStoreState(state, id, updates)) },
-  deleteInvoice: (id) => { const inv = (get().invoices || []).find((i) => i.id === id); if (inv) AX_OperationsService.deleteInvoiceInDB(inv, get().profile); set((state) => deleteInvoiceStoreState(state, id)) },
+  deleteInvoice: (id) => { const inv = (get().invoices || []).find((i) => i.id === id); if (inv) AX_OperationsService.deleteInvoiceInDB(inv, get().profile); set((state) => { const next = deleteInvoiceStoreState(state, id); return { ...next, recycleBin: inv ? [{ id: generateUUID(), entityType: 'invoice', entityId: id, entityCode: inv.code, entityTitle: `فاتورة ${inv.code || ''} - ${inv.partyName || ''}`, originalData: inv, deletedAt: new Date().toISOString() }, ...(state.recycleBin || [])] : state.recycleBin } }) },
+  restoreFromRecycleBin: (id) => recycleBinHelpers.restoreItem(get(), id, get().profile, set),
+  purgeFromRecycleBin: (id) => recycleBinHelpers.purgeItem(id, set),
+  rollbackStockAudit: (auditId) => recycleBinHelpers.rollbackAudit(auditId, get().profile, set, get()),
 
   addEmployee: (emp) => { AX_StaffOperationsService.upsertEmployeeInDB(emp); set((state) => { const updated = [emp, ...state.employees.filter((e) => e.id !== emp.id)]; try { localStorage.setItem('ax_staff_employees', JSON.stringify(updated)) } catch {}; return { employees: updated } }) },
   updateEmployee: (id, updates) => { const cur = get().employees.find((e) => e.id === id); if (cur) AX_StaffOperationsService.upsertEmployeeInDB({ ...cur, ...updates }); set((state) => { const updated = state.employees.map((e) => (e.id === id ? { ...e, ...updates } : e)); try { localStorage.setItem('ax_staff_employees', JSON.stringify(updated)) } catch {}; return { employees: updated } }) },

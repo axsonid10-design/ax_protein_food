@@ -1,5 +1,6 @@
 import { supabase } from './supabaseClient.js'
 import { generateUUID } from '../utils/AX_UUID.js'
+import { AX_RecycleBinService } from './AX_RecycleBinService.js'
 
 export const AX_ItemOperationsService = {
   addItemInDB: async (item, openingStock = null, userProfile = null) => {
@@ -160,6 +161,17 @@ export const AX_ItemOperationsService = {
   deleteItemInDB: async (itemId, userProfile = null) => {
     if (!supabase || typeof supabase.from !== 'function' || !itemId) return { success: false }
     try {
+      const { data: itemData } = await supabase.from('ax_items').select('*').eq('id', itemId).maybeSingle()
+      if (itemData) {
+        await AX_RecycleBinService.moveToRecycleBin({
+          entityType: 'item',
+          entityId: itemId,
+          entityCode: itemData.code,
+          entityTitle: `صنف: ${itemData.composite_name || itemData.code || itemId}`,
+          originalData: itemData,
+          userProfile,
+        })
+      }
       try { await supabase.from('ax_inventory_stock').delete().eq('item_id', itemId) } catch {}
       const { error } = await supabase.from('ax_items').delete().eq('id', itemId)
       if (error) throw error

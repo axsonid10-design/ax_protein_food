@@ -21,13 +21,24 @@ export const supabase = isConfigured
     })
   : {
       isMock: true,
-      from: () => ({
-        select: async () => ({ data: [], error: null }),
-        insert: async () => ({ data: null, error: null }),
-        update: async () => ({ data: null, error: null }),
-        delete: async () => ({ data: null, error: null }),
-        upsert: async () => ({ data: null, error: null }),
-      }),
+      from: () => {
+        const query = {
+          select: () => query,
+          insert: async () => ({ data: null, error: null }),
+          update: () => query,
+          delete: () => query,
+          upsert: async () => ({ data: null, error: null }),
+          eq: () => query,
+          neq: () => query,
+          ilike: () => query,
+          order: () => query,
+          limit: () => query,
+          maybeSingle: async () => ({ data: null, error: null }),
+          single: async () => ({ data: null, error: null }),
+          then: (resolve) => resolve({ data: [], error: null }),
+        }
+        return query
+      },
       auth: {
         getUser: async () => ({ data: { user: null }, error: null }),
         getSession: async () => ({ data: { session: null }, error: null }),

@@ -364,8 +364,8 @@ export function hasModulePermission(user, moduleId, action = 'view') {
 export function hasModuleAccess(user, moduleId) {
   if (!user) return false
   if (isMasterUser(user)) return true
-  if (moduleId === 'staff') {
-    return isMasterUser(user) || user.role === 'super_admin'
+  if (moduleId === 'staff' || moduleId === 'recycle_bin') {
+    return isMasterUser(user) || user.role === 'super_admin' || user.role === 'admin'
   }
   if (user.role === 'admin') return true
   const perms = Array.isArray(user.permissions) ? normalizePermissions(user.permissions) : (user.permissions || {})

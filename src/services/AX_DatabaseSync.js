@@ -30,6 +30,7 @@ export const AX_DatabaseSync = {
         { data: mfgOrders },
         { data: usersProfiles },
         { data: staffInvites },
+        { data: recycleBin },
       ] = await Promise.all([
         supabase.from('ax_items').select('*'),
         supabase.from('ax_warehouses').select('*'),
@@ -48,6 +49,7 @@ export const AX_DatabaseSync = {
         supabase.from('ax_manufacturing_orders').select('*').order('date', { ascending: false }),
         supabase.from('ax_users_profiles').select('*'),
         supabase.from('ax_staff_invites').select('*').order('created_at', { ascending: false }),
+        supabase.from('ax_recycle_bin').select('*').order('deleted_at', { ascending: false }),
       ])
 
       const payload = {}
@@ -307,6 +309,20 @@ export const AX_DatabaseSync = {
           operator: o.operator || '',
           notes: o.notes || '',
           createdAt: o.created_at,
+        }))
+      }
+
+      if (Array.isArray(recycleBin)) {
+        payload.recycleBin = recycleBin.map((r) => ({
+          id: r.id,
+          entityType: r.entity_type,
+          entityId: r.entity_id,
+          entityCode: r.entity_code,
+          entityTitle: r.entity_title,
+          deletedBy: r.deleted_by,
+          deletedAt: r.deleted_at,
+          originalData: r.original_data,
+          metadata: r.metadata || {},
         }))
       }
 
