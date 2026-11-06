@@ -10,6 +10,9 @@ import { AX_TransferFormModal } from './AX_TransferFormModal'
 import { AX_AddWarehouseModal } from './AX_AddWarehouseModal'
 import { AX_EditWarehouseModal } from './AX_EditWarehouseModal'
 import { AX_StockAuditModal } from './AX_StockAuditModal'
+import { AX_StockAuditsHistoryModal } from './AX_StockAuditsHistoryModal'
+import { AX_TransfersHistoryModal } from './AX_TransfersHistoryModal'
+import { AX_ItemMovementCardModal } from './AX_ItemMovementCardModal'
 import { AX_ConfirmModal } from '../common/AX_ConfirmModal'
 
 export function AX_WarehousesInventory() {
@@ -17,10 +20,16 @@ export function AX_WarehousesInventory() {
   const items = useAXStore((state) => state.items) || []
   const inventoryStock = useAXStore((state) => state.inventoryStock) || []
   const transfers = useAXStore((state) => state.transfers) || []
+  const stockAudits = useAXStore((state) => state.stockAudits) || []
+  const purchaseInvoices = useAXStore((state) => state.purchaseInvoices) || []
+  const salesInvoices = useAXStore((state) => state.salesInvoices) || []
   const cancelTransfer = useAXStore((state) => state.cancelTransfer)
   const deleteWarehouse = useAXStore((state) => state.deleteWarehouse)
 
   const [selectedWarehouseId, setSelectedWarehouseId] = useState(warehouses[0]?.id || '')
+  const [showAuditsHistoryModal, setShowAuditsHistoryModal] = useState(false)
+  const [showTransfersHistoryModal, setShowTransfersHistoryModal] = useState(false)
+  const [selectedItemForCard, setSelectedItemForCard] = useState(null)
   const [selectedPrimaryCategory, setSelectedPrimaryCategory] = useState('الكل')
   const [searchTerm, setSearchTerm] = useState('')
 
@@ -100,11 +109,31 @@ export function AX_WarehousesInventory() {
         <div className="flex items-center gap-2">
           <button
             type="button"
+            onClick={() => setShowAuditsHistoryModal(true)}
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-full bg-surface-lowest border border-outline-variant/40 hover:bg-surface-low text-on-surface text-xs font-black shadow-sm transition-all active:scale-95 cursor-pointer"
+            title="عرض أرشيف وسجل محاضر الجرد السابقة"
+          >
+            <ClipboardCheck className="w-3.5 h-3.5 text-secondary" />
+            <span>سجل محاضر الجرد</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setShowTransfersHistoryModal(true)}
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-full bg-surface-lowest border border-outline-variant/40 hover:bg-surface-low text-on-surface text-xs font-black shadow-sm transition-all active:scale-95 cursor-pointer"
+            title="عرض أرشيف وتاريخ كافة التحويلات المخزنية"
+          >
+            <ArrowLeftRight className="w-3.5 h-3.5 text-amber-600" />
+            <span>أرشيف التحويلات</span>
+          </button>
+
+          <button
+            type="button"
             onClick={() => setShowAuditModal(true)}
-            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-surface-lowest border border-outline-variant/40 hover:bg-surface-low text-on-surface text-xs font-black shadow-sm transition-all active:scale-95 cursor-pointer"
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-full bg-surface-lowest border border-outline-variant/40 hover:bg-surface-low text-on-surface text-xs font-black shadow-sm transition-all active:scale-95 cursor-pointer"
           >
             <ClipboardCheck className="w-3.5 h-3.5 text-primary" />
-            <span>جرد المخزن وتسوية الأرصدة</span>
+            <span>بدء جرد مخزني</span>
           </button>
 
           <button
@@ -323,7 +352,9 @@ export function AX_WarehousesInventory() {
                     return (
                       <div
                         key={idx}
-                        className="bg-surface-lowest border border-outline-variant/30 rounded-2xl p-3 shadow-sm flex flex-col justify-between gap-2"
+                        onClick={() => setSelectedItemForCard(it)}
+                        className="bg-surface-lowest border border-outline-variant/30 rounded-2xl p-3 shadow-sm flex flex-col justify-between gap-2 cursor-pointer hover:border-primary/50 hover:bg-surface-low/50 transition-all group"
+                        title="انقر لعرض كارت حركة الصنف 360°"
                       >
                         <div>
                           <span className="text-xs font-black text-on-surface block">
@@ -434,6 +465,8 @@ export function AX_WarehousesInventory() {
         }}
         onCancel={() => setTransferToCancel(null)}
       />
+
+      <AX_StockAuditsHistoryModal isOpen={showAuditsHistoryModal} onClose={() => setShowAuditsHistoryModal(false)} audits={stockAudits} warehouses={warehouses} />
     </div>
   )
 }
