@@ -47,6 +47,10 @@ export function AX_TreasuryTransactionsTable({
                       <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-700 border border-emerald-500/20">
                         <ArrowDownLeft className="w-3 h-3" /> وارد قبض
                       </span>
+                    ) : (tx.type === 'other_income' || tx.type === 'misc_revenue') ? (
+                      <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-teal-500/10 text-teal-700 border border-teal-500/20">
+                        <ArrowDownLeft className="w-3 h-3" /> إيرادات متنوعة
+                      </span>
                     ) : isExpense ? (
                       <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-amber-500/10 text-amber-700 border border-amber-500/20">
                         <ArrowUpRight className="w-3 h-3" /> صادر مصروف
@@ -110,7 +114,7 @@ export function AX_TreasuryTransactionsTable({
                     {tx.partyName || (tx.expenseMainCategoryName ? `[${[tx.expenseMainCategoryName, tx.expenseSubCategoryName, tx.expenseSecondaryCategoryName].filter(Boolean).join(' / ')}]` : '-')}
                   </span>
                   <span className="text-[10px] text-on-surface-variant">
-                    {tx.type === 'client_receipt' ? 'وارد قبض' : isExpense ? 'مصروف' : isPayroll ? 'أجور' : 'سداد مورد'}
+                    {tx.type === 'client_receipt' ? 'وارد قبض' : (tx.type === 'other_income' || tx.type === 'misc_revenue') ? 'إيرادات متنوعة' : isExpense ? 'مصروف' : isPayroll ? 'أجور' : 'سداد مورد'}
                   </span>
                 </div>
                 <span className="font-mono font-black text-sm text-primary">

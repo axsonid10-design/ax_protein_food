@@ -20,6 +20,8 @@ export const getLatestConfirmedAudit = (warehouseId, stockAudits = []) => {
   }, targetAudits[0])
 }
 
+const isDateOnlyString = (val) => typeof val === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(val)
+
 export const checkTransferAuditDiscrepancy = (transfer, stockAudits = [], warehouses = []) => {
   if (!transfer) {
     return { isAuditDiscrepancy: false, isFromBackdated: false, isToBackdated: false, auditDiscrepancyNote: '' }
@@ -29,10 +31,23 @@ export const checkTransferAuditDiscrepancy = (transfer, stockAudits = [], wareho
   const toWarehouseId = transfer.toId || transfer.toWarehouseId
 
   const trfDateRaw = transfer.operationalDate || transfer.transactionDate || transfer.date || transfer.requestedAt || transfer.createdAt || transfer.created_at
-  const trfDate = parseDate(trfDateRaw)
+  let trfDate = parseDate(trfDateRaw)
 
   if (!trfDate) {
     return { isAuditDiscrepancy: false, isFromBackdated: false, isToBackdated: false, auditDiscrepancyNote: '' }
+  }
+
+  let isDateOnly = isDateOnlyString(transfer.operationalDate) || isDateOnlyString(transfer.date)
+
+  if (isDateOnly) {
+    const creationTime = transfer.requestedAt || transfer.createdAt || transfer.created_at || transfer.confirmedAt || transfer.confirmed_at
+    if (creationTime) {
+      const parsedCreation = parseDate(creationTime)
+      if (parsedCreation && formatDateOnly(parsedCreation) === formatDateOnly(trfDate)) {
+        trfDate = parsedCreation
+        isDateOnly = false
+      }
+    }
   }
 
   const trfDateStr = formatDateOnly(trfDate)
@@ -44,10 +59,18 @@ export const checkTransferAuditDiscrepancy = (transfer, stockAudits = [], wareho
   let isToBackdated = false
   const notes = []
 
+  const compareIsBackdated = (trfDt, auditDt, dateOnlyMode) => {
+    if (!auditDt) return false
+    if (dateOnlyMode) {
+      return formatDateOnly(trfDt) < formatDateOnly(auditDt)
+    }
+    return trfDt.getTime() < auditDt.getTime()
+  }
+
   if (fromAudit) {
     const fromAuditDateRaw = fromAudit.operationalDate || fromAudit.auditDate || fromAudit.date || fromAudit.createdAt || fromAudit.created_at
     const fromAuditDate = parseDate(fromAuditDateRaw)
-    if (fromAuditDate && trfDate.getTime() < fromAuditDate.getTime()) {
+    if (fromAuditDate && compareIsBackdated(trfDate, fromAuditDate, isDateOnly)) {
       isFromBackdated = true
       const fromWh = warehouses.find((w) => w.id === fromWarehouseId)
       const whName = fromWh?.name || fromAudit.warehouseName || 'مخزن الإرسال'
@@ -59,7 +82,7 @@ export const checkTransferAuditDiscrepancy = (transfer, stockAudits = [], wareho
   if (toAudit) {
     const toAuditDateRaw = toAudit.operationalDate || toAudit.auditDate || toAudit.date || toAudit.createdAt || toAudit.created_at
     const toAuditDate = parseDate(toAuditDateRaw)
-    if (toAuditDate && trfDate.getTime() < toAuditDate.getTime()) {
+    if (toAuditDate && compareIsBackdated(trfDate, toAuditDate, isDateOnly)) {
       isToBackdated = true
       const toWh = warehouses.find((w) => w.id === toWarehouseId)
       const whName = toWh?.name || toAudit.warehouseName || 'مخزن الاستلام'
@@ -94,31 +117,36 @@ export const calculateTransferStockMovement = (transfer, currentStock = [], stoc
     ? transfer.items
     : [{ itemId: transfer.itemId, quantity: transfer.quantity, unit: transfer.unit }]
 
+  const isConfirmed = transfer.status === 'confirmed' || transfer.isConfirmed || transfer.forceCredit || transfer.isImmediate
+  const shouldCreditDestination = !isToBackdated || isConfirmed
+
   transferItems.forEach((item) => {
-    if (!item?.itemId || !item?.quantity) return
+    if (!item?.itemId || item?.quantity === undefined || item?.quantity === null) return
+    const qty = Number(item.quantity) || 0
+    if (qty <= 0) return
 
     if (!isFromBackdated && fromTargetId) {
       const fromIndex = updatedStock.findIndex((s) => s.warehouseId === fromTargetId && s.itemId === item.itemId)
       if (fromIndex >= 0) {
         updatedStock[fromIndex] = {
           ...updatedStock[fromIndex],
-          quantity: Math.max(0, updatedStock[fromIndex].quantity - item.quantity)
+          quantity: Math.max(0, (Number(updatedStock[fromIndex].quantity) || 0) - qty)
         }
       }
     }
 
-    if (!isToBackdated && toTargetId) {
+    if (shouldCreditDestination && toTargetId) {
       const toIndex = updatedStock.findIndex((s) => s.warehouseId === toTargetId && s.itemId === item.itemId)
       if (toIndex >= 0) {
         updatedStock[toIndex] = {
           ...updatedStock[toIndex],
-          quantity: updatedStock[toIndex].quantity + item.quantity
+          quantity: (Number(updatedStock[toIndex].quantity) || 0) + qty
         }
       } else {
         updatedStock.push({
           warehouseId: toTargetId,
           itemId: item.itemId,
-          quantity: item.quantity,
+          quantity: qty,
           unit: item.unit || 'كرتونة'
         })
       }

@@ -5,6 +5,7 @@ import { AX_StaffOperationsService } from './AX_StaffOperationsService.js'
 import { AX_CategoryOperationsService } from './AX_CategoryOperationsService.js'
 import { AX_ItemOperationsService } from './AX_ItemOperationsService.js'
 import { AX_InvoiceOperationsService } from './AX_InvoiceOperationsService.js'
+import { recoverUnappliedTransfers, executeImmediateTransfer } from '../store/transferHelpers.js'
 
 export const AX_OperationsService = {
   ...AX_StaffOperationsService,
@@ -39,7 +40,8 @@ export const AX_OperationsService = {
       if (txRow.treasury_id && txRow.amount > 0) {
         const { data: tr } = await supabase.from('ax_treasuries').select('*').eq('id', txRow.treasury_id).maybeSingle()
         if (tr) {
-          const delta = txRow.type === 'client_receipt' ? txRow.amount : -txRow.amount
+          const isCashIn = txRow.type === 'client_receipt' || txRow.type === 'other_income' || txRow.type === 'misc_revenue'
+          const delta = isCashIn ? txRow.amount : -txRow.amount
           await supabase.from('ax_treasuries').update({ balance: Number(tr.balance || 0) + delta }).eq('id', tr.id)
         }
       }
@@ -48,7 +50,7 @@ export const AX_OperationsService = {
         const targetTable = dbType === 'client_receipt' ? 'ax_clients' : 'ax_suppliers'
         const { data: party } = await supabase.from(targetTable).select('*').eq('name', txRow.party_name).maybeSingle()
         if (party) {
-          const newBal = Math.max(0, Number(party.balance || 0) - txRow.amount)
+          const newBal = Number(party.balance || 0) - txRow.amount
           await supabase.from(targetTable).update({ balance: newBal }).eq('id', party.id)
         }
       }
@@ -395,4 +397,6 @@ export const AX_OperationsService = {
       })
     } catch {}
   },
+  recoverUnappliedTransfers,
+  executeImmediateTransfer,
 }

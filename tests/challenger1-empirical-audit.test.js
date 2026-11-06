@@ -277,7 +277,7 @@ describe('Challenger 1 Empirical Stress Tests: R1, R4, R2', () => {
       assert.equal(res.overpaymentAmount, 0)
     })
 
-    it('R2.4 [CRITICAL ADVERSARIAL STRESS TEST]: Cash transaction type compatibility in AX_SupplierDetailsModal', () => {
+    it('R2.4: Cash transaction type compatibility in AX_SupplierDetailsModal', () => {
       const modalFile = path.resolve(process.cwd(), 'src/components/suppliers/AX_SupplierDetailsModal.jsx')
       const modalCode = fs.readFileSync(modalFile, 'utf-8')
 
@@ -289,9 +289,7 @@ describe('Challenger 1 Empirical Stress Tests: R1, R4, R2', () => {
 
       assert.ok(treasuryCode.includes("type === 'supplier_payment'"), 'Treasury modal must support supplier_payment')
       assert.ok(cacheHelperCode.includes("'supplier_payment'"), 'Store cache helper must record supplier_payment')
-
-      const payoutsFilterRegex = /tx\.type === 'payment' \|\| tx\.type === 'cash_out'/
-      const hasSupplierPaymentInPayouts = modalCode.includes("tx.type === 'supplier_payment'")
+      assert.ok(modalCode.includes("tx.type === 'supplier_payment'"), 'AX_SupplierDetailsModal must include supplier_payment in payouts')
 
       const supplier = { id: 'sup-audit-1', name: 'شركة لحوم البستان', companyName: 'شركة لحوم البستان' }
       const mockCashTransactions = [
@@ -304,18 +302,14 @@ describe('Challenger 1 Empirical Stress Tests: R1, R4, R2', () => {
         (tx) =>
           tx &&
           (tx.partyId === supplier.id || tx.partyName === supplier.name) &&
-          (tx.type === 'payment' || tx.type === 'cash_out')
+          (tx.type === 'payment' || tx.type === 'cash_out' || tx.type === 'supplier_payment')
       )
 
-      assert.equal(simulatedCurrentPayouts.length, 2, 'Simulated current payouts only matches payment and cash_out')
-      assert.equal(
-        simulatedCurrentPayouts.some((tx) => tx.id === 'tx-p1'),
-        false,
-        'CRITICAL FINDING: tx-p1 with type "supplier_payment" is currently excluded by (tx.type === "payment" || tx.type === "cash_out")!'
-      )
+      assert.equal(simulatedCurrentPayouts.length, 3, 'Payouts matches payment, cash_out, and supplier_payment')
+      assert.equal(simulatedCurrentPayouts.some((tx) => tx.id === 'tx-p1'), true, 'supplier_payment tx-p1 is correctly included')
     })
 
-    it('R2.5 [CRITICAL ADVERSARIAL STRESS TEST]: Supplier balance clamping vs overpayment detection in AX_SuppliersManager', () => {
+    it('R2.5: Supplier balance un-clamping and overpayment detection in AX_SuppliersManager', () => {
       const supplier = { id: 'sup-clamp', name: 'مورد مجمدات النيل', balance: 5000 }
       useAXStore.setState({
         suppliers: [supplier],
@@ -334,18 +328,14 @@ describe('Challenger 1 Empirical Stress Tests: R1, R4, R2', () => {
       })
 
       const supplierAfter = useAXStore.getState().suppliers.find((s) => s.id === 'sup-clamp')
-      assert.equal(supplierAfter.balance, 0, 'Supplier balance is clamped to Math.max(0, ...) so it becomes 0 instead of -3000')
+      assert.equal(supplierAfter.balance, -3000, 'Supplier balance must be negative -3000 representing overpayment')
 
       const totalOverpayments = useAXStore.getState().suppliers.reduce((sum, s) => {
         const bal = Number(s.balance) || 0
         return bal < 0 ? sum + Math.abs(bal) : sum
       }, 0)
 
-      assert.equal(
-        totalOverpayments,
-        0,
-        'CRITICAL FINDING: Because s.balance is clamped to 0 on payment, bal < 0 is never satisfied in AX_SuppliersManager for cash overpayments!'
-      )
+      assert.equal(totalOverpayments, 3000, 'totalOverpayments must accurately capture 3000 negative balance')
     })
   })
 })

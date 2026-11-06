@@ -58,10 +58,10 @@ export function AX_SupplierOverpaymentCard({
               isPayable ? 'text-red-800' : isReceivable ? 'text-emerald-700' : 'text-on-surface'
             }`}
           >
-            {Math.abs(netOffsetBalance).toLocaleString('en-US')} ج.م
+            {isReceivable ? `-${Math.abs(netOffsetBalance).toLocaleString('en-US')}` : netOffsetBalance.toLocaleString('en-US')} ج.م
           </span>
           <span className="text-[10px] font-bold block text-on-surface-variant">
-            {isPayable ? 'مستحق للمورد (له)' : isReceivable ? 'مطلوب من المورد (عليه)' : 'حساب خالص'}
+            {isPayable ? 'مستحق للمورد (له)' : isReceivable ? 'مطلوب من المورد (لنا عنده - بالسالب)' : 'حساب خالص'}
           </span>
         </div>
       </div>

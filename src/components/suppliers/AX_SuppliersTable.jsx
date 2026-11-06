@@ -103,10 +103,10 @@ export function AX_SuppliersTable({
                           : 'text-on-surface-variant'
                       }
                     >
-                      {Math.abs(bal).toLocaleString('en-US')} ج.م
+                      {isReceivable ? `-${Math.abs(bal).toLocaleString('en-US')}` : bal.toLocaleString('en-US')} ج.م
                     </span>
                     <span className="text-[10px] mr-1 text-on-surface-variant font-normal">
-                      {isPayable ? '(له)' : isReceivable ? '(مقدم له)' : ''}
+                      {isPayable ? '(مستحق له)' : isReceivable ? '(لنا عنده - دائن)' : ''}
                     </span>
                   </td>
 

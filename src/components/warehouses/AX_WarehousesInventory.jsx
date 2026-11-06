@@ -1,20 +1,16 @@
 import React, { useState, useEffect } from 'react'
 import {
-  Boxes, ArrowLeftRight, Warehouse, Plus, Clock, Search,
-  PackageCheck, Tag, ClipboardCheck, Ban, Edit3, Trash2, AlertTriangle,
+  Boxes, ArrowLeftRight, Plus, Clock, Search,
+  PackageCheck, Tag, ClipboardCheck, Ban, AlertTriangle,
 } from 'lucide-react'
 import { useAXStore } from '../../store/useAXStore'
+import { AX_WarehouseBentoCard } from './AX_WarehouseBentoCard'
 import { AX_TransferInspectionModal } from './AX_TransferInspectionModal'
 import { AX_TransferFormModal } from './AX_TransferFormModal'
 import { AX_AddWarehouseModal } from './AX_AddWarehouseModal'
 import { AX_EditWarehouseModal } from './AX_EditWarehouseModal'
 import { AX_StockAuditModal } from './AX_StockAuditModal'
 import { AX_ConfirmModal } from '../common/AX_ConfirmModal'
-
-const getWarehouseTypeLabel = (type) => ({
-  cold_store: 'تجميد وحفظ', raw_materials: 'خامات وتوريد', processing: 'تقطيع وتجهيز',
-  finished_goods: 'مصنعات وتعبئة', van: 'سيارة توزيع', branch: 'فرع مبيعات', main: 'رئيسي',
-}[type] || type || 'مخزن')
 
 export function AX_WarehousesInventory() {
   const warehouses = useAXStore((state) => state.warehouses) || []
@@ -238,72 +234,21 @@ export function AX_WarehousesInventory() {
       )}
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3">
-        {warehouses.map((wh) => {
-          const whStock = (inventoryStock || []).filter((s) => s.warehouseId === wh.id)
-          const isSelected = selectedWarehouseId === wh.id
-
-          return (
-            <div
-              key={wh.id}
-              onClick={() => {
-                setSelectedWarehouseId(wh.id)
-                setSelectedPrimaryCategory('الكل')
-              }}
-              className={`bg-surface-lowest border-2 rounded-3xl p-4 shadow-sm transition-all cursor-pointer flex flex-col justify-between gap-3 ${
-                isSelected
-                  ? 'border-primary ring-2 ring-primary/20 bg-primary/5'
-                  : 'border-outline-variant/30 hover:border-primary/50 hover:bg-surface-low'
-              }`}
-            >
-              <div className="space-y-1.5">
-                <div className="flex items-center justify-between">
-                  <div className="p-2 rounded-2xl bg-secondary/10 text-secondary">
-                    <Warehouse className="w-4 h-4" />
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <span className="px-2 py-0.5 rounded-full bg-surface-low text-on-surface-variant text-[10px] font-bold border border-outline-variant/30">
-                      {getWarehouseTypeLabel(wh.type)}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        setEditingWarehouse(wh)
-                      }}
-                      className="p-1 rounded-full hover:bg-primary/10 text-on-surface-variant hover:text-primary transition-colors cursor-pointer"
-                      title="تعديل بيانات المخزن"
-                    >
-                      <Edit3 className="w-3.5 h-3.5" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        setWarehouseToDelete(wh)
-                      }}
-                      className="p-1 rounded-full hover:bg-error/10 text-on-surface-variant hover:text-error transition-colors cursor-pointer"
-                      title="حذف المخزن"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                </div>
-
-                <h3 className="font-black text-sm text-on-surface pt-1">{wh.name}</h3>
-                <span className="text-[11px] text-on-surface-variant font-bold block">
-                  المسؤول: {wh.manager}
-                </span>
-              </div>
-
-              <div className="pt-2 border-t border-surface-container flex items-center justify-between text-xs">
-                <span className="text-on-surface-variant font-bold">قيمة البيع:</span>
-                <span className="font-mono font-black text-primary">
-                  {whStock.reduce((acc, s) => acc + (Number(s.quantity) || 0) * (Number(getItem(s.itemId)?.sellPrice ?? getItem(s.itemId)?.buyPrice ?? 0)), 0).toLocaleString('en-US')} ج.م
-                </span>
-              </div>
-            </div>
-          )
-        })}
+        {warehouses.map((wh) => (
+          <AX_WarehouseBentoCard
+            key={wh.id}
+            warehouse={wh}
+            isSelected={selectedWarehouseId === wh.id}
+            onSelect={() => {
+              setSelectedWarehouseId(wh.id)
+              setSelectedPrimaryCategory('الكل')
+            }}
+            whStock={(inventoryStock || []).filter((s) => s.warehouseId === wh.id)}
+            getItem={getItem}
+            onEdit={setEditingWarehouse}
+            onDelete={setWarehouseToDelete}
+          />
+        ))}
       </div>
 
       <div className="bg-surface-lowest border border-outline-variant/30 rounded-3xl p-5 shadow-level1 space-y-4">

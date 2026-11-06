@@ -433,9 +433,10 @@ export const useAXStore = create((set, get) => ({
   addCashTransaction: (tx) => {
     AX_OperationsService.addCashTransactionInDB(tx, get().profile)
     set((state) => {
-      const updatedTreasuries = state.treasuryAccounts.map((t) => t.id === tx.treasuryId ? { ...t, balance: t.balance + (tx.type === 'client_receipt' ? tx.amount : -tx.amount) } : t)
-      const updatedClients = state.clients.map((c) => (tx.partyId === c.id || tx.partyName === c.name) ? { ...c, balance: Math.max(0, c.balance - tx.amount) } : c)
-      const updatedSuppliers = state.suppliers.map((s) => (tx.partyId === s.id || tx.partyName === s.name) ? { ...s, balance: Math.max(0, s.balance - tx.amount) } : s)
+      const isCashIn = tx.type === 'client_receipt' || tx.type === 'other_income' || tx.type === 'misc_revenue'
+      const updatedTreasuries = state.treasuryAccounts.map((t) => t.id === tx.treasuryId ? { ...t, balance: (Number(t.balance) || 0) + (isCashIn ? tx.amount : -tx.amount) } : t)
+      const updatedClients = state.clients.map((c) => (tx.partyId === c.id || tx.partyName === c.name) ? { ...c, balance: (Number(c.balance) || 0) - tx.amount } : c)
+      const updatedSuppliers = state.suppliers.map((s) => (tx.partyId === s.id || tx.partyName === s.name) ? { ...s, balance: (Number(s.balance) || 0) - tx.amount } : s)
       const nextTx = [tx, ...state.cashTransactions]
       updateLocalCachePayload('cashTransactions', nextTx)
       updateLocalCachePayload('treasuryAccounts', updatedTreasuries)

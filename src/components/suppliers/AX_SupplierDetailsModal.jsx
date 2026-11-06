@@ -45,7 +45,7 @@ export function AX_SupplierDetailsModal({ supplier, isOpen, onClose }) {
         (tx.partyId === supplier.id ||
           tx.partyName === supplier.companyName ||
           tx.partyName === supplier.name) &&
-        (tx.type === 'payment' || tx.type === 'cash_out')
+        (tx.type === 'payment' || tx.type === 'cash_out' || tx.type === 'supplier_payment') && !tx.notes?.includes('فاتورة مشتريات') && !tx.notes?.includes('مردود مبيعات')
     )
   }, [supplier, cashTransactions])
 
@@ -57,7 +57,7 @@ export function AX_SupplierDetailsModal({ supplier, isOpen, onClose }) {
         (tx.partyId === supplier.id ||
           tx.partyName === supplier.companyName ||
           tx.partyName === supplier.name) &&
-        (tx.type === 'receipt' || tx.type === 'cash_in')
+        (tx.type === 'receipt' || tx.type === 'cash_in' || tx.type === 'supplier_refund' || (tx.type === 'client_receipt' && (tx.partyId === supplier.id || tx.partyName === supplier.name || tx.partyName === supplier.companyName)))
     )
   }, [supplier, cashTransactions])
 
@@ -203,7 +203,7 @@ export function AX_SupplierDetailsModal({ supplier, isOpen, onClose }) {
                       : 'bg-surface-container text-on-surface-variant'
                   }`}
                 >
-                  {isPayable ? 'دائن (مستحق له)' : isReceivable ? 'مدين (مطلوب منه)' : 'حساب متوازن'}
+                  {isPayable ? 'دائن (مستحق له)' : isReceivable ? 'مدين (لنا عنده - رصيد بالسالب)' : 'حساب متوازن'}
                 </span>
               </div>
               <p className="text-xs text-on-surface-variant font-bold flex items-center gap-2 mt-0.5">

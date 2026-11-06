@@ -44,7 +44,7 @@ export function AX_CashFlowReport({
     const list = []
 
     cashTransactions.forEach((tx) => {
-      const isReceipt = tx.type === 'client_receipt' || tx.type === 'in'
+      const isReceipt = tx.type === 'client_receipt' || tx.type === 'in' || tx.type === 'other_income' || tx.type === 'misc_revenue'
       const amt = Number(tx.amount) || 0
 
       list.push({

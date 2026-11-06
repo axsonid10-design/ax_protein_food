@@ -66,6 +66,8 @@ export function AX_TreasuryTransactionModal({
       setPartyName(clients[0]?.name || '')
     } else if (type === 'supplier_payment') {
       setPartyName(suppliers[0]?.name || '')
+    } else if (type === 'other_income') {
+      setPartyName('بيع فوارغ وكراتين وتغليف')
     } else if (type === 'payroll') {
       setEmployeeName(employees[0]?.name || '')
     }
@@ -86,6 +88,11 @@ export function AX_TreasuryTransactionModal({
     if (txType === 'supplier_payment') {
       finalPartyType = 'supplier'
       prefix = 'PAY'
+    } else if (txType === 'other_income') {
+      finalPartyType = 'income'
+      prefix = 'REV'
+      finalParty = partyName.trim() || 'إيرادات متنوعة'
+      finalNotes = finalNotes ? `[إيرادات متنوعة] ${finalParty}: ${finalNotes}` : `[إيرادات متنوعة] ${finalParty}`
     } else if (txType === 'expense') {
       finalPartyType = 'expense'
       prefix = 'EXP'
@@ -161,11 +168,11 @@ export function AX_TreasuryTransactionModal({
             </button>
           </div>
 
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 p-1 bg-surface-low rounded-2xl border border-outline-variant/20">
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-1.5 p-1 bg-surface-low rounded-2xl border border-outline-variant/20">
             <button
               type="button"
               onClick={() => handleTabSwitch('client_receipt')}
-              className={`py-2 px-2 rounded-xl text-[11px] font-black transition-all cursor-pointer text-center ${
+              className={`py-2 px-1 rounded-xl text-[11px] font-black transition-all cursor-pointer text-center ${
                 txType === 'client_receipt' ? 'bg-emerald-600 text-white shadow-xs' : 'text-on-surface hover:bg-surface-lowest'
               }`}
             >
@@ -174,7 +181,7 @@ export function AX_TreasuryTransactionModal({
             <button
               type="button"
               onClick={() => handleTabSwitch('supplier_payment')}
-              className={`py-2 px-2 rounded-xl text-[11px] font-black transition-all cursor-pointer text-center ${
+              className={`py-2 px-1 rounded-xl text-[11px] font-black transition-all cursor-pointer text-center ${
                 txType === 'supplier_payment' ? 'bg-error text-white shadow-xs' : 'text-on-surface hover:bg-surface-lowest'
               }`}
             >
@@ -182,8 +189,17 @@ export function AX_TreasuryTransactionModal({
             </button>
             <button
               type="button"
+              onClick={() => handleTabSwitch('other_income')}
+              className={`py-2 px-1 rounded-xl text-[11px] font-black transition-all cursor-pointer text-center ${
+                txType === 'other_income' ? 'bg-teal-600 text-white shadow-xs' : 'text-on-surface hover:bg-surface-lowest'
+              }`}
+            >
+              إيرادات متنوعة
+            </button>
+            <button
+              type="button"
               onClick={() => handleTabSwitch('expense')}
-              className={`py-2 px-2 rounded-xl text-[11px] font-black transition-all cursor-pointer text-center ${
+              className={`py-2 px-1 rounded-xl text-[11px] font-black transition-all cursor-pointer text-center ${
                 txType === 'expense' ? 'bg-amber-600 text-white shadow-xs' : 'text-on-surface hover:bg-surface-lowest'
               }`}
             >
@@ -192,7 +208,7 @@ export function AX_TreasuryTransactionModal({
             <button
               type="button"
               onClick={() => handleTabSwitch('payroll')}
-              className={`py-2 px-2 rounded-xl text-[11px] font-black transition-all cursor-pointer text-center ${
+              className={`py-2 px-1 rounded-xl text-[11px] font-black transition-all cursor-pointer text-center ${
                 txType === 'payroll' ? 'bg-purple-700 text-white shadow-xs' : 'text-on-surface hover:bg-surface-lowest'
               }`}
             >
@@ -230,6 +246,30 @@ export function AX_TreasuryTransactionModal({
                   }))}
                   placeholder="اختر المورد..."
                 />
+              </div>
+            )}
+
+            {txType === 'other_income' && (
+              <div>
+                <label className="block text-on-surface-variant mb-1 text-right">مصدر / بند الإيراد *</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="اكتب مصدر الإيراد أو اختر..."
+                  list="income-source-suggestions"
+                  value={partyName}
+                  onChange={(e) => setPartyName(e.target.value)}
+                  className="w-full px-3 py-2.5 rounded-2xl bg-surface-low border border-outline-variant/30 text-xs font-bold text-on-surface outline-none focus:border-primary text-right"
+                />
+                <datalist id="income-source-suggestions">
+                  <option value="بيع فوارغ وكراتين وتغليف" />
+                  <option value="بيع مخلفات ودهون تشفية" />
+                  <option value="عوائد وأرباح بنكية / فوائد" />
+                  <option value="إيراد خدمات تبريد وتخزين للغير" />
+                  <option value="إيراد نقل وشحن بسيارات التوزيع" />
+                  <option value="تسوية فروق نقدية بالزيادة" />
+                  <option value="إيرادات متنوعة أخرى" />
+                </datalist>
               </div>
             )}
 
