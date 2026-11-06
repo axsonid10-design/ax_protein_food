@@ -170,6 +170,13 @@ export function AX_Dashboard() {
     }, 0)
   }, [suppliers])
 
+  const supplierReceivables = useMemo(() => {
+    return (suppliers || []).reduce((acc, s) => {
+      const bal = Number(s.balance) || 0
+      return bal < 0 ? acc + Math.abs(bal) : acc
+    }, 0)
+  }, [suppliers])
+
   const repPayables = useMemo(() => {
     return (salesReps || []).reduce((acc, r) => {
       const bal = Number(r.netBalance ?? r.currentBalance ?? r.balance) || 0
@@ -218,6 +225,7 @@ export function AX_Dashboard() {
         salesTrend={salesTrend}
         customerReceivables={customerReceivables}
         supplierPayables={supplierPayables}
+        supplierReceivables={supplierReceivables}
         repPayables={repPayables}
         salesTarget={totalSalesTarget}
         targetAchievementPct={targetAchievementPct}

@@ -5,6 +5,8 @@ import { AX_SearchableSelect } from '../common/AX_SearchableSelect'
 import { AX_CompanyDatePicker } from '../common/AX_CompanyDatePicker'
 import { AX_TransferCategoryAccordionGroup } from './AX_TransferCategoryAccordion'
 import { AX_TransferReviewModal } from './AX_TransferReviewModal'
+import { AX_DraftsManagerBanner } from '../common/AX_DraftsManagerBanner'
+import { useDrafts } from '../../hooks/useDrafts'
 import { checkTransferAuditDiscrepancy, executeImmediateTransfer } from '../../store/transferHelpers'
 import { axToast } from '../../services/axToast'
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock'
@@ -17,6 +19,20 @@ export function AX_TransferFormModal({ isOpen, onClose }) {
   const inventoryStock = useAXStore((state) => state.inventoryStock) || []
   const stockAudits = useAXStore((state) => state.stockAudits) || []
   const profile = useAXStore((state) => state.profile)
+
+  const {
+    drafts,
+    activeDraftId,
+    setActiveDraftId,
+    autoSaveStatus,
+    lastSavedAt,
+    saveDraft,
+    saveDraftDebounced,
+    resumeDraft,
+    deleteDraft,
+    detachActiveDraft,
+    discardActiveDraft,
+  } = useDrafts('transfer')
 
   const allDestinations = useMemo(
     () =>
@@ -45,30 +61,52 @@ export function AX_TransferFormModal({ isOpen, onClose }) {
   const [showReviewModal, setShowReviewModal] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
 
+  const handleSelectDraft = (draft) => {
+    const p = draft.payload || {}
+    if (p.fromId && warehouses.some((w) => w.id === p.fromId)) {
+      setFromId(p.fromId)
+    }
+    if (p.toId && warehouses.some((w) => w.id === p.toId)) {
+      setToId(p.toId)
+    }
+    if (p.operationalDate) {
+      setOperationalDate(p.operationalDate)
+    }
+    if (p.selectedQuantities && typeof p.selectedQuantities === 'object') {
+      setSelectedQuantities(p.selectedQuantities)
+    }
+    if (p.notes) {
+      setNotes(p.notes)
+    }
+    resumeDraft(draft.id)
+    axToast.success(`تم استئناف مسودة: ${draft.title}`)
+  }
+
+  const handleNewDraft = () => {
+    detachActiveDraft()
+    setSelectedQuantities({})
+    setNotes('')
+    axToast.info('تم بدء مسودة جديدة وحفظ السابقة')
+  }
+
   useEffect(() => {
     if (!isOpen) return
-    try {
-      const rawDraft = localStorage.getItem('ax_transfer_draft')
-      if (rawDraft) {
-        const parsed = JSON.parse(rawDraft)
-        if (parsed.fromId && warehouses.some((w) => w.id === parsed.fromId)) {
-          setFromId(parsed.fromId)
-        }
-        if (parsed.toId && warehouses.some((w) => w.id === parsed.toId)) {
-          setToId(parsed.toId)
-        }
-        if (parsed.operationalDate) {
-          setOperationalDate(parsed.operationalDate)
-        }
-        if (parsed.selectedQuantities && typeof parsed.selectedQuantities === 'object') {
-          setSelectedQuantities(parsed.selectedQuantities)
-        }
-        if (parsed.notes) {
-          setNotes(parsed.notes)
-        }
-      }
-    } catch {}
-  }, [isOpen, warehouses])
+    const hasItems = Object.keys(selectedQuantities).length > 0
+    if (!hasItems && !notes.trim() && !activeDraftId) return
+
+    const fromWh = warehouses.find((w) => w.id === fromId)?.name || 'المخزن'
+    const toWh = warehouses.find((w) => w.id === toId)?.name || 'المخزن'
+    const itemCount = Object.keys(selectedQuantities).length
+    const title = `تحويل: من ${fromWh} إلى ${toWh} (${itemCount} أصناف)`
+    const payload = {
+      fromId,
+      toId,
+      operationalDate,
+      selectedQuantities,
+      notes,
+    }
+    saveDraftDebounced(payload, title)
+  }, [fromId, toId, operationalDate, selectedQuantities, notes, isOpen, activeDraftId, warehouses, saveDraftDebounced])
 
   const handleQuantityChange = (itemId, quantity, unit, itemRef) => {
     setSelectedQuantities((prev) => {
@@ -110,34 +148,35 @@ export function AX_TransferFormModal({ isOpen, onClose }) {
   }, [selectedQuantities, items])
 
   const selectedItemsGrouped = useMemo(() => {
-    const grouped = {}
+    const groups = {}
     selectedItemsList.forEach((it) => {
-      const cat = it.primaryCategory
-      if (!grouped[cat]) grouped[cat] = []
-      grouped[cat].push(it)
+      const cat = it.primaryCategory || 'أصناف عامة'
+      if (!groups[cat]) groups[cat] = []
+      groups[cat].push(it)
     })
-    return grouped
+    return groups
   }, [selectedItemsList])
 
   const totalSelectedCount = selectedItemsList.length
   const totalSelectedQty = selectedItemsList.reduce((sum, it) => sum + it.quantity, 0)
 
-  const handleSaveDraft = () => {
+  const handleSaveDraft = async () => {
     try {
-      const draft = {
-        id: `draft_trf_${Date.now()}`,
-        type: 'transfer',
+      const fromWh = warehouses.find((w) => w.id === fromId)?.name || 'المخزن'
+      const toWh = warehouses.find((w) => w.id === toId)?.name || 'المخزن'
+      const itemCount = Object.keys(selectedQuantities).length
+      const title = `تحويل: من ${fromWh} إلى ${toWh} (${itemCount} أصناف)`
+      const payload = {
         fromId,
         toId,
         operationalDate,
         selectedQuantities,
         notes,
-        updatedAt: new Date().toISOString(),
       }
-      localStorage.setItem('ax_transfer_draft', JSON.stringify(draft))
+      await saveDraft(payload, title, activeDraftId || `transfer_draft_${Date.now()}`)
       axToast.success('تم حفظ مسودة التحويل بنجاح')
     } catch {
-      axToast.error('تعذر حفظ المسودة')
+      axToast.error('تعذر حفظ مسودة التحويل')
     }
   }
 
@@ -188,6 +227,9 @@ export function AX_TransferFormModal({ isOpen, onClose }) {
           inventoryStock: res.updatedStock,
         }))
 
+        if (activeDraftId) {
+          await discardActiveDraft()
+        }
         try {
           localStorage.removeItem('ax_transfer_draft')
         } catch {}
@@ -220,83 +262,108 @@ export function AX_TransferFormModal({ isOpen, onClose }) {
                 <ArrowLeftRight className="w-5 h-5" />
               </span>
               <div>
-                <h3 className="text-base font-black text-on-surface">إنشاء إذن تحويل مخزني</h3>
-                <p className="text-xs font-bold text-on-surface-variant">
-                  اختيار الأصناف بالأقسام واعتماد فوري للأرصدة
-                </p>
+                <h3 className="text-base font-black text-on-surface">إجراء تحويل بضاعة بين المخازن والفروع</h3>
+                <p className="text-xs font-bold text-on-surface-variant">تحويل أرصدة أصناف فورية من مستودع لآخر</p>
               </div>
             </div>
-
             <button
               type="button"
               onClick={onClose}
-              className="p-1.5 rounded-full hover:bg-surface-container text-on-surface-variant transition-colors cursor-pointer"
+              className="p-1.5 rounded-full hover:bg-surface-container text-on-surface-variant transition-all cursor-pointer"
             >
               <X className="w-5 h-5" />
             </button>
           </div>
 
-          <form onSubmit={handleOpenReview} className="flex-1 overflow-y-auto space-y-4 pr-1 overscroll-contain">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 relative z-30">
-              <div className="relative z-20">
-                <label className="block text-xs font-black text-on-surface mb-1">المحول منه</label>
+          <form onSubmit={handleOpenReview} className="space-y-4 flex-1 overflow-y-auto pr-1">
+            <AX_DraftsManagerBanner
+              type="transfer"
+              drafts={drafts}
+              activeDraftId={activeDraftId}
+              autoSaveStatus={autoSaveStatus}
+              lastSavedAt={lastSavedAt}
+              onSelectDraft={handleSelectDraft}
+              onDeleteDraft={deleteDraft}
+              onNewDraft={handleNewDraft}
+              onSaveCurrent={handleSaveDraft}
+            />
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-black text-on-surface mb-1">من مخزن / فرع (المصدر):</label>
                 <AX_SearchableSelect
                   value={fromId}
-                  onChange={setFromId}
+                  onChange={(val) => setFromId(val)}
                   options={allDestinations.map((d) => ({
                     value: d.id,
                     label: d.name,
-                    badge: d.type === 'warehouse' ? 'مخزن' : 'موزع',
+                    badge: d.badge,
                   }))}
-                  placeholder="اختر الجهة المحول منها..."
+                  placeholder="اختر المخزن المصدر..."
                 />
               </div>
 
-              <div className="relative z-10">
-                <label className="block text-xs font-black text-on-surface mb-1">المستلم</label>
+              <div>
+                <label className="block text-xs font-black text-on-surface mb-1">إلى مخزن / سيارة / فرع (المستلم):</label>
                 <AX_SearchableSelect
                   value={toId}
-                  onChange={setToId}
+                  onChange={(val) => setToId(val)}
                   options={allDestinations
                     .filter((d) => d.id !== fromId)
                     .map((d) => ({
                       value: d.id,
                       label: d.name,
-                      badge: d.type === 'warehouse' ? 'مخزن' : 'موزع',
+                      badge: d.badge,
                     }))}
-                  placeholder="اختر المستلم..."
+                  placeholder="اختر المخزن المستلم..."
                 />
               </div>
             </div>
 
-            <div className="relative z-20">
-              <label className="block text-xs font-black text-on-surface mb-1">تاريخ العملية</label>
-              <AX_CompanyDatePicker
-                value={operationalDate}
-                onChange={setOperationalDate}
-                placeholder="اختر تاريخ التحويل..."
-              />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-black text-on-surface mb-1">تاريخ التحويل والتشغيل:</label>
+                <AX_CompanyDatePicker
+                  value={operationalDate}
+                  onChange={(val) => setOperationalDate(val)}
+                />
+              </div>
+
+              <div className="flex items-end">
+                <div className="w-full p-2.5 rounded-2xl bg-surface-low border border-outline-variant/30 flex items-center justify-between text-xs">
+                  <span className="font-bold text-on-surface-variant">إجمالي الأصناف المحددة:</span>
+                  <div className="flex items-center gap-2">
+                    <span className="px-2 py-0.5 rounded-full bg-primary/10 text-primary font-black font-mono">
+                      {totalSelectedCount} صنف
+                    </span>
+                    <span className="px-2 py-0.5 rounded-full bg-secondary/10 text-secondary font-black font-mono">
+                      {totalSelectedQty.toLocaleString('en-US')} كرتونة/وحدة
+                    </span>
+                  </div>
+                </div>
+              </div>
             </div>
 
-            {liveDiscrepancy.isAuditDiscrepancy && (
-              <div className="p-3 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-900 text-xs font-bold flex items-start gap-2">
-                <AlertTriangle className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
-                <span>{liveDiscrepancy.auditDiscrepancyNote}</span>
+            {liveDiscrepancy.hasAuditDiscrepancy && (
+              <div className="p-3 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-900 dark:text-amber-200 text-xs font-bold space-y-1">
+                <div className="flex items-center gap-2">
+                  <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+                  <span>تنبيه: يوجد محضر جرد سابق في المخزن المستلم بتأريخ أحدث من تاريخ التحويل.</span>
+                </div>
+                <p className="text-[11px] font-normal leading-relaxed text-amber-800 dark:text-amber-300">
+                  سيتم التحويل بأمان تام وإضافة الرصيد إلى المخزن المستلم دون أن يتسبب في تصفير أو انخفاض رصيد البضائع الحالية.
+                </p>
               </div>
             )}
 
-            <div className="space-y-3 pt-2 border-t border-surface-container">
+            <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <span className="text-xs font-black text-on-surface flex items-center gap-1.5">
-                    <Layers className="w-4 h-4 text-primary" />
-                    الأصناف المراد تحويلها
-                  </span>
-                  {totalSelectedCount > 0 && (
-                    <span className="px-2.5 py-0.5 rounded-full bg-primary/10 text-primary text-xs font-black font-mono">
-                      {totalSelectedCount} صنف ({totalSelectedQty})
-                    </span>
-                  )}
+                <label className="text-xs font-black text-on-surface flex items-center gap-1.5">
+                  <Layers className="w-3.5 h-3.5 text-primary" />
+                  <span>أصناف التحويل حسب الأقسام (اختر الأقسام وحدد الكميات):</span>
+                </label>
+                <div className="text-[11px] font-bold text-on-surface-variant">
+                  {totalSelectedCount} أصناف مختارة ({totalSelectedQty} إجمالي)
                 </div>
               </div>
 

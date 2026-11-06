@@ -20,11 +20,19 @@ export function AX_WarehouseBentoCard({
   onEdit,
   onDelete,
 }) {
-  const totalValuation = whStock.reduce(
+  const totalCostValuation = whStock.reduce(
     (acc, s) =>
       acc +
       (Number(s.quantity) || 0) *
-        (Number(getItem?.(s.itemId)?.sellPrice ?? getItem?.(s.itemId)?.buyPrice ?? 0)),
+        (Number(getItem?.(s.itemId)?.buyPrice ?? getItem?.(s.itemId)?.buy_price ?? 0)),
+    0
+  )
+
+  const totalSellValuation = whStock.reduce(
+    (acc, s) =>
+      acc +
+      (Number(s.quantity) || 0) *
+        (Number(getItem?.(s.itemId)?.sellPrice ?? getItem?.(s.itemId)?.sell_price ?? getItem?.(s.itemId)?.buyPrice ?? 0)),
     0
   )
 
@@ -81,11 +89,19 @@ export function AX_WarehouseBentoCard({
         </span>
       </div>
 
-      <div className="pt-2 border-t border-surface-container flex items-center justify-between text-xs">
-        <span className="text-on-surface-variant font-bold">قيمة البيع:</span>
-        <span className="font-mono font-black text-primary">
-          {totalValuation.toLocaleString('en-US')} ج.م
-        </span>
+      <div className="pt-2 border-t border-surface-container space-y-1 text-xs">
+        <div className="flex items-center justify-between">
+          <span className="text-on-surface-variant font-bold">قيمة التكلفة:</span>
+          <span className="font-mono font-black text-on-surface">
+            {totalCostValuation.toLocaleString('en-US')} ج.م
+          </span>
+        </div>
+        <div className="flex items-center justify-between">
+          <span className="text-on-surface-variant/80 text-[11px] font-bold">قيمة البيع:</span>
+          <span className="font-mono font-bold text-primary text-[11px]">
+            {totalSellValuation.toLocaleString('en-US')} ج.م
+          </span>
+        </div>
       </div>
     </div>
   )

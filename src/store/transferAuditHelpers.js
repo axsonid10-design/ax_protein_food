@@ -119,35 +119,44 @@ export const calculateTransferStockMovement = (transfer, currentStock = [], stoc
 
   const isConfirmed = transfer.status === 'confirmed' || transfer.isConfirmed || transfer.forceCredit || transfer.isImmediate
   const shouldCreditDestination = !isToBackdated || isConfirmed
+  const shouldDebitSource = !isFromBackdated || isConfirmed
 
   transferItems.forEach((item) => {
     if (!item?.itemId || item?.quantity === undefined || item?.quantity === null) return
     const qty = Number(item.quantity) || 0
     if (qty <= 0) return
 
-    if (!isFromBackdated && fromTargetId) {
-      const fromIndex = updatedStock.findIndex((s) => s.warehouseId === fromTargetId && s.itemId === item.itemId)
+    if (shouldDebitSource && fromTargetId) {
+      const fromIndex = updatedStock.findIndex(
+        (s) =>
+          (s.warehouseId === fromTargetId || s.warehouse_id === fromTargetId) &&
+          (s.itemId === item.itemId || s.item_id === item.itemId)
+      )
       if (fromIndex >= 0) {
         updatedStock[fromIndex] = {
           ...updatedStock[fromIndex],
-          quantity: Math.max(0, (Number(updatedStock[fromIndex].quantity) || 0) - qty)
+          quantity: Math.max(0, (Number(updatedStock[fromIndex].quantity) || 0) - qty),
         }
       }
     }
 
     if (shouldCreditDestination && toTargetId) {
-      const toIndex = updatedStock.findIndex((s) => s.warehouseId === toTargetId && s.itemId === item.itemId)
+      const toIndex = updatedStock.findIndex(
+        (s) =>
+          (s.warehouseId === toTargetId || s.warehouse_id === toTargetId) &&
+          (s.itemId === item.itemId || s.item_id === item.itemId)
+      )
       if (toIndex >= 0) {
         updatedStock[toIndex] = {
           ...updatedStock[toIndex],
-          quantity: (Number(updatedStock[toIndex].quantity) || 0) + qty
+          quantity: (Number(updatedStock[toIndex].quantity) || 0) + qty,
         }
       } else {
         updatedStock.push({
           warehouseId: toTargetId,
           itemId: item.itemId,
           quantity: qty,
-          unit: item.unit || 'كرتونة'
+          unit: item.unit || 'كرتونة',
         })
       }
     }

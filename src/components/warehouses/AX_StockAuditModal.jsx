@@ -7,8 +7,6 @@ import {
   Clock,
   CheckCircle2,
   Printer,
-  Boxes,
-  Layers,
   Search,
   CheckCheck,
 } from 'lucide-react'
@@ -17,7 +15,16 @@ import { useBodyScrollLock } from '../../hooks/useBodyScrollLock'
 import { AX_SearchableSelect } from '../common/AX_SearchableSelect'
 import { AX_CompanyDatePicker } from '../common/AX_CompanyDatePicker'
 import { AX_StockAuditCategoryGroup } from './AX_StockAuditCategoryGroup'
+import { AX_StockAuditStatsBar } from './AX_StockAuditStatsBar'
+import { AX_DraftsManagerBanner } from '../common/AX_DraftsManagerBanner'
+import { useDrafts } from '../../hooks/useDrafts'
+import { axToast } from '../../services/axToast'
 import { generateUUID } from '../../utils/AX_UUID'
+import {
+  buildInitialAuditRows,
+  calculateAuditStats,
+  groupAuditRowsByCategory,
+} from './stockAuditHelpers'
 
 export function AX_StockAuditModal({
   isOpen,
@@ -31,6 +38,20 @@ export function AX_StockAuditModal({
 
   const { profile, applyStockAudit, addNotification } = useAXStore()
 
+  const {
+    drafts,
+    activeDraftId,
+    setActiveDraftId,
+    autoSaveStatus,
+    lastSavedAt,
+    saveDraft,
+    saveDraftDebounced,
+    resumeDraft,
+    deleteDraft,
+    detachActiveDraft,
+    discardActiveDraft,
+  } = useDrafts('stock_audit')
+
   const [activeWhId, setActiveWhId] = useState(warehouseId || warehouses[0]?.id || 'wh-1')
   const [auditorName, setAuditorName] = useState(() => profile?.name || profile?.full_name || 'مسؤول الجرد والمخازن')
   const [auditDate, setAuditDate] = useState(() => new Date().toISOString().split('T')[0])
@@ -40,36 +61,13 @@ export function AX_StockAuditModal({
   const [collapsedCategories, setCollapsedCategories] = useState({})
 
   const activeWh = warehouses.find((w) => w.id === activeWhId) || warehouses[0]
-
   const [auditRows, setAuditRows] = useState([])
 
   useEffect(() => {
-    const whStockMap = {}
-    inventoryStock
-      .filter((s) => s.warehouseId === activeWhId)
-      .forEach((s) => {
-        whStockMap[s.itemId] = {
-          quantity: Number(s.quantity) || 0,
-          unit: s.unit,
-        }
-      })
-
-    const initialRows = (items || []).map((it) => {
-      const stockEntry = whStockMap[it.id]
-      const sysQty = stockEntry ? stockEntry.quantity : 0
-      return {
-        itemId: it.id,
-        itemName: it.compositeName || it.name || 'صنف',
-        category: it.primaryCategory || 'أصناف عامة',
-        unit: stockEntry?.unit || it.unitType || 'كرتونة',
-        costPrice: Number(it.buyPrice) || 0,
-        systemQty: sysQty,
-        actualQty: sysQty,
-      }
-    })
-
+    if (activeDraftId) return
+    const initialRows = buildInitialAuditRows(items, inventoryStock, activeWhId)
     setAuditRows(initialRows)
-  }, [activeWhId, inventoryStock, items])
+  }, [activeWhId, inventoryStock, items, activeDraftId])
 
   const handleActualQtyChange = (itemId, val) => {
     setAuditRows((prev) =>
@@ -112,52 +110,65 @@ export function AX_StockAuditModal({
     }))
   }
 
-  const calculatedStats = useMemo(() => {
-    let matchedCount = 0
-    let deficitCount = 0
-    let surplusCount = 0
-    let totalDeficitCost = 0
-    let totalSurplusCost = 0
+  const calculatedStats = useMemo(() => calculateAuditStats(auditRows), [auditRows])
 
-    const enrichedRows = auditRows.map((r) => {
-      const actual = r.actualQty === '' ? 0 : Number(r.actualQty)
-      const variance = actual - r.systemQty
-      const varianceCost = variance * r.costPrice
-
-      let status = 'matched'
-      if (variance < 0) {
-        status = 'deficit'
-        deficitCount += 1
-        totalDeficitCost += Math.abs(varianceCost)
-      } else if (variance > 0) {
-        status = 'surplus'
-        surplusCount += 1
-        totalSurplusCost += varianceCost
-      } else {
-        matchedCount += 1
+  useEffect(() => {
+    if (isOpen && auditRows.length > 0) {
+      const isDirty = auditRows.some((r) => r.actualQty !== r.systemQty) || auditNotes.trim() !== ''
+      if (isDirty || activeDraftId) {
+        const title = `جرد: ${activeWh?.name || 'المخزن'} (${calculatedStats.deficitCount + calculatedStats.surplusCount} فروقات)`
+        const payload = {
+          warehouseId: activeWhId,
+          warehouseName: activeWh?.name,
+          auditorName,
+          auditDate,
+          auditNotes,
+          selectedCategoryTab,
+          auditRows,
+        }
+        saveDraftDebounced(payload, title)
       }
-
-      return {
-        ...r,
-        actualQtyNum: actual,
-        variance,
-        varianceCost,
-        status,
-      }
-    })
-
-    const netVarianceCost = totalSurplusCost - totalDeficitCost
-
-    return {
-      enrichedRows,
-      matchedCount,
-      deficitCount,
-      surplusCount,
-      totalDeficitCost,
-      totalSurplusCost,
-      netVarianceCost,
     }
-  }, [auditRows])
+  }, [auditRows, auditNotes, auditDate, activeWhId, isOpen, activeDraftId, activeWh?.name, calculatedStats.deficitCount, calculatedStats.surplusCount, saveDraftDebounced, selectedCategoryTab, auditorName])
+
+  const handleSelectDraft = (draft) => {
+    const p = draft.payload || {}
+    if (p.warehouseId) setActiveWhId(p.warehouseId)
+    if (p.auditorName) setAuditorName(p.auditorName)
+    if (p.auditDate) setAuditDate(p.auditDate)
+    if (p.auditNotes) setAuditNotes(p.auditNotes)
+    if (p.selectedCategoryTab) setSelectedCategoryTab(p.selectedCategoryTab)
+    if (Array.isArray(p.auditRows) && p.auditRows.length > 0) {
+      setAuditRows(p.auditRows)
+    }
+    resumeDraft(draft.id)
+    axToast.success(`تم استئناف مسودة: ${draft.title}`)
+  }
+
+  const handleSaveCurrentDraft = async () => {
+    try {
+      const title = `جرد: ${activeWh?.name || 'المخزن'} (${calculatedStats.enrichedRows.length} صنف)`
+      const payload = {
+        warehouseId: activeWhId,
+        warehouseName: activeWh?.name,
+        auditorName,
+        auditDate,
+        auditNotes,
+        selectedCategoryTab,
+        auditRows,
+      }
+      await saveDraft(payload, title, activeDraftId || `audit_draft_${activeWhId}_${Date.now()}`)
+      axToast.success('تم حفظ مسودة الجرد بنجاح')
+    } catch {
+      axToast.error('تعذر حفظ مسودة الجرد')
+    }
+  }
+
+  const handleNewDraft = () => {
+    detachActiveDraft()
+    setAuditNotes('')
+    axToast.info('تم بدء مسودة جرد جديدة وحفظ السابقة')
+  }
 
   const categoriesList = useMemo(() => {
     const cats = new Set()
@@ -165,29 +176,14 @@ export function AX_StockAuditModal({
     return Array.from(cats)
   }, [auditRows])
 
-  const groupedRows = useMemo(() => {
-    const q = searchQuery.trim().toLowerCase()
-    const groups = {}
-
-    calculatedStats.enrichedRows.forEach((row) => {
-      if (selectedCategoryTab !== 'ALL' && row.category !== selectedCategoryTab) {
-        return
-      }
-      if (q && !row.itemName.toLowerCase().includes(q) && !row.category.toLowerCase().includes(q)) {
-        return
-      }
-
-      const cat = row.category || 'أصناف عامة'
-      if (!groups[cat]) groups[cat] = []
-      groups[cat].push(row)
-    })
-
-    return groups
-  }, [calculatedStats.enrichedRows, selectedCategoryTab, searchQuery])
+  const groupedRows = useMemo(
+    () => groupAuditRowsByCategory(calculatedStats.enrichedRows, selectedCategoryTab, searchQuery),
+    [calculatedStats.enrichedRows, selectedCategoryTab, searchQuery]
+  )
 
   if (!isOpen) return null
 
-  const handleConfirmAudit = (e) => {
+  const handleConfirmAudit = async (e) => {
     e.preventDefault()
 
     const sessionCode = `AUD-${Date.now().toString().slice(-4)}`
@@ -220,6 +216,10 @@ export function AX_StockAuditModal({
     }))
 
     applyStockAudit({ session: auditSession, adjustedStocks })
+
+    if (activeDraftId) {
+      await discardActiveDraft()
+    }
 
     if (addNotification) {
       addNotification({
@@ -277,6 +277,18 @@ export function AX_StockAuditModal({
         </div>
 
         <form onSubmit={handleConfirmAudit} className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-4 text-xs font-bold">
+          <AX_DraftsManagerBanner
+            type="stock_audit"
+            drafts={drafts}
+            activeDraftId={activeDraftId}
+            autoSaveStatus={autoSaveStatus}
+            lastSavedAt={lastSavedAt}
+            onSelectDraft={handleSelectDraft}
+            onDeleteDraft={deleteDraft}
+            onNewDraft={handleNewDraft}
+            onSaveCurrent={handleSaveCurrentDraft}
+          />
+
           <div className="p-3.5 rounded-2xl bg-surface-low border border-outline-variant/30 grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div className="space-y-1">
               <label className="text-on-surface flex items-center gap-1.5">
@@ -319,51 +331,7 @@ export function AX_StockAuditModal({
             </div>
           </div>
 
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-            <div className="p-3 rounded-2xl bg-surface-lowest border border-outline-variant/30 space-y-0.5">
-              <span className="text-[10px] text-on-surface-variant block">إجمالي أصناف المنظومة</span>
-              <span className="text-base font-black text-on-surface block font-mono">
-                {calculatedStats.enrichedRows.length} صنف
-              </span>
-              <span className="text-[10px] text-emerald-600 block">
-                {calculatedStats.matchedCount} مطابق دفترياً
-              </span>
-            </div>
-
-            <div className="p-3 rounded-2xl bg-surface-lowest border border-outline-variant/30 space-y-0.5">
-              <span className="text-[10px] text-on-surface-variant block">حالات العجز (نقص)</span>
-              <span className="text-base font-black text-rose-700 block font-mono">
-                {calculatedStats.deficitCount} أصناف
-              </span>
-              <span className="text-[10px] text-rose-700 block font-mono">
-                خسارة: -{calculatedStats.totalDeficitCost.toLocaleString('en-US')} ج.م
-              </span>
-            </div>
-
-            <div className="p-3 rounded-2xl bg-surface-lowest border border-outline-variant/30 space-y-0.5">
-              <span className="text-[10px] text-on-surface-variant block">حالات الفائض (زيادة)</span>
-              <span className="text-base font-black text-emerald-600 block font-mono">
-                {calculatedStats.surplusCount} أصناف
-              </span>
-              <span className="text-[10px] text-emerald-700 block font-mono">
-                فائض: +{calculatedStats.totalSurplusCost.toLocaleString('en-US')} ج.م
-              </span>
-            </div>
-
-            <div className="p-3 rounded-2xl bg-surface-lowest border border-outline-variant/30 space-y-0.5">
-              <span className="text-[10px] text-on-surface-variant block">صافي الفارق المالي</span>
-              <span
-                className={`text-base font-black block font-mono ${
-                  calculatedStats.netVarianceCost >= 0 ? 'text-primary' : 'text-rose-700'
-                }`}
-              >
-                {calculatedStats.netVarianceCost.toLocaleString('en-US')} ج.م
-              </span>
-              <span className="text-[10px] text-on-surface-variant block">
-                التأثير المالي على الأرباح
-              </span>
-            </div>
-          </div>
+          <AX_StockAuditStatsBar stats={calculatedStats} />
 
           <div className="flex flex-wrap items-center justify-between gap-2.5 pt-1">
             <div className="flex items-center gap-1.5 overflow-x-auto pb-1 max-w-full">

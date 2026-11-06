@@ -314,16 +314,30 @@ export const AX_OperationsService = {
       const toTargetId = trf.toId || trf.to_warehouse_id
 
       for (const item of transferItems) {
+        if (!item?.itemId && !item?.item_id) continue
+        const itId = item.itemId || item.item_id
+        const itQty = Number(item.quantity) || 0
+
         if (fromTargetId) {
-          const fromRow = updatedStock.find((s) => s.warehouseId === fromTargetId && s.itemId === item.itemId)
-          if (fromRow) {
-            try { await supabase.from('ax_inventory_stock').upsert({ warehouse_id: fromTargetId, item_id: item.itemId, quantity: fromRow.quantity, unit: item.unit || fromRow.unit, updated_at: new Date().toISOString() }, { onConflict: 'warehouse_id,item_id' }) } catch {}
+          const fromRow = updatedStock.find((s) => (s.warehouseId === fromTargetId || s.warehouse_id === fromTargetId) && (s.itemId === itId || s.item_id === itId))
+          let finalFromQty = fromRow ? Number(fromRow.quantity) : null
+          if (finalFromQty === null) {
+            const { data: curStock } = await supabase.from('ax_inventory_stock').select('quantity').eq('warehouse_id', fromTargetId).eq('item_id', itId).maybeSingle()
+            if (curStock) finalFromQty = Math.max(0, (Number(curStock.quantity) || 0) - itQty)
+          }
+          if (finalFromQty !== null) {
+            try { await supabase.from('ax_inventory_stock').upsert({ warehouse_id: fromTargetId, item_id: itId, quantity: finalFromQty, unit: item.unit || fromRow?.unit || 'كرتونة', updated_at: new Date().toISOString() }, { onConflict: 'warehouse_id,item_id' }) } catch {}
           }
         }
         if (toTargetId) {
-          const toRow = updatedStock.find((s) => s.warehouseId === toTargetId && s.itemId === item.itemId)
-          if (toRow) {
-            try { await supabase.from('ax_inventory_stock').upsert({ warehouse_id: toTargetId, item_id: item.itemId, quantity: toRow.quantity, unit: item.unit || toRow.unit, updated_at: new Date().toISOString() }, { onConflict: 'warehouse_id,item_id' }) } catch {}
+          const toRow = updatedStock.find((s) => (s.warehouseId === toTargetId || s.warehouse_id === toTargetId) && (s.itemId === itId || s.item_id === itId))
+          let finalToQty = toRow ? Number(toRow.quantity) : null
+          if (finalToQty === null) {
+            const { data: curStock } = await supabase.from('ax_inventory_stock').select('quantity').eq('warehouse_id', toTargetId).eq('item_id', itId).maybeSingle()
+            finalToQty = ((Number(curStock?.quantity) || 0) + itQty)
+          }
+          if (finalToQty !== null) {
+            try { await supabase.from('ax_inventory_stock').upsert({ warehouse_id: toTargetId, item_id: itId, quantity: finalToQty, unit: item.unit || toRow?.unit || 'كرتونة', updated_at: new Date().toISOString() }, { onConflict: 'warehouse_id,item_id' }) } catch {}
           }
         }
       }
@@ -396,6 +410,60 @@ export const AX_OperationsService = {
         read: false,
       })
     } catch {}
+  },
+  applyStockAuditInDB: async (auditPayload, userProfile = null) => {
+    if (!supabase || typeof supabase.from !== 'function' || !auditPayload) return
+    try {
+      const { session, adjustedStocks = [] } = auditPayload
+      if (session) {
+        await supabase.from('ax_stock_audits').upsert({
+          id: session.id,
+          code: session.code,
+          warehouse_id: session.warehouseId || session.warehouse_id,
+          warehouse_name: session.warehouseName || session.warehouse_name,
+          auditor_name: session.auditorName || session.auditor_name,
+          audit_date: session.auditDate || session.date,
+          operational_date: session.operationalDate || session.date,
+          status: session.status || 'confirmed',
+          items: session.items || [],
+          items_count: session.itemsCount || (session.items || []).length,
+          deficits_count: session.deficitsCount || 0,
+          surpluses_count: session.surplusesCount || 0,
+          total_variance_cost: session.totalVarianceCost || 0,
+          notes: session.notes || null,
+          created_at: session.createdAt || session.created_at || new Date().toISOString(),
+        }, { onConflict: 'id' })
+      }
+
+      for (const adj of adjustedStocks) {
+        const whId = adj.warehouseId || adj.warehouse_id
+        const itId = adj.itemId || adj.item_id
+        const qty = Number(adj.actualQty !== undefined ? adj.actualQty : adj.quantity) || 0
+        const unit = adj.unit || 'كرتونة'
+        if (whId && itId) {
+          await supabase.from('ax_inventory_stock').upsert({
+            warehouse_id: whId,
+            item_id: itId,
+            quantity: qty,
+            unit,
+            updated_at: new Date().toISOString(),
+          }, { onConflict: 'warehouse_id,item_id' })
+        }
+      }
+
+      try {
+        await supabase.from('ax_activity_logs').insert({
+          id: generateUUID(),
+          table_name: 'ax_stock_audits',
+          action: 'CONFIRM_AUDIT',
+          record_id: session?.id,
+          new_data: { code: session?.code, warehouseId: session?.warehouseId },
+          user_id: userProfile?.id || null,
+        })
+      } catch {}
+    } catch (err) {
+      console.error('applyStockAuditInDB error:', err)
+    }
   },
   recoverUnappliedTransfers,
   executeImmediateTransfer,

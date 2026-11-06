@@ -29,6 +29,7 @@ export function AX_DashboardMetricsCards({
   salesTrend = null,
   customerReceivables,
   supplierPayables,
+  supplierReceivables = 0,
   repPayables,
   salesTarget = 0,
   targetAchievementPct,
@@ -41,6 +42,7 @@ export function AX_DashboardMetricsCards({
 
   const effectiveReceivables = Number((customerReceivables !== undefined ? customerReceivables : totalCustomerDebts) || 0)
   const effectivePayables = Number((supplierPayables !== undefined ? supplierPayables : totalSupplierDebts) || 0)
+  const effectiveSupplierReceivables = Number(supplierReceivables || 0)
   const effectiveRepPayables = Number((repPayables !== undefined ? repPayables : totalRepBalances) || 0)
   const effectiveTargetPct = Number((targetAchievementPct !== undefined ? targetAchievementPct : salesTargetProgress) || 0)
 
@@ -101,12 +103,22 @@ export function AX_DashboardMetricsCards({
     },
     {
       id: 'payables',
-      title: 'ديون الموردين (علينا)',
-      value: Number(effectivePayables || 0).toLocaleString('en-US'),
+      title: effectivePayables > 0
+        ? 'ديون الموردين (علينا)'
+        : (effectiveSupplierReceivables > 0 ? 'رصيد دائن للموردين (لنا)' : 'ديون الموردين'),
+      value: effectivePayables > 0
+        ? Number(effectivePayables).toLocaleString('en-US')
+        : (effectiveSupplierReceivables > 0 ? `-${Number(effectiveSupplierReceivables).toLocaleString('en-US')}` : '0'),
       unit: 'ج.م',
       icon: Building2,
-      iconColor: 'text-red-950 bg-red-950/10',
-      subtitle: 'التزامات توريد مستحقة السداد',
+      iconColor: effectivePayables > 0
+        ? 'text-red-950 bg-red-950/10'
+        : (effectiveSupplierReceivables > 0 ? 'text-emerald-800 bg-emerald-700/10' : 'text-on-surface-variant bg-surface-low'),
+      subtitle: effectivePayables > 0 && effectiveSupplierReceivables > 0
+        ? `مستحق: ${Number(effectivePayables).toLocaleString('en-US')} • لنا دائن: ${Number(effectiveSupplierReceivables).toLocaleString('en-US')}`
+        : (effectivePayables > 0
+            ? 'التزامات توريد مستحقة السداد'
+            : (effectiveSupplierReceivables > 0 ? 'لنا رصيد مقدم ومسدد بالزيادة لدى الموردين' : 'لا توجد ديون مستحقة للموردين')),
     },
     {
       id: 'repCommissions',
