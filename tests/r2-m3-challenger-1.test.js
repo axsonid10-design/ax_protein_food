@@ -332,7 +332,7 @@ describe('Challenger 1 — Empirical Challenge 3: Idempotency & Edge Case Robust
     assert.equal(dstStock.quantity, 20)
   })
 
-  test('should clamp source inventory to zero and never allow negative stock balances', () => {
+  test('should allow negative stock balances when transferring more than available stock', () => {
     const stock = [{ warehouseId: 'wh-dry', itemId: 'item-overdraw', quantity: 5, unit: 'كرتونة' }]
     const transfer = {
       fromId: 'wh-dry',
@@ -343,7 +343,7 @@ describe('Challenger 1 — Empirical Challenge 3: Idempotency & Edge Case Robust
 
     const { updatedStock } = calculateTransferStockMovement(transfer, stock, [])
     const dryStock = updatedStock.find((s) => s.warehouseId === 'wh-dry')
-    assert.equal(dryStock.quantity, 0)
+    assert.equal(dryStock.quantity, -45)
   })
 
   test('should handle null, empty, or zero-quantity transfers gracefully without throwing', () => {

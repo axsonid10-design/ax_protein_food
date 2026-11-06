@@ -19,7 +19,8 @@ const tabTitles = {
   suppliers: 'الموردين',
   sales_reps: 'المناديب والعمولات',
   reports: 'التقارير والمحاسبة',
-  staff: 'الموظفين والصلاحيات',
+  employees: 'شؤون الموظفين والعمال',
+  staff: 'المستخدمين والصلاحيات',
 }
 
 export function AX_Header() {

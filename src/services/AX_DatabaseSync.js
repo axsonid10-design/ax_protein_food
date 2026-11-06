@@ -31,6 +31,8 @@ export const AX_DatabaseSync = {
         { data: usersProfiles },
         { data: staffInvites },
         { data: recycleBin },
+        { data: companyEmployees },
+        { data: employeeAttendance },
       ] = await Promise.all([
         supabase.from('ax_items').select('*'),
         supabase.from('ax_warehouses').select('*'),
@@ -50,6 +52,8 @@ export const AX_DatabaseSync = {
         supabase.from('ax_users_profiles').select('*'),
         supabase.from('ax_staff_invites').select('*').order('created_at', { ascending: false }),
         supabase.from('ax_recycle_bin').select('*').order('deleted_at', { ascending: false }),
+        supabase.from('ax_company_employees').select('*').order('name', { ascending: true }),
+        supabase.from('ax_employee_attendance').select('*').order('date', { ascending: false }).limit(300),
       ])
 
       const payload = {}
@@ -368,6 +372,43 @@ export const AX_DatabaseSync = {
         }))
         try {
           localStorage.setItem('ax_staff_employees', JSON.stringify(payload.employees))
+        } catch {}
+      }
+
+      if (Array.isArray(companyEmployees)) {
+        payload.companyEmployees = companyEmployees.map((e) => ({
+          id: e.id,
+          code: e.code,
+          name: e.name,
+          phone: e.phone || '',
+          nationalId: e.national_id,
+          department: e.department || 'التشغيل والمصنع',
+          jobTitle: e.job_title || 'عامل تشغيل',
+          salaryType: e.salary_type || 'monthly',
+          baseSalary: Number(e.base_salary || 0),
+          dailyRate: Number(e.daily_rate || 0),
+          hireDate: e.hire_date,
+          status: e.status || 'active',
+          notes: e.notes || '',
+        }))
+        try {
+          localStorage.setItem('ax_company_employees', JSON.stringify(payload.companyEmployees))
+        } catch {}
+      }
+
+      if (Array.isArray(employeeAttendance)) {
+        payload.employeeAttendance = employeeAttendance.map((a) => ({
+          id: a.id,
+          date: a.date,
+          employeeId: a.employee_id,
+          employeeName: a.employee_name,
+          status: a.status,
+          deductionDays: Number(a.deduction_days || 0),
+          dailyEarned: Number(a.daily_earned || 0),
+          notes: a.notes || '',
+        }))
+        try {
+          localStorage.setItem('ax_employee_attendance', JSON.stringify(payload.employeeAttendance))
         } catch {}
       }
 

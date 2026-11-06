@@ -64,7 +64,7 @@ export function AX_WarehousesInventory() {
     }
 
   const currentWhStock = (inventoryStock || [])
-    .filter((s) => s && s.warehouseId === selectedWarehouseId && Number(s.quantity) > 0)
+    .filter((s) => s && s.warehouseId === selectedWarehouseId && Number(s.quantity) !== 0)
     .map((s) => ({
       ...s,
       item: getItem(s.itemId),
@@ -371,8 +371,13 @@ export function AX_WarehousesInventory() {
                           <span className="text-[11px] font-mono text-outline-variant font-bold">
                             {it.code || ''}
                           </span>
-                          <span className="font-mono font-black text-primary text-xs px-2.5 py-1 rounded-full bg-primary/10 border border-primary/20">
+                          <span className={`font-mono font-black text-xs px-2.5 py-1 rounded-full border ${
+                            Number(s.quantity) < 0
+                              ? 'text-error bg-error/10 border-error/30'
+                              : 'text-primary bg-primary/10 border-primary/20'
+                          }`}>
                             {s.quantity} {s.unit}
+                            {Number(s.quantity) < 0 && <span className="mr-1 text-[10px] font-bold">(سالب)</span>}
                           </span>
                         </div>
                       </div>

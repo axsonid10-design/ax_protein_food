@@ -161,7 +161,6 @@ export function AX_StockAuditCategoryGroup({
                         <div className="flex flex-col items-center gap-0.5">
                           <input
                             type="number"
-                            min="0"
                             step="any"
                             value={r.inputQty !== undefined ? r.inputQty : r.actualQty}
                             onChange={(e) => onActualQtyChange(r.itemId, e.target.value)}
@@ -346,7 +345,6 @@ export function AX_StockAuditCategoryGroup({
                     <div className="flex items-center gap-1">
                       <input
                         type="number"
-                        min="0"
                         step="any"
                         value={r.inputQty !== undefined ? r.inputQty : r.actualQty}
                         onChange={(e) => onActualQtyChange(r.itemId, e.target.value)}

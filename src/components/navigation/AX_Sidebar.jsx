@@ -74,7 +74,8 @@ export function AX_Sidebar({ activeTab, onSelectTab, onOpenMasterControl }) {
     {
       title: 'الإدارة وفريق العمل',
       items: [
-        { id: 'staff', label: 'الموظفين', icon: Users },
+        { id: 'employees', label: 'الموظفين والعمال', icon: Users },
+        { id: 'staff', label: 'المستخدمين والصلاحيات', icon: ShieldCheck },
         { id: 'recycle_bin', label: 'سجل المحذوفات', icon: Trash2, badge: (recycleBin || []).length || 0 },
       ],
     },

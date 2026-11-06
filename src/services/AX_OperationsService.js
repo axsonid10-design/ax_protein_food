@@ -6,6 +6,7 @@ import { AX_CategoryOperationsService } from './AX_CategoryOperationsService.js'
 import { AX_ItemOperationsService } from './AX_ItemOperationsService.js'
 import { AX_InvoiceOperationsService } from './AX_InvoiceOperationsService.js'
 import { AX_TransferOperationsService } from './AX_TransferOperationsService.js'
+import { AX_EmployeesOperationsService } from './AX_EmployeesOperationsService.js'
 import { AX_RecycleBinService } from './AX_RecycleBinService.js'
 import { recoverUnappliedTransfers, executeImmediateTransfer } from '../store/transferHelpers.js'
 
@@ -15,6 +16,7 @@ export const AX_OperationsService = {
   ...AX_ItemOperationsService,
   ...AX_InvoiceOperationsService,
   ...AX_TransferOperationsService,
+  ...AX_EmployeesOperationsService,
 
   addCashTransactionInDB: async (tx, userProfile = null) => {
     if (!supabase || typeof supabase.from !== 'function' || !tx) return { success: false }

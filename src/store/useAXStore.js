@@ -17,12 +17,7 @@ import {
 } from './initialData.js'
 
 export const useAXStore = create((set, get) => ({
-  profile: (() => {
-    try {
-      const s = localStorage.getItem('ax_auth_user') || localStorage.getItem('ax_user_profile') || sessionStorage.getItem('ax_auth_user')
-      return s ? JSON.parse(s) : null
-    } catch { return null }
-  })(),
+  profile: (() => { try { const s = localStorage.getItem('ax_auth_user') || localStorage.getItem('ax_user_profile') || sessionStorage.getItem('ax_auth_user'); return s ? JSON.parse(s) : null } catch { return null } })(),
   isAuthLoading: false,
   realtimeTrigger: 0,
   isOnline: typeof navigator !== 'undefined' ? navigator.onLine : true,
@@ -31,15 +26,10 @@ export const useAXStore = create((set, get) => ({
   lastSyncTime: null,
   activeModal: null,
   modalData: null,
-  activeTab: (() => {
-    try {
-      if (typeof window !== 'undefined') {
-        const p = new URLSearchParams(window.location.search).get('tab')
-        return p || localStorage.getItem('ax_active_tab') || 'dashboard'
-      }
-    } catch {}
-    return 'dashboard'
-  })(),
+  activeTab: (() => { try { if (typeof window !== 'undefined') { const p = new URLSearchParams(window.location.search).get('tab'); return p || localStorage.getItem('ax_active_tab') || 'dashboard' } } catch {}; return 'dashboard' })(),
+  invoiceTypeFilter: 'all',
+  companyEmployees: (() => { try { const s = localStorage.getItem('ax_company_employees'); if (s) return JSON.parse(s) } catch {}; return [] })(),
+  employeeAttendance: (() => { try { const s = localStorage.getItem('ax_employee_attendance'); if (s) return JSON.parse(s) } catch {}; return [] })(),
 
   categories: initialCategories,
   subCategories: initialSubCategories,
@@ -496,4 +486,10 @@ export const useAXStore = create((set, get) => ({
   addStaffInvite: async (invite) => { const res = await AX_StaffOperationsService.addStaffInviteInDB(invite); const saved = res?.data || invite; set((state) => { const updated = [saved, ...state.staffInvites.filter((i) => i.id !== saved.id)]; try { localStorage.setItem('ax_staff_invites', JSON.stringify(updated)) } catch {}; return { staffInvites: updated } }); return res },
   revokeStaffInvite: async (inviteId) => { await AX_StaffOperationsService.revokeStaffInviteInDB(inviteId); set((state) => { const updated = state.staffInvites.filter((i) => i.id !== inviteId); try { localStorage.setItem('ax_staff_invites', JSON.stringify(updated)) } catch {}; return { staffInvites: updated } }) },
   updateStaffPermissions: async (userId, updates) => { await AX_StaffOperationsService.updateStaffPermissionsInDB(userId, updates); set((state) => { const updated = state.employees.map((e) => (e.id === userId ? { ...e, ...updates } : e)); try { localStorage.setItem('ax_staff_employees', JSON.stringify(updated)) } catch {}; return { employees: updated } }) },
+
+  addCompanyEmployee: async (emp) => { const res = await AX_OperationsService.addCompanyEmployeeInDB(emp, get().profile); const saved = res?.data || emp; set((state) => { const next = [saved, ...(state.companyEmployees || []).filter((e) => e.id !== saved.id)]; try { localStorage.setItem('ax_company_employees', JSON.stringify(next)) } catch {}; return { companyEmployees: next } }); return res },
+  updateCompanyEmployee: async (id, updates) => { const res = await AX_OperationsService.updateCompanyEmployeeInDB(id, updates, get().profile); set((state) => { const next = (state.companyEmployees || []).map((e) => (e.id === id ? { ...e, ...updates } : e)); try { localStorage.setItem('ax_company_employees', JSON.stringify(next)) } catch {}; return { companyEmployees: next } }); return res },
+  deleteCompanyEmployee: async (id) => { const emp = (get().companyEmployees || []).find((e) => e.id === id); const res = await AX_OperationsService.deleteCompanyEmployeeInDB(id, get().profile, emp); set((state) => { const next = (state.companyEmployees || []).filter((e) => e.id !== id); try { localStorage.setItem('ax_company_employees', JSON.stringify(next)) } catch {}; return { companyEmployees: next } }); return res },
+  saveEmployeeAttendance: async (records) => { const res = await AX_OperationsService.saveAttendanceBatchInDB(records, get().profile); set((state) => { const existing = [...(state.employeeAttendance || [])]; records.forEach((r) => { const idx = existing.findIndex((e) => e.date === r.date && (e.employeeId === (r.employeeId || r.employee_id) || e.employee_id === (r.employeeId || r.employee_id))); if (idx >= 0) existing[idx] = { ...existing[idx], ...r }; else existing.push(r) }); try { localStorage.setItem('ax_employee_attendance', JSON.stringify(existing)) } catch {}; return { employeeAttendance: existing } }); return res },
+  loadCompanyEmployees: async () => { const res = await AX_OperationsService.fetchCompanyEmployeesFromDB(); if (res?.success && res.data) { set({ companyEmployees: res.data }); try { localStorage.setItem('ax_company_employees', JSON.stringify(res.data)) } catch {} } },
 }))

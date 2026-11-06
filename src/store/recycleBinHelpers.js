@@ -18,6 +18,8 @@ export const recycleBinHelpers = {
           updates.clients = [res.restoredData, ...(s.clients || []).filter((c) => c.id !== res.restoredData.id)]
         } else if (res.entityType === 'supplier' && res.restoredData) {
           updates.suppliers = [res.restoredData, ...(s.suppliers || []).filter((sup) => sup.id !== res.restoredData.id)]
+        } else if (res.entityType === 'employee' && res.restoredData) {
+          updates.companyEmployees = [res.restoredData, ...(s.companyEmployees || []).filter((e) => e.id !== res.restoredData.id)]
         } else if (res.entityType === 'transfer' && res.restoredData) {
           updates.transfers = [{ ...res.restoredData, status: 'confirmed' }, ...(s.transfers || []).filter((t) => t.id !== res.restoredData.id)]
           const fromId = res.restoredData.from_warehouse_id || res.restoredData.fromId
@@ -29,7 +31,7 @@ export const recycleBinHelpers = {
             if (!itId || qty <= 0) continue
             if (fromId) {
               const idx = stockCopy.findIndex((st) => st.warehouseId === fromId && st.itemId === itId)
-              if (idx >= 0) stockCopy[idx] = { ...stockCopy[idx], quantity: Math.max(0, (Number(stockCopy[idx].quantity) || 0) - qty) }
+              if (idx >= 0) stockCopy[idx] = { ...stockCopy[idx], quantity: (Number(stockCopy[idx].quantity) || 0) - qty }
             }
             if (toId) {
               const idx = stockCopy.findIndex((st) => st.warehouseId === toId && st.itemId === itId)
@@ -109,7 +111,7 @@ export const recycleBinHelpers = {
           if (toId) {
             const idx = revertedStock.findIndex((st) => st.warehouseId === toId && st.itemId === itId)
             if (idx >= 0) {
-              revertedStock[idx] = { ...revertedStock[idx], quantity: Math.max(0, (Number(revertedStock[idx].quantity) || 0) - qty) }
+              revertedStock[idx] = { ...revertedStock[idx], quantity: (Number(revertedStock[idx].quantity) || 0) - qty }
             }
           }
         }

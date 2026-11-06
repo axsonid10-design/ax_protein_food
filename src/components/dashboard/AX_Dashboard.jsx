@@ -211,6 +211,12 @@ export function AX_Dashboard() {
       />
 
       <AX_DashboardMetricsCards
+        onNavigateTab={(tab, filter) => {
+          if (filter) {
+            useAXStore.setState({ invoiceTypeFilter: filter })
+          }
+          if (setActiveTab) setActiveTab(tab)
+        }}
         salesTotal={salesTotal}
         purchasesTotal={purchasesTotal}
         purchasesCount={purchaseInvoices.length}

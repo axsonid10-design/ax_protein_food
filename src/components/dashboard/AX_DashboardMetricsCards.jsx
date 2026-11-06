@@ -37,6 +37,7 @@ export function AX_DashboardMetricsCards({
   totalSupplierDebts,
   totalRepBalances,
   salesTargetProgress,
+  onNavigateTab,
 }) {
   const [activeMetricSegment, setActiveMetricSegment] = useState('operational')
 
@@ -57,6 +58,8 @@ export function AX_DashboardMetricsCards({
       subtitle: `${salesCount} فاتورة`,
       trend: salesTrend ? salesTrend.label : null,
       isPositive: salesTrend ? salesTrend.isPositive : true,
+      targetTab: 'invoices',
+      tabFilter: 'sale',
     },
     {
       id: 'purchases',
@@ -68,6 +71,8 @@ export function AX_DashboardMetricsCards({
       subtitle: `${purchasesCount} فاتورة توريد`,
       trend: purchasesTrend ? purchasesTrend.label : null,
       isPositive: purchasesTrend ? purchasesTrend.isPositive : true,
+      targetTab: 'invoices',
+      tabFilter: 'purchase',
     },
     {
       id: 'stockUnits',
@@ -78,6 +83,7 @@ export function AX_DashboardMetricsCards({
       iconColor: 'text-rose-700 bg-rose-500/10',
       subtitle: `${Number(stockQuantity || 0).toLocaleString('en-US')} وحدة • ${itemsCount} صنف`,
       trend: null,
+      targetTab: 'warehouses',
     },
     {
       id: 'liquidity',
@@ -88,6 +94,7 @@ export function AX_DashboardMetricsCards({
       iconColor: 'text-amber-700 bg-amber-500/10',
       subtitle: `${accountsCount} حسابات وخزن`,
       trend: null,
+      targetTab: 'treasury',
     },
   ]
 
@@ -100,6 +107,7 @@ export function AX_DashboardMetricsCards({
       icon: Users,
       iconColor: 'text-red-800 bg-red-700/10',
       subtitle: 'مستحقات آجلة لدى العملاء',
+      targetTab: 'customers',
     },
     {
       id: 'payables',
@@ -119,6 +127,7 @@ export function AX_DashboardMetricsCards({
         : (effectivePayables > 0
             ? 'التزامات توريد مستحقة السداد'
             : (effectiveSupplierReceivables > 0 ? 'لنا رصيد مقدم ومسدد بالزيادة لدى الموردين' : 'لا توجد ديون مستحقة للموردين')),
+      targetTab: 'suppliers',
     },
     {
       id: 'repCommissions',
@@ -128,6 +137,7 @@ export function AX_DashboardMetricsCards({
       icon: BadgePercent,
       iconColor: 'text-emerald-800 bg-emerald-700/10',
       subtitle: 'صافي مستحقات أرباح البيع',
+      targetTab: 'sales_reps',
     },
     {
       id: 'targetAchievement',
@@ -137,6 +147,7 @@ export function AX_DashboardMetricsCards({
       icon: Target,
       iconColor: 'text-primary bg-primary/10',
       subtitle: effectiveTargetPct >= 100 ? 'تم تحقيق المستهدف' : 'جاري المتابعة',
+      targetTab: 'sales_reps',
     },
   ]
 
@@ -147,10 +158,19 @@ export function AX_DashboardMetricsCards({
     return (
       <div
         key={card.id}
-        className="bg-surface-lowest border border-outline-variant/30 rounded-2xl p-2.5 sm:p-3 shadow-xs flex flex-col justify-between hover:border-primary/40 transition-all group"
+        onClick={() => {
+          if (card.targetTab && onNavigateTab) {
+            onNavigateTab(card.targetTab, card.tabFilter)
+          }
+        }}
+        className={`bg-surface-lowest border border-outline-variant/30 rounded-2xl p-2.5 sm:p-3 shadow-xs flex flex-col justify-between transition-all group ${
+          card.targetTab
+            ? 'cursor-pointer hover:border-primary/60 hover:shadow-sm active:scale-[0.98]'
+            : 'hover:border-primary/40'
+        }`}
       >
         <div className="flex items-center justify-between gap-1">
-          <span className="text-[11px] sm:text-xs font-bold text-on-surface-variant truncate">
+          <span className="text-[11px] sm:text-xs font-bold text-on-surface-variant truncate group-hover:text-primary transition-colors">
             {card.title}
           </span>
           <div
@@ -170,16 +190,23 @@ export function AX_DashboardMetricsCards({
             </span>
           </div>
 
-          <div className="mt-1 flex items-center gap-1 text-[10px] sm:text-[11px] font-bold truncate">
-            {card.trend && (
-              <span className="inline-flex items-center gap-0.5 text-emerald-700 shrink-0">
-                <ArrowUpRight className="w-3 h-3" />
-                <span>{card.trend}</span>
+          <div className="mt-1 flex items-center justify-between gap-1 text-[10px] sm:text-[11px] font-bold truncate">
+            <div className="flex items-center gap-1 truncate">
+              {card.trend && (
+                <span className="inline-flex items-center gap-0.5 text-emerald-700 shrink-0">
+                  <ArrowUpRight className="w-3 h-3" />
+                  <span>{card.trend}</span>
+                </span>
+              )}
+              <span className="text-on-surface-variant/80 truncate">
+                {card.subtitle}
+              </span>
+            </div>
+            {card.targetTab && (
+              <span className="text-[10px] font-bold text-primary/70 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                عرض ←
               </span>
             )}
-            <span className="text-on-surface-variant/80 truncate">
-              {card.subtitle}
-            </span>
           </div>
         </div>
       </div>

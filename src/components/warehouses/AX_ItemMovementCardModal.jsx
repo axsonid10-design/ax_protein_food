@@ -363,7 +363,9 @@ export function AX_ItemMovementCardModal({
                             <Warehouse className="w-3.5 h-3.5 text-secondary" />
                             <span>{s.warehouseName}</span>
                           </td>
-                          <td className="px-3 text-center font-mono font-black text-primary text-sm">
+                          <td className={`px-3 text-center font-mono font-black text-sm ${
+                            Number(s.quantity) < 0 ? 'text-error' : 'text-primary'
+                          }`}>
                             {s.quantity}
                           </td>
                           <td className="px-3 text-center text-on-surface-variant text-[11px]">

@@ -13,6 +13,7 @@ import {
   BadgePercent,
   BarChart3,
   Trash2,
+  ShieldCheck,
 } from 'lucide-react'
 import { useAXStore } from '../../store/useAXStore'
 import { hasModuleAccess } from '../../utils/permissionsConfig'
@@ -36,7 +37,8 @@ export function AX_MobileNavbar({ activeTab, onSelectTab }) {
     { id: 'suppliers', label: 'الموردين', icon: Building2, badge: 0 },
     { id: 'sales_reps', label: 'المناديب', icon: BadgePercent, badge: 0 },
     { id: 'reports', label: 'التقارير', icon: BarChart3, badge: 0 },
-    { id: 'staff', label: 'الموظفين', icon: Users, badge: 0 },
+    { id: 'employees', label: 'الموظفين', icon: Users, badge: 0 },
+    { id: 'staff', label: 'الصلاحيات', icon: ShieldCheck, badge: 0 },
     { id: 'recycle_bin', label: 'المحذوفات', icon: Trash2, badge: (recycleBin || []).length || 0 },
   ]
 

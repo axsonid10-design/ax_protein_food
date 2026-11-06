@@ -73,6 +73,22 @@ export const AX_RecycleBinService = {
           phone: rawData.phone || '',
           balance: Number(rawData.balance || 0),
         }, { onConflict: 'id' })
+      } else if (entityType === 'employee') {
+        await supabase.from('ax_company_employees').upsert({
+          id: rawData.id,
+          code: rawData.code,
+          name: rawData.name,
+          phone: rawData.phone || null,
+          national_id: rawData.national_id || rawData.nationalId || null,
+          department: rawData.department || 'التشغيل والمصنع',
+          job_title: rawData.job_title || rawData.jobTitle || 'عامل تشغيل',
+          salary_type: rawData.salary_type || rawData.salaryType || 'monthly',
+          base_salary: Number(rawData.base_salary ?? rawData.baseSalary ?? 0),
+          daily_rate: Number(rawData.daily_rate ?? rawData.dailyRate ?? 0),
+          hire_date: rawData.hire_date || rawData.hireDate || null,
+          status: rawData.status || 'active',
+          notes: rawData.notes || null,
+        }, { onConflict: 'id' })
       } else if (entityType === 'transfer') {
         const fromId = rawData.from_warehouse_id || rawData.fromId
         const toId = rawData.to_warehouse_id || rawData.toId
@@ -89,7 +105,7 @@ export const AX_RecycleBinService = {
             await supabase.from('ax_inventory_stock').upsert({
               warehouse_id: fromId,
               item_id: itemId,
-              quantity: Math.max(0, curFromQty - qty),
+              quantity: curFromQty - qty,
               unit: item.unit || fromStock?.unit || 'كرتونة',
               updated_at: new Date().toISOString(),
             }, { onConflict: 'warehouse_id,item_id' })

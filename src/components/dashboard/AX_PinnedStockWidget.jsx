@@ -102,7 +102,7 @@ export function AX_PinnedStockWidget() {
               </div>
 
               <div className="flex items-baseline gap-1 pt-0.5">
-                <span className="text-base sm:text-xl font-black font-mono text-primary">
+                <span className={`text-base sm:text-xl font-black font-mono ${qty < 0 ? 'text-error' : 'text-primary'}`}>
                   {qty.toLocaleString('en-US')}
                 </span>
                 <span className="text-[11px] font-bold text-on-surface-variant">

@@ -32,8 +32,15 @@ export function AX_InvoicesManager() {
     deleteInvoice,
   } = useAXStore()
 
+  const invoiceTypeFilter = useAXStore((s) => s.invoiceTypeFilter)
   const [activeSubView, setActiveSubView] = useState('invoices')
-  const [typeFilter, setTypeFilter] = useState('all')
+  const [typeFilter, setTypeFilter] = useState(() => useAXStore.getState().invoiceTypeFilter || 'all')
+
+  useEffect(() => {
+    if (invoiceTypeFilter && invoiceTypeFilter !== typeFilter) {
+      setTypeFilter(invoiceTypeFilter)
+    }
+  }, [invoiceTypeFilter])
   const [timeframe, setTimeframe] = useState('all')
   const [specificDate, setSpecificDate] = useState('')
   const [customStart, setCustomStart] = useState('')

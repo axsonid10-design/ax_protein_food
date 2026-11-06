@@ -135,8 +135,15 @@ export const calculateTransferStockMovement = (transfer, currentStock = [], stoc
       if (fromIndex >= 0) {
         updatedStock[fromIndex] = {
           ...updatedStock[fromIndex],
-          quantity: Math.max(0, (Number(updatedStock[fromIndex].quantity) || 0) - qty),
+          quantity: (Number(updatedStock[fromIndex].quantity) || 0) - qty,
         }
+      } else {
+        updatedStock.push({
+          warehouseId: fromTargetId,
+          itemId: item.itemId,
+          quantity: -qty,
+          unit: item.unit || 'كرتونة',
+        })
       }
     }
 

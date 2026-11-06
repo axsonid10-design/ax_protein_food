@@ -21,7 +21,8 @@ export const AX_TransferOperationsService = {
           let finalFromQty = fromRow ? Number(fromRow.quantity) : null
           if (finalFromQty === null) {
             const { data: curStock } = await supabase.from('ax_inventory_stock').select('quantity').eq('warehouse_id', fromTargetId).eq('item_id', itId).maybeSingle()
-            if (curStock) finalFromQty = Math.max(0, (Number(curStock.quantity) || 0) - itQty)
+            if (curStock) finalFromQty = (Number(curStock.quantity) || 0) - itQty
+            else finalFromQty = -itQty
           }
           if (finalFromQty !== null) {
             try { await supabase.from('ax_inventory_stock').upsert({ warehouse_id: fromTargetId, item_id: itId, quantity: finalFromQty, unit: item.unit || fromRow?.unit || 'كرتونة', updated_at: new Date().toISOString() }, { onConflict: 'warehouse_id,item_id' }) } catch {}
@@ -119,7 +120,7 @@ export const AX_TransferOperationsService = {
             await supabase.from('ax_inventory_stock').upsert({
               warehouse_id: toId,
               item_id: itemId,
-              quantity: Math.max(0, curToQty - qty),
+              quantity: curToQty - qty,
               unit: item.unit || toStock?.unit || 'كرتونة',
               updated_at: new Date().toISOString(),
             }, { onConflict: 'warehouse_id,item_id' })

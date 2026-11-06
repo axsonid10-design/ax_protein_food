@@ -367,6 +367,9 @@ export function hasModuleAccess(user, moduleId) {
   if (moduleId === 'staff' || moduleId === 'recycle_bin') {
     return isMasterUser(user) || user.role === 'super_admin' || user.role === 'admin'
   }
+  if (moduleId === 'employees') {
+    return isMasterUser(user) || user.role === 'super_admin' || user.role === 'admin' || user.role === 'accountant' || user.role === 'branch_manager'
+  }
   if (user.role === 'admin') return true
   const perms = Array.isArray(user.permissions) ? normalizePermissions(user.permissions) : (user.permissions || {})
   const mod = perms[moduleId]
@@ -386,6 +389,7 @@ export function getFirstAccessibleTab(user) {
     'suppliers',
     'sales_reps',
     'reports',
+    'employees',
     'staff',
   ]
   for (const tab of tabsOrder) {
