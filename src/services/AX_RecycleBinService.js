@@ -74,14 +74,57 @@ export const AX_RecycleBinService = {
           balance: Number(rawData.balance || 0),
         }, { onConflict: 'id' })
       } else if (entityType === 'transfer') {
-        await supabase.from('ax_transfers').upsert({
-          id: rawData.id,
-          code: rawData.code,
-          from_warehouse_id: rawData.fromId || rawData.from_warehouse_id,
-          to_warehouse_id: rawData.toId || rawData.to_warehouse_id,
-          status: rawData.status || 'pending',
-          items: rawData.items || [],
-        }, { onConflict: 'id' })
+        const fromId = rawData.from_warehouse_id || rawData.fromId
+        const toId = rawData.to_warehouse_id || rawData.toId
+        const items = rawData.items || []
+
+        for (const item of items) {
+          const itemId = item.itemId || item.id || item.item_id
+          const qty = Number(item.quantity) || 0
+          if (!itemId || qty <= 0) continue
+
+          if (fromId) {
+            const { data: fromStock } = await supabase.from('ax_inventory_stock').select('*').eq('warehouse_id', fromId).eq('item_id', itemId).maybeSingle()
+            const curFromQty = Number(fromStock?.quantity || 0)
+            await supabase.from('ax_inventory_stock').upsert({
+              warehouse_id: fromId,
+              item_id: itemId,
+              quantity: Math.max(0, curFromQty - qty),
+              unit: item.unit || fromStock?.unit || 'كرتونة',
+              updated_at: new Date().toISOString(),
+            }, { onConflict: 'warehouse_id,item_id' })
+          }
+
+          if (toId) {
+            const { data: toStock } = await supabase.from('ax_inventory_stock').select('*').eq('warehouse_id', toId).eq('item_id', itemId).maybeSingle()
+            const curToQty = Number(toStock?.quantity || 0)
+            await supabase.from('ax_inventory_stock').upsert({
+              warehouse_id: toId,
+              item_id: itemId,
+              quantity: curToQty + qty,
+              unit: item.unit || toStock?.unit || 'كرتونة',
+              updated_at: new Date().toISOString(),
+            }, { onConflict: 'warehouse_id,item_id' })
+          }
+        }
+
+        await supabase.from('ax_transfers').update({ status: 'confirmed' }).eq('id', rawData.id)
+      } else if (entityType === 'audit') {
+        const whId = rawData.warehouse_id || rawData.warehouseId
+        for (const it of (rawData.items || [])) {
+          const itId = it.itemId || it.item_id
+          const actQty = Number(it.actualQtyNum !== undefined ? it.actualQtyNum : it.actualQty) || 0
+          if (whId && itId) {
+            await supabase.from('ax_inventory_stock').upsert({
+              warehouse_id: whId,
+              item_id: itId,
+              quantity: actQty,
+              unit: it.unit || 'كرتونة',
+              updated_at: new Date().toISOString(),
+            }, { onConflict: 'warehouse_id,item_id' })
+          }
+        }
+        await supabase.from('ax_stock_audits').update({ status: 'approved' }).eq('id', rawData.id)
       }
 
       await supabase.from('ax_recycle_bin').delete().eq('id', item.id)

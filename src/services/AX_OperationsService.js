@@ -5,14 +5,16 @@ import { AX_StaffOperationsService } from './AX_StaffOperationsService.js'
 import { AX_CategoryOperationsService } from './AX_CategoryOperationsService.js'
 import { AX_ItemOperationsService } from './AX_ItemOperationsService.js'
 import { AX_InvoiceOperationsService } from './AX_InvoiceOperationsService.js'
+import { AX_TransferOperationsService } from './AX_TransferOperationsService.js'
+import { AX_RecycleBinService } from './AX_RecycleBinService.js'
 import { recoverUnappliedTransfers, executeImmediateTransfer } from '../store/transferHelpers.js'
 
 export const AX_OperationsService = {
   ...AX_StaffOperationsService,
   ...AX_CategoryOperationsService,
   ...AX_ItemOperationsService,
-
-...AX_InvoiceOperationsService,
+  ...AX_InvoiceOperationsService,
+  ...AX_TransferOperationsService,
 
   addCashTransactionInDB: async (tx, userProfile = null) => {
     if (!supabase || typeof supabase.from !== 'function' || !tx) return { success: false }
@@ -305,91 +307,6 @@ export const AX_OperationsService = {
     } catch (err) { return { success: false, error: err.message } }
   },
 
-  confirmTransferInDB: async (trf, updatedStock = [], userName = '') => {
-    if (!supabase || typeof supabase.from !== 'function' || !trf?.id) return
-    try {
-      await supabase.from('ax_transfers').update({ status: 'confirmed', confirmed_at: new Date().toISOString(), confirmed_by: userName || 'مدير المنظومة' }).eq('id', trf.id)
-      const transferItems = trf.items && trf.items.length > 0 ? trf.items : [{ itemId: trf.itemId, quantity: trf.quantity, unit: trf.unit }]
-      const fromTargetId = trf.fromId || trf.from_warehouse_id
-      const toTargetId = trf.toId || trf.to_warehouse_id
-
-      for (const item of transferItems) {
-        if (!item?.itemId && !item?.item_id) continue
-        const itId = item.itemId || item.item_id
-        const itQty = Number(item.quantity) || 0
-
-        if (fromTargetId) {
-          const fromRow = updatedStock.find((s) => (s.warehouseId === fromTargetId || s.warehouse_id === fromTargetId) && (s.itemId === itId || s.item_id === itId))
-          let finalFromQty = fromRow ? Number(fromRow.quantity) : null
-          if (finalFromQty === null) {
-            const { data: curStock } = await supabase.from('ax_inventory_stock').select('quantity').eq('warehouse_id', fromTargetId).eq('item_id', itId).maybeSingle()
-            if (curStock) finalFromQty = Math.max(0, (Number(curStock.quantity) || 0) - itQty)
-          }
-          if (finalFromQty !== null) {
-            try { await supabase.from('ax_inventory_stock').upsert({ warehouse_id: fromTargetId, item_id: itId, quantity: finalFromQty, unit: item.unit || fromRow?.unit || 'كرتونة', updated_at: new Date().toISOString() }, { onConflict: 'warehouse_id,item_id' }) } catch {}
-          }
-        }
-        if (toTargetId) {
-          const toRow = updatedStock.find((s) => (s.warehouseId === toTargetId || s.warehouse_id === toTargetId) && (s.itemId === itId || s.item_id === itId))
-          let finalToQty = toRow ? Number(toRow.quantity) : null
-          if (finalToQty === null) {
-            const { data: curStock } = await supabase.from('ax_inventory_stock').select('quantity').eq('warehouse_id', toTargetId).eq('item_id', itId).maybeSingle()
-            finalToQty = ((Number(curStock?.quantity) || 0) + itQty)
-          }
-          if (finalToQty !== null) {
-            try { await supabase.from('ax_inventory_stock').upsert({ warehouse_id: toTargetId, item_id: itId, quantity: finalToQty, unit: item.unit || toRow?.unit || 'كرتونة', updated_at: new Date().toISOString() }, { onConflict: 'warehouse_id,item_id' }) } catch {}
-          }
-        }
-      }
-
-      const transferTitle = `✅ تم فحص واستلام إذن التحويل [${trf.code || 'تحويل'}]`
-      const transferMsg = `تم تأكيد إذن التحويل ونقل الأصناف للمستلم بنجاح.`
-      try { await supabase.from('ax_notifications').insert({ id: 'notif-' + Date.now(), title: transferTitle, message: transferMsg, type: 'transfer', target_tab: 'warehouses', read: false }) } catch {}
-      if (typeof supabase.functions?.invoke === 'function') {
-        try { supabase.functions.invoke('ax-web-push', { body: { project_slug: 'protein-food', userId: 'all', title: transferTitle, message: transferMsg, link: '/?tab=warehouses', tag: `trf-conf-${Date.now()}` } }) } catch {}
-      }
-    } catch {}
-  },
-
-  cancelTransferInDB: async (transferId, userProfile = null) => {
-    if (!supabase || typeof supabase.from !== 'function' || !transferId) return { success: false }
-    try {
-      const { error } = await supabase.from('ax_transfers').update({ status: 'cancelled' }).eq('id', transferId)
-      if (error) throw error
-      try { await supabase.from('ax_activity_logs').insert({ id: generateUUID(), table_name: 'ax_transfers', action: 'UPDATE', record_id: transferId, new_data: { status: 'cancelled' }, user_id: userProfile?.id || null }) } catch {}
-      return { success: true }
-    } catch (err) {
-      return { success: false, error: err.message }
-    }
-  },
-
-  addTransferInDB: async (newTrf) => {
-    if (!supabase || typeof supabase.from !== 'function' || !newTrf?.id) return
-    try {
-      const opDate = newTrf.operationalDate || newTrf.date || new Date().toISOString().split('T')[0]
-      const timePart = new Date().toISOString().split('T')[1] || '12:00:00.000Z'
-      const reqIso = `${opDate}T${timePart}`
-      await supabase.from('ax_transfers').insert({
-        id: newTrf.id,
-        code: newTrf.code,
-        from_warehouse_id: newTrf.fromId,
-        to_warehouse_id: newTrf.toId,
-        items: newTrf.items,
-        status: newTrf.status || 'pending',
-        date: opDate,
-        requested_at: reqIso,
-        notes: newTrf.notes || null,
-      })
-      const trfTitle = `📦 إذن تحويل مخزني جديد [${newTrf.code}]`
-      const trfMsg = `تم إنشاء إذن تحويل أصناف جديد وبانتظار الفحص والاستلام بالمخزن.`
-      try { await supabase.from('ax_notifications').insert({ id: 'notif-' + Date.now(), title: trfTitle, message: trfMsg, type: 'transfer', target_tab: 'warehouses', read: false }) } catch {}
-
-      if (typeof supabase.functions?.invoke === 'function') {
-        try { supabase.functions.invoke('ax-web-push', { body: { project_slug: 'protein-food', userId: 'all', title: trfTitle, message: trfMsg, link: '/?tab=warehouses', tag: `trf-new-${Date.now()}` } }) } catch {}
-      }
-    } catch {}
-  },
-
   markNotificationReadInDB: async (id) => {
     try {
       if (supabase?.from) await supabase.from('ax_notifications').update({ read: true }).eq('id', id)
@@ -471,6 +388,18 @@ export const AX_OperationsService = {
         }
       }
       await supabase.from('ax_stock_audits').update({ status: 'cancelled' }).eq('id', auditId)
+
+      try {
+        await AX_RecycleBinService.moveToRecycleBin({
+          entityType: 'audit',
+          entityId: auditId,
+          entityCode: audit.code || `AUD-${String(auditId).slice(-4)}`,
+          entityTitle: `محضر جرد: ${audit.warehouse_name || audit.warehouseName || 'المخزن'} (${audit.code || ''})`,
+          originalData: audit,
+          userProfile,
+        })
+      } catch {}
+
       try {
         await supabase.from('ax_activity_logs').insert({ id: generateUUID(), table_name: 'ax_stock_audits', action: 'ROLLBACK_AUDIT', record_id: auditId, new_data: { code: audit.code, warehouse_id: whId }, user_id: userProfile?.id || null })
       } catch {}

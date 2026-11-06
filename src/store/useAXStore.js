@@ -486,6 +486,8 @@ export const useAXStore = create((set, get) => ({
   restoreFromRecycleBin: (id) => recycleBinHelpers.restoreItem(get(), id, get().profile, set),
   purgeFromRecycleBin: (id) => recycleBinHelpers.purgeItem(id, set),
   rollbackStockAudit: (auditId) => recycleBinHelpers.rollbackAudit(auditId, get().profile, set, get()),
+  updateTransfer: (id, updates) => { AX_OperationsService.updateTransferInDB(id, updates, get().profile); set((state) => ({ transfers: (state.transfers || []).map((t) => t.id === id ? { ...t, ...updates } : t) })) },
+  rollbackTransfer: (id) => recycleBinHelpers.rollbackTransfer(id, get().profile, set, get()),
 
   addEmployee: (emp) => { AX_StaffOperationsService.upsertEmployeeInDB(emp); set((state) => { const updated = [emp, ...state.employees.filter((e) => e.id !== emp.id)]; try { localStorage.setItem('ax_staff_employees', JSON.stringify(updated)) } catch {}; return { employees: updated } }) },
   updateEmployee: (id, updates) => { const cur = get().employees.find((e) => e.id === id); if (cur) AX_StaffOperationsService.upsertEmployeeInDB({ ...cur, ...updates }); set((state) => { const updated = state.employees.map((e) => (e.id === id ? { ...e, ...updates } : e)); try { localStorage.setItem('ax_staff_employees', JSON.stringify(updated)) } catch {}; return { employees: updated } }) },
