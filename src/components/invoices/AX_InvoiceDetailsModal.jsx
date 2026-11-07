@@ -136,7 +136,7 @@ export function AX_InvoiceDetailsModal({
               className="py-1.5 px-3.5 rounded-full bg-primary hover:bg-primary-dark text-white text-xs font-black shadow-xs flex items-center gap-1.5 transition-all cursor-pointer"
             >
               <Printer className="w-3.5 h-3.5" />
-              <span>طباعة A4</span>
+              <span>طباعة ومشاركة الفاتورة</span>
             </button>
             <button
               type="button"

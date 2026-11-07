@@ -1,15 +1,19 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
+import fs from 'node:fs'
+import path from 'node:path'
+import * as invoiceImageService from '../src/services/axInvoiceImageService.js'
+import { formatDualUnits } from '../src/utils/itemUnitFormatters.js'
 
-describe('A4 Branded Invoice Printing Template', () => {
+describe('A4 Branded Invoice Printing Template & WhatsApp Image Master', () => {
   const getInvoiceTitle = (type) => {
     switch (type) {
       case 'purchase':
         return 'فاتورة مشتريات وتوريد'
       case 'sale_return':
-        return 'إشعار مردود مبيعات'
+        return 'إشعار مردود مبيعات معتمد'
       case 'purchase_return':
-        return 'إشعار مردود مشتريات'
+        return 'إشعار مردود مشتريات معتمد'
       default:
         return 'فاتورة مبيعات نقدية وآجلة'
     }
@@ -41,8 +45,8 @@ describe('A4 Branded Invoice Printing Template', () => {
   it('generates correct official titles for all 4 invoice categories', () => {
     assert.equal(getInvoiceTitle('sale'), 'فاتورة مبيعات نقدية وآجلة')
     assert.equal(getInvoiceTitle('purchase'), 'فاتورة مشتريات وتوريد')
-    assert.equal(getInvoiceTitle('sale_return'), 'إشعار مردود مبيعات')
-    assert.equal(getInvoiceTitle('purchase_return'), 'إشعار مردود مشتريات')
+    assert.equal(getInvoiceTitle('sale_return'), 'إشعار مردود مبيعات معتمد')
+    assert.equal(getInvoiceTitle('purchase_return'), 'إشعار مردود مشتريات معتمد')
   })
 
   it('computes accurate totals with transport and loading costs for printing', () => {
@@ -63,5 +67,29 @@ describe('A4 Branded Invoice Printing Template', () => {
     assert.equal(fin.remainingAmount, 2950)
     assert.equal(fin.status, 'partial')
     assert.equal(fin.statusLabel, 'مدفوع جزئي')
+  })
+
+  it('verifies axInvoiceImageService exports required WhatsApp and image functions', () => {
+    assert.equal(typeof invoiceImageService.captureInvoiceElement, 'function')
+    assert.equal(typeof invoiceImageService.getInvoiceImageBlob, 'function')
+    assert.equal(typeof invoiceImageService.downloadInvoiceImage, 'function')
+    assert.equal(typeof invoiceImageService.copyInvoiceImageToClipboard, 'function')
+    assert.equal(typeof invoiceImageService.shareInvoiceImageToWhatsApp, 'function')
+  })
+
+  it('verifies CSS print stylesheet contains strict physical dimensions for A4 portrait, A4 landscape, and A5', () => {
+    const cssPath = path.resolve(process.cwd(), 'src/index.css')
+    const cssContent = fs.readFileSync(cssPath, 'utf-8')
+    assert.ok(cssContent.includes('#ax-invoice-print-sheet'), 'CSS must target #ax-invoice-print-sheet')
+    assert.ok(cssContent.includes('transform: none !important'), 'Print CSS must reset scale transforms')
+    assert.ok(cssContent.includes('format-a4-portrait'), 'Must support format-a4-portrait')
+    assert.ok(cssContent.includes('format-a4-landscape'), 'Must support format-a4-landscape')
+    assert.ok(cssContent.includes('format-a5'), 'Must support format-a5')
+  })
+
+  it('formats dual units properly for invoice line items', () => {
+    const item = { unitType: 'كرتونة', piecesPerCarton: 20, subUnitType: 'كيس' }
+    const formatted = formatDualUnits(5, 'كرتونة', item)
+    assert.equal(formatted, '5 كرتونة (100 كيس)')
   })
 })

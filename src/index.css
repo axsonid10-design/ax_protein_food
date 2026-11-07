@@ -52,11 +52,30 @@ body {
     margin: 8mm;
   }
 
-  body {
+  body.print-format-a4-landscape {
+    @page {
+      size: A4 landscape;
+      margin: 8mm;
+    }
+  }
+
+  body.print-format-a5 {
+    @page {
+      size: A5 portrait;
+      margin: 6mm;
+    }
+  }
+
+  html, body {
     background-color: #ffffff !important;
     background-image: none !important;
     color: #0f172a !important;
     font-size: 11pt !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: visible !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
   }
 
   header,
@@ -64,8 +83,56 @@ body {
   aside,
   button,
   .print-hidden,
-  .no-print {
+  .no-print,
+  .ax-print-controls {
     display: none !important;
+  }
+
+  .ax-print-modal-backdrop {
+    position: static !important;
+    background: transparent !important;
+    backdrop-filter: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    display: block !important;
+    overflow: visible !important;
+  }
+
+  .ax-print-viewport-container {
+    padding: 0 !important;
+    margin: 0 !important;
+    display: block !important;
+    overflow: visible !important;
+  }
+
+  #ax-invoice-print-sheet {
+    position: static !important;
+    transform: none !important;
+    margin: 0 auto !important;
+    box-shadow: none !important;
+    border: none !important;
+    border-radius: 0 !important;
+    box-sizing: border-box !important;
+    page-break-inside: avoid;
+    overflow: visible !important;
+  }
+
+  #ax-invoice-print-sheet.format-a4-portrait {
+    width: 210mm !important;
+    min-height: 297mm !important;
+    padding: 12mm 10mm !important;
+  }
+
+  #ax-invoice-print-sheet.format-a4-landscape {
+    width: 297mm !important;
+    min-height: 210mm !important;
+    padding: 10mm 12mm !important;
+  }
+
+  #ax-invoice-print-sheet.format-a5 {
+    width: 148mm !important;
+    min-height: 210mm !important;
+    padding: 8mm 8mm !important;
   }
 
   .print-visible {
