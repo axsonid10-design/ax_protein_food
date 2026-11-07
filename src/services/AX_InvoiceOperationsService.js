@@ -1,6 +1,7 @@
 import { supabase } from './supabaseClient.js'
 import { generateUUID } from '../utils/AX_UUID.js'
 import { AX_RecycleBinService } from './AX_RecycleBinService.js'
+import { offlineDB } from './offlineDB.js'
 
 export const AX_InvoiceOperationsService = {
   addInvoiceInDB: async (inv, userProfile = null) => {
@@ -27,7 +28,7 @@ export const AX_InvoiceOperationsService = {
         total: Number(inv.total || 0),
         paid_amount: Number(inv.paidAmount ?? inv.paid_amount ?? 0),
         remaining_amount: Number(inv.remainingAmount ?? inv.remaining_amount ?? 0),
-        status: inv.status || 'completed',
+        status: isSaleReturn ? 'sale_return' : isPurchaseReturn ? 'purchase_return' : (inv.status || 'completed'),
         date: inv.date || new Date().toISOString().split('T')[0],
         payment_terms: inv.paymentTerms || inv.payment_terms || defaultTerms,
         items: inv.items || [],
@@ -44,10 +45,10 @@ export const AX_InvoiceOperationsService = {
           const { data: stockRow } = await supabase.from('ax_inventory_stock').select('*').eq('warehouse_id', invoiceRow.warehouse_id).eq('item_id', itemId).maybeSingle()
           const delta = isSaleReturn ? qty : (isPurchaseReturn ? -qty : (dbType === 'sale' ? -qty : qty))
           if (stockRow) {
-            const newQty = Math.max(0, Number(stockRow.quantity || 0) + delta)
+            const newQty = Number(stockRow.quantity || 0) + delta
             await supabase.from('ax_inventory_stock').update({ quantity: newQty, updated_at: new Date().toISOString() }).eq('id', stockRow.id)
-          } else if (delta > 0) {
-            await supabase.from('ax_inventory_stock').insert({ id: generateUUID(), warehouse_id: invoiceRow.warehouse_id, item_id: itemId, quantity: qty, unit: item.unit || 'كرتونة' })
+          } else {
+            await supabase.from('ax_inventory_stock').insert({ id: generateUUID(), warehouse_id: invoiceRow.warehouse_id, item_id: itemId, quantity: delta, unit: item.unit || 'كرتونة' })
           }
         }
       }
@@ -127,8 +128,10 @@ export const AX_InvoiceOperationsService = {
           const { data: stockRow } = await supabase.from('ax_inventory_stock').select('*').eq('warehouse_id', whId).eq('item_id', itemId).maybeSingle()
           const reverseDelta = isSaleReturn ? -qty : (isPurchaseReturn ? qty : (dbType === 'sale' ? qty : -qty))
           if (stockRow) {
-            const newQty = Math.max(0, Number(stockRow.quantity || 0) + reverseDelta)
+            const newQty = Number(stockRow.quantity || 0) + reverseDelta
             await supabase.from('ax_inventory_stock').update({ quantity: newQty, updated_at: new Date().toISOString() }).eq('id', stockRow.id)
+          } else {
+            await supabase.from('ax_inventory_stock').insert({ id: generateUUID(), warehouse_id: whId, item_id: itemId, quantity: reverseDelta, unit: item.unit || 'كرتونة' })
           }
         }
       }

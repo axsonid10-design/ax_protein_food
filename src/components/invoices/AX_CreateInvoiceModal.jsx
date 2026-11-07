@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useMemo } from 'react'
 import { Plus, AlertTriangle, RotateCcw, Printer } from 'lucide-react'
 import { AX_SearchableSelect } from '../common/AX_SearchableSelect'
 import { AX_CompanyDatePicker } from '../common/AX_CompanyDatePicker'
@@ -17,6 +17,7 @@ import { getCartonEquivalent } from '../../utils/pricingCalculations'
 export function AX_CreateInvoiceModal({
   isOpen, onClose, items = [], warehouses = [], clients = [],
   suppliers = [], treasuryAccounts = [], inventoryStock: propInventoryStock, onSave,
+  defaultType = 'sale', lockGroup = null,
 }) {
   useBodyScrollLock(isOpen, onClose)
 
@@ -24,7 +25,7 @@ export function AX_CreateInvoiceModal({
   const inventoryStock = propInventoryStock || storeInventoryStock
 
   const [invForm, setInvForm] = useState({
-    type: 'sale',
+    type: defaultType || 'sale',
     partyName: clients[0]?.name || '',
     isCustomParty: false,
     warehouseId: warehouses[0]?.id || '',
@@ -36,7 +37,7 @@ export function AX_CreateInvoiceModal({
 
   const [paymentStatus, setPaymentStatus] = useState('unpaid')
   const [paidInput, setPaidInput] = useState('')
-  const [partyKind, setPartyKind] = useState('customer')
+  const [partyKind, setPartyKind] = useState(() => (defaultType === 'purchase' || defaultType === 'purchase_return' ? 'supplier' : 'customer'))
   const [selectedTreasuryId, setSelectedTreasuryId] = useState(treasuryAccounts[0]?.id || '')
   const [showCustomerModal, setShowCustomerModal] = useState(false)
   const [showSupplierModal, setShowSupplierModal] = useState(false)
@@ -51,6 +52,27 @@ export function AX_CreateInvoiceModal({
   const selectedItemIds = new Set(invForm.items.map((row) => row.itemId))
   const availableItems = items.filter((it) => !selectedItemIds.has(it.id))
 
+  const typeButtons = useMemo(() => {
+    if (lockGroup === 'sales') {
+      return [
+        ['sale', 'فاتورة مبيعات', 'bg-primary text-white shadow-xs'],
+        ['sale_return', 'مردود مبيعات', 'bg-purple-700 text-white shadow-xs'],
+      ]
+    }
+    if (lockGroup === 'purchases') {
+      return [
+        ['purchase', 'فاتورة مشتريات', 'bg-secondary text-white shadow-xs'],
+        ['purchase_return', 'مردود مشتريات', 'bg-amber-600 text-white shadow-xs'],
+      ]
+    }
+    return [
+      ['sale', 'فاتورة مبيعات', 'bg-primary text-white shadow-xs'],
+      ['purchase', 'فاتورة مشتريات', 'bg-secondary text-white shadow-xs'],
+      ['sale_return', 'مردود مبيعات', 'bg-purple-700 text-white shadow-xs'],
+      ['purchase_return', 'مردود مشتريات', 'bg-amber-600 text-white shadow-xs'],
+    ]
+  }, [lockGroup])
+
   const getItemStock = (itemId, whId = invForm.warehouseId) => {
     if (!whId || !itemId) return 0
     const row = (inventoryStock || []).find((s) => s.warehouseId === whId && s.itemId === itemId)
@@ -60,12 +82,15 @@ export function AX_CreateInvoiceModal({
   useEffect(() => {
     if (isOpen) {
       const initialWarehouseId = warehouses[0]?.id || ''
-      const initialPartyName = clients[0]?.name || ''
+      const resType = defaultType || 'sale'
+      const initPartyKind = resType === 'purchase' || resType === 'purchase_return' ? 'supplier' : 'customer'
+      const initPartyName = initPartyKind === 'customer' ? (clients[0]?.name || '') : (suppliers[0]?.companyName || suppliers[0]?.name || '')
       setInvForm({
-        type: 'sale', partyName: initialPartyName, isCustomParty: false,
+        type: resType, partyName: initPartyName, isCustomParty: false,
         warehouseId: initialWarehouseId, date: new Date().toISOString().split('T')[0],
         transportCost: '', loadingCost: '', items: [],
       })
+      setPartyKind(initPartyKind)
       setPaymentStatus('unpaid')
       setPaidInput('')
       setSelectedTreasuryId(treasuryAccounts[0]?.id || '')
@@ -75,7 +100,7 @@ export function AX_CreateInvoiceModal({
       setPreviewInvoice(null)
       setIsPostSavePrint(false)
     }
-  }, [isOpen])
+  }, [isOpen, defaultType])
 
   useEffect(() => {
     if (!availableItems.some((it) => it.id === draftItem.itemId)) {
@@ -122,15 +147,6 @@ export function AX_CreateInvoiceModal({
 
   const handleCommitDraftItem = () => {
     if (!draftItem.itemId || Number(draftItem.quantity) <= 0) return
-    if (invForm.type === 'sale') {
-      const itObj = items.find((i) => i.id === draftItem.itemId)
-      const avail = getItemStock(draftItem.itemId, invForm.warehouseId)
-      const reqCartons = getCartonEquivalent(draftItem.quantity, draftItem.unit || itObj?.unitType || 'كرتونة', itObj)
-      if (avail <= 0 || reqCartons > avail) {
-        axToast.error('رصيد الصنف غير متاح في المخزن المحدد')
-        return
-      }
-    }
     const newItems = [draftItem, ...invForm.items]
     setInvForm({ ...invForm, items: newItems })
     const newSelected = new Set(newItems.map((r) => r.itemId))
@@ -144,15 +160,6 @@ export function AX_CreateInvoiceModal({
   }
 
   const handleDirectAddItem = (newItem) => {
-    if (invForm.type === 'sale') {
-      const itObj = items.find((i) => i.id === newItem.itemId)
-      const avail = getItemStock(newItem.itemId, invForm.warehouseId)
-      const reqCartons = getCartonEquivalent(newItem.quantity, newItem.unit || itObj?.unitType || 'كرتونة', itObj)
-      if (avail <= 0 || reqCartons > avail) {
-        axToast.error('رصيد الصنف غير متاح في المخزن المحدد')
-        return
-      }
-    }
     setInvForm((prev) => ({
       ...prev,
       items: [newItem, ...prev.items],
@@ -172,16 +179,6 @@ export function AX_CreateInvoiceModal({
       const updates = typeof fieldOrUpdates === 'object' && fieldOrUpdates !== null
         ? fieldOrUpdates
         : { [fieldOrUpdates]: value }
-      if (prev.type === 'sale' && updates.quantity !== undefined) {
-        const itemObj = items.find((i) => i.id === row.itemId)
-        const unitToCheck = updates.unit || row.unit || itemObj?.unitType || 'كرتونة'
-        const reqCartons = getCartonEquivalent(updates.quantity, unitToCheck, itemObj)
-        const availCartons = getItemStock(row.itemId, prev.warehouseId)
-        if (availCartons <= 0 || reqCartons > availCartons) {
-          axToast.error('رصيد الصنف غير متاح في المخزن المحدد')
-          return prev
-        }
-      }
       const updated = [...prev.items]
       updated[idx] = { ...updated[idx], ...updates }
       return { ...prev, items: updated }
@@ -247,18 +244,6 @@ export function AX_CreateInvoiceModal({
     e.preventDefault()
     if (invForm.items.length === 0) return
 
-    if (invForm.type === 'sale') {
-      for (const it of invForm.items) {
-        const itemObj = items.find((i) => i.id === it.itemId)
-        const avail = getItemStock(it.itemId, invForm.warehouseId)
-        const req = getCartonEquivalent(it.quantity, it.unit || itemObj?.unitType || 'كرتونة', itemObj)
-        if (avail <= 0 || req > avail) {
-          axToast.error('رصيد الصنف غير متاح في المخزن المحدد')
-          return
-        }
-      }
-    }
-
     const newInv = buildInvoicePayload(false)
     onSave(newInv)
     setPreviewInvoice(newInv)
@@ -271,10 +256,10 @@ export function AX_CreateInvoiceModal({
   const currentRemaining = Math.max(0, currentTotal - currentPaid)
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-sm animate-in fade-in overscroll-contain">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-0 sm:p-4 bg-black/60 backdrop-blur-sm animate-in fade-in overscroll-contain">
       <form
         onSubmit={handleSubmit}
-        className="bg-surface-lowest border-2 border-secondary/30 rounded-3xl p-5 sm:p-6 shadow-level3 max-w-3xl w-full space-y-4 max-h-[92vh] overflow-y-auto overscroll-contain"
+        className="bg-surface-lowest border-2 border-secondary/30 rounded-none sm:rounded-3xl p-4 sm:p-6 shadow-level3 w-full h-full sm:h-auto sm:max-w-6xl lg:max-w-7xl max-h-[100dvh] sm:max-h-[95vh] flex flex-col space-y-4 overflow-y-auto overscroll-contain mobile-form-zoom"
       >
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5 border-b border-surface-container pb-3">
           <span className="text-sm font-black text-on-surface flex items-center gap-2">
@@ -282,12 +267,7 @@ export function AX_CreateInvoiceModal({
             إنشاء فاتورة جديدة
           </span>
           <div className="grid grid-cols-2 sm:flex gap-1.5 w-full sm:w-auto">
-            {[
-              ['sale', 'فاتورة مبيعات', 'bg-primary text-white shadow-xs'],
-              ['purchase', 'فاتورة مشتريات', 'bg-secondary text-white shadow-xs'],
-              ['sale_return', 'مردود مبيعات', 'bg-purple-700 text-white shadow-xs'],
-              ['purchase_return', 'مردود مشتريات', 'bg-amber-600 text-white shadow-xs'],
-            ].map(([id, label, activeBg]) => (
+            {typeButtons.map(([id, label, activeBg]) => (
               <button
                 key={id}
                 type="button"

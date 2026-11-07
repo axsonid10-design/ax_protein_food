@@ -11,6 +11,7 @@ import {
   Printer,
   Boxes,
   RotateCcw,
+  Trash2,
 } from 'lucide-react'
 import { useAXStore } from '../../store/useAXStore'
 import { AX_ConfirmModal } from '../common/AX_ConfirmModal'
@@ -23,16 +24,18 @@ export function AX_StockAuditsHistoryModal({
   warehouses = [],
 }) {
   const rollbackStockAudit = useAXStore((state) => state.rollbackStockAudit)
+  const deleteStockAudit = useAXStore((state) => state.deleteStockAudit)
   const [selectedWhFilter, setSelectedWhFilter] = useState('ALL')
   const [searchQuery, setSearchQuery] = useState('')
   const [expandedAuditId, setExpandedAuditId] = useState(null)
   const [auditToRollback, setAuditToRollback] = useState(null)
-  const [isRollingBack, setIsRollingBack] = useState(false)
+  const [auditToDelete, setAuditToDelete] = useState(null)
+  const [isProcessing, setIsProcessing] = useState(false)
 
   const handleConfirmRollback = async () => {
     if (!auditToRollback) return
     try {
-      setIsRollingBack(true)
+      setIsProcessing(true)
       const res = await rollbackStockAudit(auditToRollback.id)
       if (res?.success) {
         axToast.success(`تم إلغاء محضر الجرد [${auditToRollback.code}] واسترجاع كميات الأصناف السابقة`)
@@ -43,7 +46,25 @@ export function AX_StockAuditsHistoryModal({
     } catch {
       axToast.error('حدث خطأ أثناء إلغاء المحضر')
     } finally {
-      setIsRollingBack(false)
+      setIsProcessing(false)
+    }
+  }
+
+  const handleConfirmDelete = async () => {
+    if (!auditToDelete) return
+    try {
+      setIsProcessing(true)
+      const res = await deleteStockAudit(auditToDelete.id)
+      if (res?.success) {
+        axToast.success(`تم مسح محضر الجرد [${auditToDelete.code}] بنجاح وتحديث أرصدة المخزن`)
+        setAuditToDelete(null)
+      } else {
+        axToast.error(res?.error || 'تعذر مسح المحضر')
+      }
+    } catch {
+      axToast.error('حدث خطأ أثناء مسح المحضر')
+    } finally {
+      setIsProcessing(false)
     }
   }
 
@@ -215,6 +236,18 @@ export function AX_StockAuditsHistoryModal({
                         </span>
                       </div>
 
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setAuditToDelete(audit)
+                        }}
+                        className="w-7 h-7 rounded-full bg-rose-500/10 hover:bg-rose-500/20 text-rose-700 flex items-center justify-center transition-all cursor-pointer active:scale-95"
+                        title="مسح محضر الجرد نهائياً"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+
                       <div className="w-6 h-6 rounded-full bg-surface-container flex items-center justify-center text-on-surface-variant">
                         {isExpanded ? (
                           <ChevronUp className="w-3.5 h-3.5" />
@@ -317,8 +350,8 @@ export function AX_StockAuditsHistoryModal({
                         </table>
                       </div>
 
-                      <div className="flex items-center justify-between pt-2 border-t border-surface-container">
-                        <div className="flex items-center gap-2">
+                      <div className="flex items-center justify-between pt-2 border-t border-surface-container flex-wrap gap-2">
+                        <div className="flex items-center gap-2 flex-wrap">
                           {audit.status === 'cancelled' ? (
                             <span className="px-3 py-1 rounded-full bg-rose-500/10 text-rose-700 text-xs font-black border border-rose-500/20">
                               تم إلغاء هذا المحضر واسترجاع أرصدته الدفترية
@@ -327,13 +360,23 @@ export function AX_StockAuditsHistoryModal({
                             <button
                               type="button"
                               onClick={() => setAuditToRollback(audit)}
-                              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-rose-500/10 hover:bg-rose-500/20 text-rose-700 text-xs font-black border border-rose-500/20 transition-all cursor-pointer active:scale-95"
+                              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-amber-500/10 hover:bg-amber-500/20 text-amber-800 text-xs font-black border border-amber-500/20 transition-all cursor-pointer active:scale-95"
                               title="إلغاء هذا المحضر واسترجاع كميات الأصناف الدفترية لما كانت عليه قبل الجرد"
                             >
                               <RotateCcw className="w-3.5 h-3.5" />
                               <span>إلغاء المحضر واسترجاع الأرصدة الأصلية</span>
                             </button>
                           )}
+
+                          <button
+                            type="button"
+                            onClick={() => setAuditToDelete(audit)}
+                            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-rose-500/10 hover:bg-rose-500/20 text-rose-700 text-xs font-black border border-rose-500/20 transition-all cursor-pointer active:scale-95"
+                            title="مسح محضر الجرد نهائياً وحذفه من السجل"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                            <span>مسح المحضر نهائياً</span>
+                          </button>
                         </div>
                       </div>
                     </div>
@@ -373,6 +416,17 @@ export function AX_StockAuditsHistoryModal({
         isDestructive={true}
         onConfirm={handleConfirmRollback}
         onCancel={() => setAuditToRollback(null)}
+      />
+
+      <AX_ConfirmModal
+        isOpen={Boolean(auditToDelete)}
+        title="تأكيد مسح محضر الجرد"
+        message={auditToDelete ? `هل أنت متأكد من مسح محضر الجرد "${auditToDelete.code}" نهائياً؟ سيتم حذف المحضر من السجل، وإعادة احتساب أرصدة الأصناف بدقة بناءً على كافة الحركات التشغيلية السابقة، ونقله لسلة المحذوفات.` : ''}
+        confirmText="نعم، مسح المحضر"
+        cancelText="تراجع"
+        isDestructive={true}
+        onConfirm={handleConfirmDelete}
+        onCancel={() => setAuditToDelete(null)}
       />
     </div>
   )

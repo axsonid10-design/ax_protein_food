@@ -1,165 +1,95 @@
-import React, { useState, useMemo } from 'react'
+import React, { useState, useEffect, useMemo } from 'react'
 import {
   X,
   Package,
   Boxes,
   TrendingUp,
   ShoppingBag,
-  ArrowLeftRight,
-  ClipboardCheck,
-  Calendar,
   Warehouse,
   Printer,
-  ChevronDown,
+  History,
+  Layers,
 } from 'lucide-react'
+import { calculateItemMovements } from './itemMovementHelpers'
+import { AX_ItemOpeningBalanceModal } from '../items/AX_ItemOpeningBalanceModal'
 
 export function AX_ItemMovementCardModal({
   isOpen,
   onClose,
   item = null,
+  initialWarehouseId = 'ALL',
   warehouses = [],
   inventoryStock = [],
+  invoices = [],
   purchaseInvoices = [],
   salesInvoices = [],
   transfers = [],
   stockAudits = [],
 }) {
   const [activeTab, setActiveTab] = useState('timeline')
+  const [selectedWhId, setSelectedWhId] = useState(initialWarehouseId || 'ALL')
+  const [isOpeningModalOpen, setIsOpeningModalOpen] = useState(false)
+
+  useEffect(() => {
+    if (isOpen) {
+      setSelectedWhId(initialWarehouseId || 'ALL')
+    }
+  }, [isOpen, initialWarehouseId])
 
   const itemId = item?.id
 
   const stockPerWarehouse = useMemo(() => {
     if (!itemId) return []
-    return (inventoryStock || [])
-      .filter((s) => s && s.itemId === itemId)
-      .map((s) => {
-        const wh = warehouses.find((w) => w.id === s.warehouseId)
-        return {
-          warehouseId: s.warehouseId,
-          warehouseName: wh?.name || 'مخزن غير محدد',
-          warehouseType: wh?.type || 'warehouse',
-          quantity: Number(s.quantity) || 0,
-          unit: s.unit || item?.unitType || 'كرتونة',
-        }
-      })
-  }, [itemId, inventoryStock, warehouses, item])
+    return (warehouses || []).map((wh) => {
+      const s = (inventoryStock || []).find((st) => st && st.itemId === itemId && st.warehouseId === wh.id)
+      return {
+        warehouseId: wh.id,
+        warehouseName: wh.name || 'مخزن',
+        warehouseType: wh.type || 'cold_store',
+        quantity: Number(s?.quantity) || 0,
+        unit: s?.unit || item?.unitType || 'كرتونة',
+      }
+    })
+  }, [itemId, warehouses, inventoryStock, item])
 
   const totalCurrentStock = useMemo(() => {
     return stockPerWarehouse.reduce((acc, s) => acc + s.quantity, 0)
   }, [stockPerWarehouse])
 
-  const now = new Date()
-  const currentMonthStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+  const currentStock = useMemo(() => {
+    if (selectedWhId === 'ALL') return totalCurrentStock
+    const found = stockPerWarehouse.find((s) => s.warehouseId === selectedWhId)
+    return found ? found.quantity : 0
+  }, [selectedWhId, totalCurrentStock, stockPerWarehouse])
 
-  const { monthlyPurchases, monthlySales, allMovements } = useMemo(() => {
-    if (!itemId) {
-      return { monthlyPurchases: 0, monthlySales: 0, allMovements: [] }
-    }
+  const selectedWarehouseObj = useMemo(() => {
+    if (selectedWhId === 'ALL') return null
+    return (warehouses || []).find((w) => w.id === selectedWhId) || null
+  }, [selectedWhId, warehouses])
 
-    const movements = []
-    let mPurchases = 0
-    let mSales = 0
+  const effectivePurchases = useMemo(() => {
+    if (purchaseInvoices && purchaseInvoices.length > 0) return purchaseInvoices
+    return (invoices || []).filter((i) => i.type === 'purchase' || i.type === 'purchase_return')
+  }, [purchaseInvoices, invoices])
 
-    ;(purchaseInvoices || []).forEach((inv) => {
-      const invDate = inv.date || inv.operationalDate || inv.createdAt || ''
-      const isThisMonth = String(invDate).startsWith(currentMonthStr)
-      ;(inv.items || []).forEach((it) => {
-        if (it.itemId === itemId || it.id === itemId) {
-          const qty = Number(it.quantity) || 0
-          const price = Number(it.price || it.buyPrice || 0)
-          if (isThisMonth) mPurchases += qty
-          movements.push({
-            id: `purch-${inv.id}-${it.itemId}`,
-            type: 'purchase',
-            date: invDate,
-            title: `توريد مشتريات [${inv.code || 'فاتورة'}]`,
-            party: inv.supplierName || 'مورد',
-            inQty: qty,
-            outQty: 0,
-            unitPrice: price,
-            totalCost: qty * price,
-            notes: inv.notes || '',
-          })
-        }
-      })
+  const effectiveSales = useMemo(() => {
+    if (salesInvoices && salesInvoices.length > 0) return salesInvoices
+    return (invoices || []).filter((i) => i.type === 'sale' || i.type === 'sale_return')
+  }, [salesInvoices, invoices])
+
+  const { movementsList, openingBalance, totalInward, totalOutward } = useMemo(() => {
+    return calculateItemMovements({
+      itemId,
+      selectedWhId,
+      purchases: effectivePurchases,
+      sales: effectiveSales,
+      transfers,
+      stockAudits,
+      currentStock,
+      warehouses,
+      inventoryStock,
     })
-
-    ;(salesInvoices || []).forEach((inv) => {
-      const invDate = inv.date || inv.operationalDate || inv.createdAt || ''
-      const isThisMonth = String(invDate).startsWith(currentMonthStr)
-      ;(inv.items || []).forEach((it) => {
-        if (it.itemId === itemId || it.id === itemId) {
-          const qty = Number(it.quantity) || 0
-          const price = Number(it.price || it.sellPrice || 0)
-          if (isThisMonth) mSales += qty
-          movements.push({
-            id: `sale-${inv.id}-${it.itemId}`,
-            type: 'sale',
-            date: invDate,
-            title: `فاتورة بيع [${inv.code || 'فاتورة'}]`,
-            party: inv.clientName || inv.customerName || 'عميل',
-            inQty: 0,
-            outQty: qty,
-            unitPrice: price,
-            totalCost: qty * price,
-            notes: inv.notes || '',
-          })
-        }
-      })
-    })
-
-    ;(transfers || []).forEach((trf) => {
-      if (trf.status !== 'confirmed') return
-      const trfDate = trf.operationalDate || trf.date || trf.requestedAt || ''
-      const tItems = trf.items || [{ itemId: trf.itemId, quantity: trf.quantity }]
-      tItems.forEach((it) => {
-        if (it.itemId === itemId) {
-          const qty = Number(it.quantity) || 0
-          movements.push({
-            id: `trf-${trf.id}-${it.itemId}`,
-            type: 'transfer',
-            date: trfDate,
-            title: `تحويل مخزني [${trf.code || 'تحويل'}]`,
-            party: `من ${trf.fromName || 'مخزن'} إلى ${trf.toName || 'مخزن'}`,
-            inQty: qty,
-            outQty: qty,
-            isTransfer: true,
-            notes: trf.notes || '',
-          })
-        }
-      })
-    })
-
-    ;(stockAudits || []).forEach((aud) => {
-      const audDate = aud.auditDate || aud.date || aud.createdAt || ''
-      ;(aud.items || []).forEach((it) => {
-        if (it.itemId === itemId) {
-          const variance = Number(it.variance || 0)
-          if (variance !== 0) {
-            movements.push({
-              id: `aud-${aud.id}-${it.itemId}`,
-              type: 'audit',
-              date: audDate,
-              title: `تسوية جردية [${aud.code || 'محضر'}]`,
-              party: aud.warehouseName || 'المخزن',
-              inQty: variance > 0 ? variance : 0,
-              outQty: variance < 0 ? Math.abs(variance) : 0,
-              varianceCost: Number(it.varianceCost || 0),
-              notes: `دفتري: ${it.systemQty} • فعلي: ${it.actualQtyNum || it.actualQty}`,
-            })
-          }
-        }
-      })
-    })
-
-    movements.sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0))
-
-    return {
-      monthlyPurchases: mPurchases,
-      monthlySales: mSales,
-      allMovements: movements,
-    }
-  }, [itemId, purchaseInvoices, salesInvoices, transfers, stockAudits, currentMonthStr])
+  }, [itemId, selectedWhId, effectivePurchases, effectiveSales, transfers, stockAudits, currentStock, warehouses, inventoryStock])
 
   if (!isOpen || !item) return null
 
@@ -168,7 +98,7 @@ export function AX_ItemMovementCardModal({
   const marginPct = buyPrice > 0 ? Math.round(((sellPrice - buyPrice) / buyPrice) * 100) : 0
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-150">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-150">
       <div className="bg-surface-lowest border border-outline-variant/30 rounded-3xl max-w-4xl w-full max-h-[94vh] flex flex-col shadow-2xl overflow-hidden">
         <div className="flex items-center justify-between p-4 border-b border-surface-container shrink-0">
           <div className="flex items-center gap-3">
@@ -183,9 +113,14 @@ export function AX_ItemMovementCardModal({
                 <span className="font-mono text-xs font-bold text-on-surface-variant px-2 py-0.5 rounded-full bg-surface-container">
                   {item.code || 'صنف'}
                 </span>
+                {selectedWarehouseObj && (
+                  <span className="text-xs font-black text-primary px-2.5 py-0.5 rounded-full bg-primary/10 border border-primary/20">
+                    مخزن: {selectedWarehouseObj.name}
+                  </span>
+                )}
               </div>
               <span className="text-[11px] font-bold text-on-surface-variant block">
-                القسم: {item.primaryCategory || 'عام'} • الوحدة الأساسية: {item.unitType || 'كرتونة'}
+                القسم: {item.primaryCategory || 'عام'} • الوحدة: {item.unitType || 'كرتونة'}
                 {Number(item.weightPerCarton || item.weight_per_carton) > 1 && (
                   <span> • وزن الكرتونة: {item.weightPerCarton || item.weight_per_carton} كجم</span>
                 )}
@@ -202,49 +137,111 @@ export function AX_ItemMovementCardModal({
           </button>
         </div>
 
+        <div className="px-4 py-2.5 bg-surface-low/30 border-b border-surface-container overflow-x-auto scrollbar-none shrink-0 flex items-center gap-1.5">
+          <span className="text-[11px] font-black text-on-surface-variant whitespace-nowrap ml-1">تحديد المخزن:</span>
+          <button
+            type="button"
+            onClick={() => setSelectedWhId('ALL')}
+            className={`px-3 py-1 rounded-full text-xs font-black transition-all cursor-pointer whitespace-nowrap flex items-center gap-1.5 ${
+              selectedWhId === 'ALL'
+                ? 'bg-primary text-white shadow-xs'
+                : 'bg-surface-lowest border border-outline-variant/40 text-on-surface hover:bg-surface-container'
+            }`}
+          >
+            <Boxes className="w-3.5 h-3.5" />
+            <span>كافة المخازن</span>
+            <span className={`px-1.5 py-0.2 rounded-full font-mono text-[10px] ${
+              totalCurrentStock < 0 ? 'bg-rose-500 text-white' : selectedWhId === 'ALL' ? 'bg-white/20 text-white' : 'bg-surface-container text-on-surface-variant'
+            }`}>
+              {totalCurrentStock.toLocaleString('en-US')}
+            </span>
+          </button>
+
+          {stockPerWarehouse.map((w) => {
+            const isSelected = selectedWhId === w.warehouseId
+            return (
+              <button
+                key={w.warehouseId}
+                type="button"
+                onClick={() => setSelectedWhId(w.warehouseId)}
+                className={`px-3 py-1 rounded-full text-xs font-black transition-all cursor-pointer whitespace-nowrap flex items-center gap-1.5 ${
+                  isSelected
+                    ? 'bg-primary text-white shadow-xs'
+                    : 'bg-surface-lowest border border-outline-variant/40 text-on-surface hover:bg-surface-container'
+                }`}
+              >
+                <Warehouse className="w-3.5 h-3.5" />
+                <span>{w.warehouseName}</span>
+                <span className={`px-1.5 py-0.2 rounded-full font-mono text-[10px] ${
+                  w.quantity < 0
+                    ? 'bg-rose-500 text-white'
+                    : isSelected
+                    ? 'bg-white/20 text-white'
+                    : 'bg-surface-container text-on-surface-variant'
+                }`}>
+                  {w.quantity.toLocaleString('en-US')}
+                </span>
+              </button>
+            )
+          })}
+        </div>
+
         <div className="p-3 sm:p-4 border-b border-surface-container bg-surface-low/30 shrink-0">
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
             <div className="p-3 rounded-2xl bg-surface-lowest border border-outline-variant/30 space-y-1">
               <div className="flex items-center justify-between text-xs font-bold text-on-surface-variant">
-                <span>الرصيد الإجمالي:</span>
+                <span>رصيد أول المدة:</span>
+                <button
+                  type="button"
+                  onClick={() => setIsOpeningModalOpen(true)}
+                  className="inline-flex items-center gap-1 text-[10px] font-black text-amber-700 bg-amber-500/10 hover:bg-amber-500/20 px-2 py-0.5 rounded-full transition-colors cursor-pointer"
+                  title="تعديل رصيد أول المدة"
+                >
+                  <Layers className="w-3 h-3" />
+                  <span>تعديل</span>
+                </button>
+              </div>
+              <div className={`font-mono font-black text-lg sm:text-xl ${openingBalance < 0 ? 'text-error' : 'text-on-surface'}`}>
+                {openingBalance.toLocaleString('en-US')}{' '}
+                <span className="text-xs font-normal text-on-surface-variant">{item.unitType || 'كرتونة'}</span>
+              </div>
+            </div>
+
+            <div className="p-3 rounded-2xl bg-surface-lowest border border-outline-variant/30 space-y-1">
+              <div className="flex items-center justify-between text-xs font-bold text-on-surface-variant">
+                <span>الرصيد الحالي {selectedWhId === 'ALL' ? '(الكل)' : `(${selectedWarehouseObj?.name || 'المخزن'})`}:</span>
                 <Boxes className="w-4 h-4 text-primary" />
               </div>
-              <div className="font-mono font-black text-lg sm:text-xl text-primary">
-                {totalCurrentStock.toLocaleString('en-US')}{' '}
+              <div className={`font-mono font-black text-lg sm:text-xl flex items-center gap-1.5 ${currentStock < 0 ? 'text-error' : 'text-primary'}`}>
+                <span>{currentStock.toLocaleString('en-US')}</span>
                 <span className="text-xs font-normal text-on-surface-variant">{item.unitType || 'كرتونة'}</span>
+                {currentStock < 0 && (
+                  <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-rose-500/10 text-rose-700 font-black border border-rose-500/20">
+                    سالب
+                  </span>
+                )}
               </div>
             </div>
 
             <div className="p-3 rounded-2xl bg-surface-lowest border border-outline-variant/30 space-y-1">
               <div className="flex items-center justify-between text-xs font-bold text-on-surface-variant">
-                <span>مشتريات الشهر:</span>
-                <ShoppingBag className="w-4 h-4 text-amber-600" />
-              </div>
-              <div className="font-mono font-black text-lg sm:text-xl text-amber-700">
-                {monthlyPurchases.toLocaleString('en-US')}{' '}
-                <span className="text-xs font-normal text-on-surface-variant">{item.unitType || 'كرتونة'}</span>
-              </div>
-            </div>
-
-            <div className="p-3 rounded-2xl bg-surface-lowest border border-outline-variant/30 space-y-1">
-              <div className="flex items-center justify-between text-xs font-bold text-on-surface-variant">
-                <span>مبيعات الشهر:</span>
-                <TrendingUp className="w-4 h-4 text-emerald-600" />
+                <span>إجمالي الوارد:</span>
+                <ShoppingBag className="w-4 h-4 text-emerald-600" />
               </div>
               <div className="font-mono font-black text-lg sm:text-xl text-emerald-700">
-                {monthlySales.toLocaleString('en-US')}{' '}
+                +{totalInward.toLocaleString('en-US')}{' '}
                 <span className="text-xs font-normal text-on-surface-variant">{item.unitType || 'كرتونة'}</span>
               </div>
             </div>
 
             <div className="p-3 rounded-2xl bg-surface-lowest border border-outline-variant/30 space-y-1">
               <div className="flex items-center justify-between text-xs font-bold text-on-surface-variant">
-                <span>سعر الشراء / البيع:</span>
-                <span className="text-[10px] text-emerald-700 font-mono font-black">+{marginPct}%</span>
+                <span>إجمالي المنصرف:</span>
+                <TrendingUp className="w-4 h-4 text-rose-600" />
               </div>
-              <div className="font-mono font-black text-xs sm:text-sm text-on-surface flex items-baseline justify-between pt-1">
-                <span>ش: {buyPrice.toLocaleString('en-US')} ج</span>
-                <span className="text-primary font-black">ب: {sellPrice.toLocaleString('en-US')} ج</span>
+              <div className="font-mono font-black text-lg sm:text-xl text-rose-700">
+                -{totalOutward.toLocaleString('en-US')}{' '}
+                <span className="text-xs font-normal text-on-surface-variant">{item.unitType || 'كرتونة'}</span>
               </div>
             </div>
           </div>
@@ -261,7 +258,7 @@ export function AX_ItemMovementCardModal({
                   : 'bg-surface-lowest border border-outline-variant/40 text-on-surface hover:bg-surface-container'
               }`}
             >
-              حركة الصنف 360° ({allMovements.length})
+              حركة الصنف ({movementsList.length})
             </button>
             <button
               type="button"
@@ -272,18 +269,25 @@ export function AX_ItemMovementCardModal({
                   : 'bg-surface-lowest border border-outline-variant/40 text-on-surface hover:bg-surface-container'
               }`}
             >
-              توزيع المخزون ({stockPerWarehouse.length})
+              توزيع الأرصدة ({stockPerWarehouse.length})
             </button>
+          </div>
+          <div className="text-[11px] font-bold text-on-surface-variant hidden sm:flex items-center gap-2">
+            <span>سعر الشراء: <strong className="text-on-surface font-mono">{buyPrice.toLocaleString('en-US')} ج</strong></span>
+            <span>•</span>
+            <span>سعر البيع: <strong className="text-primary font-mono">{sellPrice.toLocaleString('en-US')} ج</strong></span>
+            <span className="text-emerald-700 font-mono font-black">({marginPct}%)</span>
           </div>
         </div>
 
         <div className="flex-1 overflow-y-auto p-3 sm:p-4 space-y-3">
           {activeTab === 'timeline' && (
             <div>
-              {allMovements.length === 0 ? (
+              {movementsList.length === 0 ? (
                 <div className="py-16 text-center text-on-surface-variant space-y-2">
                   <Package className="w-10 h-10 mx-auto text-on-surface-variant/40" />
-                  <p className="text-xs font-bold">لا توجد حركات مسجلة لهذا الصنف حتى الآن</p>
+                  <p className="text-xs font-bold">لا توجد حركات مسجلة لهذا الصنف في هذا النطاق</p>
+                  <p className="text-[11px]">رصيد أول المدة الحالي: {openingBalance} {item.unitType || 'كرتونة'}</p>
                 </div>
               ) : (
                 <div className="overflow-x-auto">
@@ -292,14 +296,15 @@ export function AX_ItemMovementCardModal({
                       <tr className="bg-surface-low/60 border-b border-surface-container text-on-surface-variant font-black h-9 text-[11px]">
                         <th className="px-3">التاريخ</th>
                         <th className="px-3">نوع الحركة</th>
-                        <th className="px-3">الجهة / المخزن</th>
+                        <th className="px-3">الجهة / البيان</th>
                         <th className="px-3 text-center">الوارد</th>
                         <th className="px-3 text-center">المنصرف</th>
+                        <th className="px-3 text-center">الرصيد بعد الحركة</th>
                         <th className="px-3 text-left">السعر / التكلفة</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-surface-container/40 font-bold">
-                      {allMovements.map((m) => (
+                      {movementsList.map((m) => (
                         <tr key={m.id} className="h-10 hover:bg-surface-low/30">
                           <td className="px-3 font-mono text-on-surface-variant whitespace-nowrap text-[11px]">
                             {String(m.date || '').slice(0, 10)}
@@ -311,7 +316,7 @@ export function AX_ItemMovementCardModal({
                                   ? 'bg-amber-500/10 text-amber-800'
                                   : m.type === 'sale'
                                   ? 'bg-emerald-500/10 text-emerald-800'
-                                  : m.type === 'transfer'
+                                  : m.type.startsWith('transfer')
                                   ? 'bg-primary/10 text-primary'
                                   : 'bg-rose-500/10 text-rose-800'
                               }`}
@@ -328,11 +333,35 @@ export function AX_ItemMovementCardModal({
                           <td className="px-3 text-center font-mono font-black text-rose-700">
                             {m.outQty > 0 ? `-${m.outQty}` : '—'}
                           </td>
+                          <td className={`px-3 text-center font-mono font-black ${
+                            m.balanceAfter < 0 ? 'text-error' : 'text-primary'
+                          }`}>
+                            {m.balanceAfter.toLocaleString('en-US')}
+                          </td>
                           <td className="px-3 text-left font-mono font-black text-on-surface">
                             {m.unitPrice > 0 ? `${m.unitPrice.toLocaleString('en-US')} ج.م` : '—'}
                           </td>
                         </tr>
                       ))}
+                      <tr className="bg-secondary/5 font-black text-on-surface border-t-2 border-secondary/20">
+                        <td className="px-3 py-2 text-secondary text-[11px]">بداية الفترة</td>
+                        <td className="px-3 py-2">
+                          <span className="px-2 py-0.5 rounded-full text-[10px] bg-secondary/15 text-secondary">
+                            رصيد أول المدة
+                          </span>
+                        </td>
+                        <td className="px-3 py-2 text-on-surface-variant text-[11px]">
+                          الرصيد الدفتري الافتتاحي
+                        </td>
+                        <td className="px-3 py-2 text-center text-on-surface-variant">—</td>
+                        <td className="px-3 py-2 text-center text-on-surface-variant">—</td>
+                        <td className={`px-3 py-2 text-center font-mono text-sm ${
+                          openingBalance < 0 ? 'text-error' : 'text-secondary font-black'
+                        }`}>
+                          {openingBalance.toLocaleString('en-US')}
+                        </td>
+                        <td className="px-3 py-2 text-left text-on-surface-variant">—</td>
+                      </tr>
                     </tbody>
                   </table>
                 </div>
@@ -366,7 +395,12 @@ export function AX_ItemMovementCardModal({
                           <td className={`px-3 text-center font-mono font-black text-sm ${
                             Number(s.quantity) < 0 ? 'text-error' : 'text-primary'
                           }`}>
-                            {s.quantity}
+                            {s.quantity.toLocaleString('en-US')}
+                            {Number(s.quantity) < 0 && (
+                              <span className="mr-1 text-[10px] px-1.5 py-0.2 rounded-full bg-rose-500/10 text-rose-700">
+                                سالب
+                              </span>
+                            )}
                           </td>
                           <td className="px-3 text-center text-on-surface-variant text-[11px]">
                             {s.unit}
@@ -406,6 +440,13 @@ export function AX_ItemMovementCardModal({
           </button>
         </div>
       </div>
+
+      <AX_ItemOpeningBalanceModal
+        isOpen={isOpeningModalOpen}
+        onClose={() => setIsOpeningModalOpen(false)}
+        item={item}
+        warehouses={warehouses}
+      />
     </div>
   )
 }

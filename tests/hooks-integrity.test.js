@@ -20,7 +20,7 @@ function getAllJsxFiles(dir, fileList = []) {
   return fileList
 }
 
-describe('React Hooks Integrity Scanner (No Early Return Before Hooks)', () => {
+describe('React Hooks Integrity Scanner (No Early Return Before Hooks & Proper Imports)', () => {
   const componentsDir = path.resolve(process.cwd(), 'src', 'components')
   const jsxFiles = getAllJsxFiles(componentsDir)
 
@@ -31,7 +31,7 @@ describe('React Hooks Integrity Scanner (No Early Return Before Hooks)', () => {
   jsxFiles.forEach((filePath) => {
     const relPath = path.relative(process.cwd(), filePath)
 
-    it(`should not violate hooks order in: ${relPath}`, () => {
+    it(`should not violate hooks order or import integrity in: ${relPath}`, () => {
       const content = fs.readFileSync(filePath, 'utf-8')
       const lines = content.split('\n')
 
@@ -58,6 +58,14 @@ describe('React Hooks Integrity Scanner (No Early Return Before Hooks)', () => {
           if (line.includes(`${hook}(`)) {
             hookCalls.push({ hook, line: i + 1, text: line })
           }
+        }
+      }
+
+      const reactHooks = ['useState', 'useEffect', 'useMemo', 'useCallback', 'useRef']
+      for (const rh of reactHooks) {
+        if (hookCalls.some((h) => h.hook === rh)) {
+          const importMatch = new RegExp(`import\\s+[^;]*\\b${rh}\\b[^;]*from\\s+['"]react['"]`).test(content)
+          assert.ok(importMatch, `[CRITICAL] React Hook "${rh}" called in ${relPath} but not imported from 'react'!`)
         }
       }
 

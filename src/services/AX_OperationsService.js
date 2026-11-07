@@ -372,7 +372,7 @@ export const AX_OperationsService = {
       console.error('applyStockAuditInDB error:', err)
     }
   },
-  rollbackStockAuditInDB: async (auditId, userProfile = null, auditFallback = null) => {
+  rollbackStockAuditInDB: async (auditId, userProfile = null, auditFallback = null, recalculatedStockMap = {}) => {
     if (!auditId) return { success: false }
     try {
       let audit = auditFallback
@@ -384,9 +384,19 @@ export const AX_OperationsService = {
       const whId = audit.warehouse_id || audit.warehouseId
       for (const it of (audit.items || [])) {
         const itemId = it.itemId || it.item_id
-        const prevQty = Number(it.systemQty !== undefined ? it.systemQty : it.previousQty) || 0
+        const targetQty = Number(
+          recalculatedStockMap?.[itemId] !== undefined
+            ? recalculatedStockMap[itemId]
+            : (it.systemQty !== undefined ? it.systemQty : it.previousQty)
+        ) || 0
         if (whId && itemId) {
-          await supabase.from('ax_inventory_stock').upsert({ warehouse_id: whId, item_id: itemId, quantity: prevQty, unit: it.unit || 'كرتونة', updated_at: new Date().toISOString() }, { onConflict: 'warehouse_id,item_id' })
+          await supabase.from('ax_inventory_stock').upsert({
+            warehouse_id: whId,
+            item_id: itemId,
+            quantity: targetQty,
+            unit: it.unit || 'كرتونة',
+            updated_at: new Date().toISOString()
+          }, { onConflict: 'warehouse_id,item_id' })
         }
       }
       await supabase.from('ax_stock_audits').update({ status: 'cancelled' }).eq('id', auditId)
@@ -408,6 +418,62 @@ export const AX_OperationsService = {
       return { success: true, warehouseId: whId, items: audit.items || [] }
     } catch (err) {
       console.error('rollbackStockAuditInDB error:', err)
+      return { success: false, error: err.message }
+    }
+  },
+  deleteStockAuditInDB: async (auditId, userProfile = null, auditFallback = null, recalculatedStockMap = {}) => {
+    if (!auditId) return { success: false }
+    try {
+      let audit = auditFallback
+      if (supabase && typeof supabase.from === 'function') {
+        const { data } = await supabase.from('ax_stock_audits').select('*').eq('id', auditId).maybeSingle()
+        if (data) audit = data
+      }
+      if (!audit) audit = { id: auditId, warehouse_id: 'wh-1', items: [] }
+      const whId = audit.warehouse_id || audit.warehouseId
+      for (const it of (audit.items || [])) {
+        const itemId = it.itemId || it.item_id || it.id
+        const targetQty = Number(
+          recalculatedStockMap?.[itemId] !== undefined
+            ? recalculatedStockMap[itemId]
+            : (it.systemQty !== undefined ? it.systemQty : (it.previousQty || 0))
+        ) || 0
+        if (whId && itemId && supabase && typeof supabase.from === 'function') {
+          await supabase.from('ax_inventory_stock').upsert({
+            warehouse_id: whId,
+            item_id: itemId,
+            quantity: targetQty,
+            unit: it.unit || 'كرتونة',
+            updated_at: new Date().toISOString()
+          }, { onConflict: 'warehouse_id,item_id' })
+        }
+      }
+      if (supabase && typeof supabase.from === 'function') {
+        try {
+          await AX_RecycleBinService.moveToRecycleBin({
+            entityType: 'audit',
+            entityId: auditId,
+            entityCode: audit.code || `AUD-${String(auditId).slice(-4)}`,
+            entityTitle: `محضر جرد: ${audit.warehouse_name || audit.warehouseName || 'المخزن'} (${audit.code || ''})`,
+            originalData: { ...audit, status: 'cancelled' },
+            userProfile,
+          })
+        } catch {}
+        await supabase.from('ax_stock_audits').delete().eq('id', auditId)
+        try {
+          await supabase.from('ax_activity_logs').insert({
+            id: generateUUID(),
+            table_name: 'ax_stock_audits',
+            action: 'DELETE_AUDIT',
+            record_id: auditId,
+            new_data: { code: audit.code, warehouse_id: whId },
+            user_id: userProfile?.id || null
+          })
+        } catch {}
+      }
+      return { success: true, warehouseId: whId, items: audit.items || [] }
+    } catch (err) {
+      console.error('deleteStockAuditInDB error:', err)
       return { success: false, error: err.message }
     }
   },

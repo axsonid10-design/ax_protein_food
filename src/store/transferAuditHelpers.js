@@ -27,8 +27,8 @@ export const checkTransferAuditDiscrepancy = (transfer, stockAudits = [], wareho
     return { isAuditDiscrepancy: false, isFromBackdated: false, isToBackdated: false, auditDiscrepancyNote: '' }
   }
 
-  const fromWarehouseId = transfer.fromId || transfer.fromWarehouseId
-  const toWarehouseId = transfer.toId || transfer.toWarehouseId
+  const fromWarehouseId = transfer.fromId || transfer.fromWarehouseId || transfer.from_warehouse_id
+  const toWarehouseId = transfer.toId || transfer.toWarehouseId || transfer.to_warehouse_id
 
   const trfDateRaw = transfer.operationalDate || transfer.transactionDate || transfer.date || transfer.requestedAt || transfer.createdAt || transfer.created_at
   let trfDate = parseDate(trfDateRaw)
@@ -111,18 +111,19 @@ export const calculateTransferStockMovement = (transfer, currentStock = [], stoc
   const { isFromBackdated, isToBackdated } = discrepancyInfo
 
   let updatedStock = [...currentStock]
-  const fromTargetId = transfer.fromId || transfer.fromWarehouseId
-  const toTargetId = transfer.toId || transfer.toWarehouseId
+  const fromTargetId = transfer.fromId || transfer.fromWarehouseId || transfer.from_warehouse_id
+  const toTargetId = transfer.toId || transfer.toWarehouseId || transfer.to_warehouse_id
   const transferItems = transfer.items && transfer.items.length > 0
     ? transfer.items
-    : [{ itemId: transfer.itemId, quantity: transfer.quantity, unit: transfer.unit }]
+    : [{ itemId: transfer.itemId || transfer.item_id || transfer.id, quantity: transfer.quantity, unit: transfer.unit }]
 
   const isConfirmed = transfer.status === 'confirmed' || transfer.isConfirmed || transfer.forceCredit || transfer.isImmediate
   const shouldCreditDestination = !isToBackdated || isConfirmed
   const shouldDebitSource = !isFromBackdated || isConfirmed
 
   transferItems.forEach((item) => {
-    if (!item?.itemId || item?.quantity === undefined || item?.quantity === null) return
+    const itId = item?.itemId || item?.item_id || item?.id
+    if (!itId || item?.quantity === undefined || item?.quantity === null) return
     const qty = Number(item.quantity) || 0
     if (qty <= 0) return
 
@@ -130,7 +131,7 @@ export const calculateTransferStockMovement = (transfer, currentStock = [], stoc
       const fromIndex = updatedStock.findIndex(
         (s) =>
           (s.warehouseId === fromTargetId || s.warehouse_id === fromTargetId) &&
-          (s.itemId === item.itemId || s.item_id === item.itemId)
+          ((s.itemId || s.item_id) === itId)
       )
       if (fromIndex >= 0) {
         updatedStock[fromIndex] = {
@@ -140,7 +141,7 @@ export const calculateTransferStockMovement = (transfer, currentStock = [], stoc
       } else {
         updatedStock.push({
           warehouseId: fromTargetId,
-          itemId: item.itemId,
+          itemId: itId,
           quantity: -qty,
           unit: item.unit || 'كرتونة',
         })
@@ -151,7 +152,7 @@ export const calculateTransferStockMovement = (transfer, currentStock = [], stoc
       const toIndex = updatedStock.findIndex(
         (s) =>
           (s.warehouseId === toTargetId || s.warehouse_id === toTargetId) &&
-          (s.itemId === item.itemId || s.item_id === item.itemId)
+          ((s.itemId || s.item_id) === itId)
       )
       if (toIndex >= 0) {
         updatedStock[toIndex] = {
@@ -161,7 +162,7 @@ export const calculateTransferStockMovement = (transfer, currentStock = [], stoc
       } else {
         updatedStock.push({
           warehouseId: toTargetId,
-          itemId: item.itemId,
+          itemId: itId,
           quantity: qty,
           unit: item.unit || 'كرتونة',
         })

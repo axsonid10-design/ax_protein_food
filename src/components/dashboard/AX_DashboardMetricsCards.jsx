@@ -58,8 +58,8 @@ export function AX_DashboardMetricsCards({
       subtitle: `${salesCount} فاتورة`,
       trend: salesTrend ? salesTrend.label : null,
       isPositive: salesTrend ? salesTrend.isPositive : true,
-      targetTab: 'invoices',
-      tabFilter: 'sale',
+      targetTab: 'sales',
+      tabFilter: 'all',
     },
     {
       id: 'purchases',
@@ -71,8 +71,8 @@ export function AX_DashboardMetricsCards({
       subtitle: `${purchasesCount} فاتورة توريد`,
       trend: purchasesTrend ? purchasesTrend.label : null,
       isPositive: purchasesTrend ? purchasesTrend.isPositive : true,
-      targetTab: 'invoices',
-      tabFilter: 'purchase',
+      targetTab: 'purchases',
+      tabFilter: 'all',
     },
     {
       id: 'stockUnits',

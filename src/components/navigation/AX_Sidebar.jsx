@@ -19,6 +19,8 @@ import {
   BadgePercent,
   BarChart3,
   Trash2,
+  TrendingUp,
+  ShoppingBag,
 } from 'lucide-react'
 import { useAXStore } from '../../store/useAXStore'
 import { hasModuleAccess } from '../../utils/permissionsConfig'
@@ -64,10 +66,16 @@ export function AX_Sidebar({ activeTab, onSelectTab, onOpenMasterControl }) {
       ],
     },
     {
+      title: 'المبيعات والمشتريات',
+      items: [
+        { id: 'sales', label: 'المبيعات والمردودات', icon: TrendingUp },
+        { id: 'purchases', label: 'المشتريات والمردودات', icon: ShoppingBag },
+      ],
+    },
+    {
       title: 'المالية والحسابات',
       items: [
         { id: 'treasury', label: 'الخزينة', icon: Wallet, badge: pendingCashCount },
-        { id: 'invoices', label: 'الفواتير', icon: FileText },
         { id: 'reports', label: 'التقارير والمحاسبة', icon: BarChart3 },
       ],
     },

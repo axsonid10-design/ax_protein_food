@@ -10,7 +10,7 @@ import { generateUUID } from '../utils/AX_UUID.js'
 import { categoryHelpers } from './categoryHelpers.js'
 import { recycleBinHelpers } from './recycleBinHelpers.js'
 import { expenseCategoryHelpers, initialExpenseCategories } from './expenseCategoryHelpers.js'
-import { updateLocalCachePayload, processInvoiceStoreState, saveSalesRepState, updateSalesRepState, deleteSalesRepState, updateInvoiceStoreState, deleteInvoiceStoreState } from './storeCacheHelper.js'
+import { updateLocalCachePayload, processInvoiceStoreState, saveSalesRepState, updateSalesRepState, deleteSalesRepState, updateInvoiceStoreState, deleteInvoiceStoreState, saveItemOpeningBalanceState } from './storeCacheHelper.js'
 import { checkTransferAuditDiscrepancy, calculateTransferStockMovement } from './transferAuditHelpers.js'
 import {
   initialCategories, initialSubCategories, initialSecondaryCategories, initialItems, initialWarehouses, initialDistributors, initialInventoryStock, initialTransfers, initialStockAudits, initialTreasuryAccounts, initialCashTransactions, initialPendingCashTransfers, initialManufacturingOrders, initialInvoices, initialClients, initialSuppliers, initialSalesReps, initialSalesRepLedger, initialNotifications,
@@ -79,12 +79,11 @@ export const useAXStore = create((set, get) => ({
     return payload
   },
 
-  hydrateFromSupabase: (payload) =>
-    set((state) => ({
-      ...state,
-      ...payload,
-      ...(payload?.cashTransfers && !payload?.pendingCashTransfers ? { pendingCashTransfers: payload.cashTransfers } : {}),
-    })),
+  hydrateFromSupabase: (payload) => set((state) => {
+    const dbInvIds = new Set((payload.invoices || []).map((i) => i.id))
+    const localOnly = (state.invoices || []).filter((i) => !dbInvIds.has(i.id))
+    return { ...state, ...payload, invoices: [...(payload.invoices || []), ...localOnly], ...(payload?.cashTransfers && !payload?.pendingCashTransfers ? { pendingCashTransfers: payload.cashTransfers } : {}) }
+  }),
 
   markAllNotificationsRead: () => {
     try { Promise.resolve(AX_OperationsService.markAllNotificationsReadInDB()).catch(() => {}) } catch {}
@@ -188,22 +187,9 @@ export const useAXStore = create((set, get) => ({
     })
   },
 
-  editItem: (item) => {
-    AX_OperationsService.editItemInDB(item, get().profile)
-    set((state) => ({
-      items: state.items.map((i) => (i.id === item.id ? { ...i, ...item } : i)),
-    }))
-  },
-
-  deleteItem: (id) => {
-    const it = (get().items || []).find((i) => i.id === id)
-    AX_OperationsService.deleteItemInDB(id, get().profile)
-    set((state) => ({
-      items: state.items.filter((i) => i.id !== id),
-      inventoryStock: state.inventoryStock.filter((s) => s.itemId !== id),
-      recycleBin: it ? [{ id: generateUUID(), entityType: 'item', entityId: id, entityCode: it.code, entityTitle: `صنف: ${it.compositeName || it.code}`, originalData: it, deletedAt: new Date().toISOString() }, ...(state.recycleBin || [])] : state.recycleBin,
-    }))
-  },
+  editItem: (item) => { AX_OperationsService.editItemInDB(item, get().profile); set((state) => ({ items: state.items.map((i) => (i.id === item.id ? { ...i, ...item } : i)) })) },
+  deleteItem: (id) => { const it = (get().items || []).find((i) => i.id === id); AX_OperationsService.deleteItemInDB(id, get().profile); set((state) => ({ items: state.items.filter((i) => i.id !== id), inventoryStock: state.inventoryStock.filter((s) => s.itemId !== id), recycleBin: it ? [{ id: generateUUID(), entityType: 'item', entityId: id, entityCode: it.code, entityTitle: `صنف: ${it.compositeName || it.code}`, originalData: it, deletedAt: new Date().toISOString() }, ...(state.recycleBin || [])] : state.recycleBin })) },
+  saveItemOpeningBalance: (payload) => { const { inventoryStock, newStock, finalStockRow } = saveItemOpeningBalanceState(get(), payload); AX_OperationsService.saveOpeningBalanceInDB({ ...payload, quantity: Number(payload.quantity) || 0, unit: finalStockRow?.unit, newStock }, get().profile); set({ inventoryStock }); return { success: true, newStock } },
 
   addCategory: (name) => { AX_OperationsService.addCategoryInDB({ name, level: 'primary' }, get().profile); set((state) => categoryHelpers.addCategory(state, name)) },
   editCategory: (oldName, newName) => { AX_OperationsService.editCategoryInDB({ oldName, newName, level: 'primary' }, get().profile); set((state) => categoryHelpers.editCategory(state, oldName, newName)) },
@@ -301,27 +287,35 @@ export const useAXStore = create((set, get) => ({
     AX_OperationsService.deleteWarehouseInDB(id, get().profile)
     set((state) => {
       const nextWh = state.warehouses.filter((w) => w.id !== id)
+      let stockCopy = state.inventoryStock.filter((s) => (s.warehouseId || s.warehouse_id) !== id)
+      const nextTransfers = (state.transfers || []).map((t) => {
+        const fromId = t.fromId || t.fromWarehouseId || t.from_warehouse_id
+        const toId = t.toId || t.toWarehouseId || t.to_warehouse_id
+        if (toId === id && t.status === 'confirmed') {
+          for (const item of (t.items || [])) {
+            const itId = item.itemId || item.id || item.item_id
+            const qty = Number(item.quantity) || 0
+            if (fromId && itId && qty > 0) {
+              const sIdx = stockCopy.findIndex((s) => (s.warehouseId || s.warehouse_id) === fromId && (s.itemId || s.item_id) === itId)
+              if (sIdx >= 0) stockCopy[sIdx] = { ...stockCopy[sIdx], quantity: (Number(stockCopy[sIdx].quantity) || 0) + qty }
+              else stockCopy.push({ warehouseId: fromId, itemId: itId, quantity: qty, unit: item.unit || 'كرتونة' })
+            }
+          }
+          return { ...t, status: 'cancelled', notes: (t.notes ? `${t.notes} • ` : '') + 'ملغي لحذف مخزن الاستلام' }
+        }
+        if (fromId === id && t.status === 'confirmed') {
+          return { ...t, status: 'cancelled', notes: (t.notes ? `${t.notes} • ` : '') + 'ملغي لحذف مخزن الإرسال' }
+        }
+        return t
+      })
       updateLocalCachePayload('warehouses', nextWh)
-      return { warehouses: nextWh, inventoryStock: state.inventoryStock.filter((s) => s.warehouseId !== id) }
+      updateLocalCachePayload('transfers', nextTransfers)
+      updateLocalCachePayload('inventoryStock', stockCopy)
+      return { warehouses: nextWh, transfers: nextTransfers, inventoryStock: stockCopy }
     })
   },
-  addTreasuryAccount: (account) => {
-    const acc = { ...account, id: account.id || generateUUID() }
-    AX_OperationsService.addTreasuryAccountInDB(acc, get().profile)
-    set((state) => {
-      const nextTr = [...state.treasuryAccounts, acc]
-      updateLocalCachePayload('treasuryAccounts', nextTr)
-      return { treasuryAccounts: nextTr }
-    })
-  },
-  updateTreasuryAccount: (account) => {
-    AX_OperationsService.updateTreasuryAccountInDB(account, get().profile)
-    set((state) => {
-      const nextTr = state.treasuryAccounts.map((t) => (t.id === account.id ? { ...t, ...account } : t))
-      updateLocalCachePayload('treasuryAccounts', nextTr)
-      return { treasuryAccounts: nextTr }
-    })
-  },
+  addTreasuryAccount: (account) => { const acc = { ...account, id: account.id || generateUUID() }; AX_OperationsService.addTreasuryAccountInDB(acc, get().profile); set((state) => { const nextTr = [...state.treasuryAccounts, acc]; updateLocalCachePayload('treasuryAccounts', nextTr); return { treasuryAccounts: nextTr } }) },
+  updateTreasuryAccount: (account) => { AX_OperationsService.updateTreasuryAccountInDB(account, get().profile); set((state) => { const nextTr = state.treasuryAccounts.map((t) => (t.id === account.id ? { ...t, ...account } : t)); updateLocalCachePayload('treasuryAccounts', nextTr); return { treasuryAccounts: nextTr } }) },
   deleteTreasuryAccount: (id) => {
     AX_OperationsService.deleteTreasuryAccountInDB(id, get().profile)
     set((state) => {
@@ -476,8 +470,10 @@ export const useAXStore = create((set, get) => ({
   restoreFromRecycleBin: (id) => recycleBinHelpers.restoreItem(get(), id, get().profile, set),
   purgeFromRecycleBin: (id) => recycleBinHelpers.purgeItem(id, set),
   rollbackStockAudit: (auditId) => recycleBinHelpers.rollbackAudit(auditId, get().profile, set, get()),
+  deleteStockAudit: (auditId) => recycleBinHelpers.deleteAudit(auditId, get().profile, set, get()),
   updateTransfer: (id, updates) => { AX_OperationsService.updateTransferInDB(id, updates, get().profile); set((state) => ({ transfers: (state.transfers || []).map((t) => t.id === id ? { ...t, ...updates } : t) })) },
   rollbackTransfer: (id) => recycleBinHelpers.rollbackTransfer(id, get().profile, set, get()),
+  deleteTransfer: (id) => recycleBinHelpers.deleteTransfer(id, get().profile, set, get()),
 
   addEmployee: (emp) => { AX_StaffOperationsService.upsertEmployeeInDB(emp); set((state) => { const updated = [emp, ...state.employees.filter((e) => e.id !== emp.id)]; try { localStorage.setItem('ax_staff_employees', JSON.stringify(updated)) } catch {}; return { employees: updated } }) },
   updateEmployee: (id, updates) => { const cur = get().employees.find((e) => e.id === id); if (cur) AX_StaffOperationsService.upsertEmployeeInDB({ ...cur, ...updates }); set((state) => { const updated = state.employees.map((e) => (e.id === id ? { ...e, ...updates } : e)); try { localStorage.setItem('ax_staff_employees', JSON.stringify(updated)) } catch {}; return { employees: updated } }) },

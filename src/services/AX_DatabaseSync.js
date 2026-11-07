@@ -98,6 +98,8 @@ export const AX_DatabaseSync = {
           warehouseId: s.warehouse_id,
           itemId: s.item_id,
           quantity: Number(s.quantity || 0),
+          openingBalance: Number(s.opening_balance || 0),
+          openingDate: s.opening_date || null,
           unit: s.unit || 'كرتونة',
         }))
       }
@@ -127,8 +129,12 @@ export const AX_DatabaseSync = {
         payload.transfers = transfers.map((t) => ({
           id: t.id,
           code: t.code,
-          fromId: t.from_warehouse_id,
-          toId: t.to_warehouse_id,
+          fromId: t.from_warehouse_id || t.fromId,
+          fromWarehouseId: t.from_warehouse_id || t.fromId,
+          from_warehouse_id: t.from_warehouse_id || t.fromId,
+          toId: t.to_warehouse_id || t.toId,
+          toWarehouseId: t.to_warehouse_id || t.toId,
+          to_warehouse_id: t.to_warehouse_id || t.toId,
           status: t.status,
           date: t.date || (t.requested_at ? String(t.requested_at).split('T')[0] : null),
           operationalDate: t.operational_date || t.date || (t.requested_at ? String(t.requested_at).split('T')[0] : null),
@@ -139,7 +145,11 @@ export const AX_DatabaseSync = {
           isAuditDiscrepancy: Boolean(t.is_audit_discrepancy || t.isAuditDiscrepancy),
           auditDiscrepancyNote: t.audit_discrepancy_note || t.auditDiscrepancyNote || '',
           notes: t.notes,
-          items: t.items || (t.item_id ? [{ itemId: t.item_id, quantity: Number(t.quantity || 0), unit: t.unit }] : []),
+          items: (Array.isArray(t.items) ? t.items : (t.item_id ? [{ itemId: t.item_id, quantity: Number(t.quantity || 0), unit: t.unit }] : [])).map((it) => ({
+            ...it,
+            itemId: it.itemId || it.item_id || it.id,
+            quantity: Number(it.quantity || 0),
+          })),
         }))
       }
 
@@ -196,9 +206,22 @@ export const AX_DatabaseSync = {
       if (Array.isArray(invoices)) {
         payload.invoices = invoices.map((inv) => {
           let resolvedType = inv.type
-          if (inv.payment_terms === 'مردود مبيعات' || inv.code?.startsWith('RET-SALE') || inv.status === 'sale_return') {
+          if (
+            inv.type === 'sale_return' ||
+            inv.status === 'sale_return' ||
+            inv.payment_terms === 'مردود مبيعات' ||
+            inv.code?.startsWith('RET-SALE') ||
+            inv.notes?.includes('مردود مبيعات')
+          ) {
             resolvedType = 'sale_return'
-          } else if (inv.payment_terms === 'مردود مشتريات' || inv.code?.startsWith('RET-PURCHASE') || inv.status === 'purchase_return') {
+          } else if (
+            inv.type === 'purchase_return' ||
+            inv.status === 'purchase_return' ||
+            inv.payment_terms === 'مردود مشتريات' ||
+            inv.code?.startsWith('RET-PUR') ||
+            inv.notes?.includes('مردود مشتريات') ||
+            inv.notes?.includes('مردود على الفاتورة')
+          ) {
             resolvedType = 'purchase_return'
           }
           return {
@@ -206,6 +229,8 @@ export const AX_DatabaseSync = {
             code: inv.code,
             type: resolvedType,
             partyName: inv.party_name,
+            partyType: inv.party_type || (resolvedType === 'sale' || resolvedType === 'sale_return' ? 'customer' : 'supplier'),
+            partyKind: inv.party_type || (resolvedType === 'sale' || resolvedType === 'sale_return' ? 'customer' : 'supplier'),
             warehouseId: inv.warehouse_id,
             date: inv.date,
             operationalDate: inv.date,
@@ -220,6 +245,7 @@ export const AX_DatabaseSync = {
             status: inv.status || 'paid',
             paymentTerms: inv.payment_terms || (Number(inv.remaining_amount) > 0 ? 'مدفوع جزئي' : 'مدفوع كلي'),
             items: inv.items || [],
+            notes: inv.notes || '',
           }
         })
       }

@@ -120,8 +120,8 @@ export function AX_InvoiceReturnModal({
       total: returnTotal,
       paidAmount: isCashRefund ? returnTotal : 0,
       remainingAmount: isCashRefund ? 0 : returnTotal,
-      status: isCashRefund ? 'paid' : 'unpaid',
-      paymentTerms: isCashRefund ? 'رد نقدي فوري' : 'تخفيض رصيد الحساب',
+      status: targetType,
+      paymentTerms: isCashRefund ? 'رد نقدي فوري' : (isReturnOfSale ? 'مردود مبيعات' : 'مردود مشتريات'),
       treasuryId: isCashRefund ? selectedTreasuryId : null,
       notes: `مردود على الفاتورة ${invoice.code}${returnNotes ? ` — ${returnNotes}` : ''}`,
     }
@@ -132,10 +132,10 @@ export function AX_InvoiceReturnModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-sm animate-in fade-in overscroll-contain">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-0 sm:p-4 bg-black/60 backdrop-blur-sm animate-in fade-in overscroll-contain">
       <form
         onSubmit={handleSubmit}
-        className="bg-surface-lowest border border-outline-variant/30 rounded-3xl p-5 sm:p-6 shadow-level3 max-w-2xl w-full space-y-4 max-h-[92vh] overflow-y-auto overscroll-contain"
+        className="bg-surface-lowest border border-outline-variant/30 rounded-none sm:rounded-3xl p-4 sm:p-6 shadow-level3 max-w-4xl w-full space-y-4 h-full sm:h-auto max-h-[100dvh] sm:max-h-[94vh] overflow-y-auto overscroll-contain mobile-form-zoom"
       >
         <div className="flex items-center justify-between border-b border-surface-container pb-3">
           <div className="flex items-center gap-2">

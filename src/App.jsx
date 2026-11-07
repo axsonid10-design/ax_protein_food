@@ -24,6 +24,8 @@ import { AX_WarehousesInventory } from './components/warehouses/AX_WarehousesInv
 import { AX_ManufacturingDisassembly } from './components/manufacturing/AX_ManufacturingDisassembly'
 import { AX_TreasuryLedger } from './components/treasury/AX_TreasuryLedger'
 import { AX_VanDistribution } from './components/distribution/AX_VanDistribution'
+import { AX_SalesManager } from './components/sales/AX_SalesManager'
+import { AX_PurchasesManager } from './components/purchases/AX_PurchasesManager'
 import { AX_InvoicesManager } from './components/invoices/AX_InvoicesManager'
 import { AX_CustomersManager } from './components/customers/AX_CustomersManager'
 import { AX_SuppliersManager } from './components/suppliers/AX_SuppliersManager'
@@ -253,7 +255,9 @@ export default function App() {
               {activeTab === 'manufacturing' && hasModuleAccess(profile, 'manufacturing') && <AX_ManufacturingDisassembly />}
               {activeTab === 'distribution' && hasModuleAccess(profile, 'distribution') && <AX_VanDistribution />}
               {activeTab === 'treasury' && hasModuleAccess(profile, 'treasury') && <AX_TreasuryLedger />}
-              {activeTab === 'invoices' && hasModuleAccess(profile, 'invoices') && <AX_InvoicesManager />}
+              {activeTab === 'sales' && hasModuleAccess(profile, 'sales') && <AX_SalesManager />}
+              {activeTab === 'purchases' && hasModuleAccess(profile, 'purchases') && <AX_PurchasesManager />}
+              {activeTab === 'invoices' && hasModuleAccess(profile, 'invoices') && <AX_SalesManager />}
               {activeTab === 'customers' && hasModuleAccess(profile, 'customers') && <AX_CustomersManager />}
               {activeTab === 'suppliers' && hasModuleAccess(profile, 'suppliers') && <AX_SuppliersManager />}
               {activeTab === 'sales_reps' && hasModuleAccess(profile, 'sales_reps') && <AX_SalesRepsManager />}

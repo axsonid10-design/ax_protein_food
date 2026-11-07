@@ -1,20 +1,5 @@
 import React, { useState, useMemo } from 'react'
-import {
-  Boxes,
-  Plus,
-  Search,
-  Filter,
-  Tag,
-  Scale,
-  Trash2,
-  Copy,
-  Edit3,
-  ChevronRight,
-  ChevronLeft,
-  ChevronDown,
-  Layers,
-  Activity,
-} from 'lucide-react'
+import { Boxes, Plus, Search, Filter, Tag, Scale, Trash2, Copy, Edit3, ChevronRight, ChevronLeft, ChevronDown, Layers, Activity } from 'lucide-react'
 import { useAXStore } from '../../store/useAXStore'
 import { AX_CategorySelect } from './AX_CategorySelect'
 import { AX_SearchableSelect } from '../common/AX_SearchableSelect'
@@ -24,6 +9,7 @@ import { AX_AddItemModal } from './AX_AddItemModal'
 import { AX_EditItemModal } from './AX_EditItemModal'
 import { AX_BulkAddItemsModal } from './AX_BulkAddItemsModal'
 import { AX_ItemMovementCardModal } from '../warehouses/AX_ItemMovementCardModal'
+import { AX_ItemOpeningBalanceModal } from './AX_ItemOpeningBalanceModal'
 import { getCategoryClass } from '../../utils/categoryColors'
 
 export function AX_ItemsCatalog() {
@@ -31,25 +17,10 @@ export function AX_ItemsCatalog() {
     items = [],
     categories = [],
     subCategories = {},
-    secondaryCategories = [],
-    warehouses = [],
-    inventoryStock = [],
-    invoices = [],
-    transfers = [],
-    stockAudits = [],
-    addItem,
-    addMultipleItems,
-    editItem,
-    deleteItem,
-    addCategory,
-    editCategory,
-    deleteCategory,
-    addSubCategory,
-    editSubCategory,
-    deleteSubCategory,
-    addSecondaryCategory,
-    editSecondaryCategory,
-    deleteSecondaryCategory,
+    secondaryCategories = [], warehouses = [], inventoryStock = [], invoices = [], transfers = [], stockAudits = [],
+    addItem, addMultipleItems, editItem, deleteItem,
+    addCategory, editCategory, deleteCategory, addSubCategory, editSubCategory, deleteSubCategory,
+    addSecondaryCategory, editSecondaryCategory, deleteSecondaryCategory,
   } = useAXStore()
 
   const [searchTerm, setSearchTerm] = useState('')
@@ -58,6 +29,7 @@ export function AX_ItemsCatalog() {
   const [isBulkAddOpen, setIsBulkAddOpen] = useState(false)
   const [itemToEdit, setItemToEdit] = useState(null)
   const [selectedItemForCard, setSelectedItemForCard] = useState(null)
+  const [itemForOpeningBalance, setItemForOpeningBalance] = useState(null)
   const [currentPage, setCurrentPage] = useState(1)
   const [itemToDelete, setItemToDelete] = useState(null)
   const [isDeleting, setIsDeleting] = useState(false)
@@ -314,6 +286,14 @@ export function AX_ItemsCatalog() {
                     </button>
                     <button
                       type="button"
+                      onClick={() => setItemForOpeningBalance(item)}
+                      className="p-1 rounded-full text-amber-700 hover:bg-amber-500/10 transition-colors cursor-pointer"
+                      title="تسجيل وتعديل رصيد أول المدة"
+                    >
+                      <Layers className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      type="button"
                       onClick={() => setItemToEdit(item)}
                       className="p-1 rounded-full text-secondary hover:bg-secondary/10 transition-colors cursor-pointer"
                       title="تعديل بيانات الصنف"
@@ -398,6 +378,14 @@ export function AX_ItemsCatalog() {
                 </button>
                 <button
                   type="button"
+                  onClick={() => setItemForOpeningBalance(item)}
+                  className="p-1 rounded-full text-amber-700 hover:bg-amber-500/10 cursor-pointer"
+                  title="تسجيل وتعديل رصيد أول المدة"
+                >
+                  <Layers className="w-4 h-4" />
+                </button>
+                <button
+                  type="button"
                   onClick={() => setItemToEdit(item)}
                   className="p-1 rounded-full text-secondary hover:bg-secondary/10 cursor-pointer"
                   title="تعديل بيانات الصنف"
@@ -478,6 +466,13 @@ export function AX_ItemsCatalog() {
         salesInvoices={salesInvoices}
         transfers={transfers}
         stockAudits={stockAudits}
+      />
+
+      <AX_ItemOpeningBalanceModal
+        isOpen={Boolean(itemForOpeningBalance)}
+        onClose={() => setItemForOpeningBalance(null)}
+        item={itemForOpeningBalance}
+        warehouses={warehouses}
       />
 
       <button

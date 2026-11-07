@@ -216,10 +216,16 @@ export function AX_InvoiceItemsEditor({
             const currentUnit = row.unit || itObj?.unitType || 'كرتونة'
             const availableUnits = ['كرتونة', 'كيلو', Number(itObj?.piecesPerCarton) > 0 ? 'قطعة' : null].filter(Boolean)
 
+            const isNegativeStock = invType === 'sale' && (getStock(row.itemId) <= 0 || getStock(row.itemId) < getCartonEquivalent(row.quantity, currentUnit, itObj))
+
             return (
               <div
                 key={idx}
-                className="bg-surface-low border border-outline-variant/30 rounded-xl p-2.5 space-y-2 transition-all"
+                className={`rounded-xl p-2.5 space-y-2 transition-all border ${
+                  isNegativeStock
+                    ? 'bg-rose-500/10 border-2 border-rose-500/60 shadow-xs'
+                    : 'bg-surface-low border-outline-variant/30'
+                }`}
               >
                 <div className="flex items-center justify-between text-xs">
                   <div className="flex items-center gap-2 min-w-0 flex-wrap">
@@ -234,11 +240,11 @@ export function AX_InvoiceItemsEditor({
                     </span>
                     {invType === 'sale' && (
                       <span className={`text-[10px] font-mono font-bold px-1.5 py-0.5 rounded border shrink-0 ${
-                        getStock(row.itemId) >= getCartonEquivalent(row.quantity, currentUnit, itObj)
+                        !isNegativeStock
                           ? 'bg-emerald-500/10 text-emerald-700 border-emerald-500/20'
-                          : 'bg-rose-500/10 text-rose-700 border-rose-500/30'
+                          : 'bg-rose-600 text-white border-rose-700 font-black'
                       }`}>
-                        متاح: {getStock(row.itemId)}
+                        {isNegativeStock ? `سالب: رصيد المخزن (${getStock(row.itemId)})` : `متاح: ${getStock(row.itemId)}`}
                       </span>
                     )}
                   </div>

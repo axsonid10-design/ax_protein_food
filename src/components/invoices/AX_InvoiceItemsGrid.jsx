@@ -83,15 +83,6 @@ export function AX_InvoiceItemsGrid({
     const existingIdx = invoiceItems.findIndex(
       (r) => r.itemId === item.id && (r.unit || item.unitType || 'كرتونة') === activeUnit
     )
-    const avail = getStock(item.id)
-    if (invType === 'sale') {
-      const curQty = existingIdx !== -1 ? (Number(invoiceItems[existingIdx]?.quantity) || 0) : 0
-      const nextCartonReq = getCartonEquivalent(curQty + 1, activeUnit, item)
-      if (avail <= 0 || nextCartonReq > avail) {
-        axToast.error('رصيد الصنف غير متاح في المخزن المحدد')
-        return
-      }
-    }
     if (existingIdx !== -1) {
       onUpdateQuantity(existingIdx, (Number(invoiceItems[existingIdx].quantity) || 0) + 1)
     } else {
@@ -126,15 +117,6 @@ export function AX_InvoiceItemsGrid({
     const existingIdx = invoiceItems.findIndex(
       (r) => r.itemId === item.id && (r.unit || item.unitType || 'كرتونة') === activeUnit
     )
-    const avail = getStock(item.id)
-    if (invType === 'sale') {
-      const curQty = existingIdx !== -1 ? (Number(invoiceItems[existingIdx]?.quantity) || 0) : 0
-      const nextCartonReq = getCartonEquivalent(curQty + 1, activeUnit, item)
-      if (avail <= 0 || nextCartonReq > avail) {
-        axToast.error('رصيد الصنف غير متاح في المخزن المحدد')
-        return
-      }
-    }
     if (existingIdx !== -1) {
       onUpdateQuantity(existingIdx, (Number(invoiceItems[existingIdx].quantity) || 0) + 1)
     } else {
@@ -211,15 +193,15 @@ export function AX_InvoiceItemsGrid({
                   const isAdded = Boolean(matchingRow)
                   const addedQty = matchingRow ? Number(matchingRow.quantity) || 0 : 0
                   const avail = getStock(item.id)
-                  const isOutOfStock = invType === 'sale' && avail <= 0
+                  const isNegativeStock = avail <= 0
 
                   return (
                     <div
                       key={item.id}
                       onClick={() => handleCardClick(item, activeUnit)}
                       className={`p-2.5 rounded-2xl border transition-all text-right flex flex-col justify-between select-none cursor-pointer group ${
-                        isOutOfStock
-                          ? 'bg-surface-low/50 border-rose-500/30 opacity-80'
+                        isNegativeStock
+                          ? 'bg-rose-500/15 border-2 border-rose-600 text-rose-950 shadow-xs'
                           : isAdded
                           ? 'bg-primary/10 border-primary/40 shadow-xs'
                           : 'bg-surface-low/70 hover:bg-surface-low border-outline-variant/30 hover:border-primary/30'
@@ -246,12 +228,12 @@ export function AX_InvoiceItemsGrid({
                               </button>
                             ))}
                           </div>
-                          <span className={`text-[10px] font-mono font-bold px-1.5 py-0.5 rounded-md border shrink-0 ${
+                          <span className={`text-[10px] font-mono font-black px-1.5 py-0.5 rounded-md border shrink-0 ${
                             avail > 0
                               ? 'bg-emerald-500/10 text-emerald-700 border-emerald-500/20'
-                              : 'bg-rose-500/10 text-rose-700 border-rose-500/20'
+                              : 'bg-rose-600 text-white border-rose-700 font-black'
                           }`}>
-                            {avail > 0 ? `متاح: ${avail}` : 'رصيد 0'}
+                            {avail > 0 ? `متاح: ${avail}` : avail === 0 ? 'رصيد 0 (سحب سالب)' : `سالب: ${avail}`}
                           </span>
                           {isAdded && (
                             <span className="w-4 h-4 rounded-full bg-primary text-white flex items-center justify-center shrink-0">

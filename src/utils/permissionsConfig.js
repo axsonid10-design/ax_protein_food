@@ -370,6 +370,12 @@ export function hasModuleAccess(user, moduleId) {
   if (moduleId === 'employees') {
     return isMasterUser(user) || user.role === 'super_admin' || user.role === 'admin' || user.role === 'accountant' || user.role === 'branch_manager'
   }
+  if (moduleId === 'sales' || moduleId === 'purchases') {
+    if (isMasterUser(user) || user.role === 'admin' || user.role === 'super_admin') return true
+    const perms = Array.isArray(user.permissions) ? normalizePermissions(user.permissions) : (user.permissions || {})
+    const mod = perms[moduleId] || perms['invoices']
+    return Boolean(mod && mod.view)
+  }
   if (user.role === 'admin') return true
   const perms = Array.isArray(user.permissions) ? normalizePermissions(user.permissions) : (user.permissions || {})
   const mod = perms[moduleId]

@@ -239,4 +239,37 @@ export const AX_ItemOperationsService = {
       return { success: false, error: err.message }
     }
   },
+
+  saveOpeningBalanceInDB: async ({ itemId, warehouseId, quantity, date, unit, newStock }, userProfile = null) => {
+    if (!supabase || typeof supabase.from !== 'function' || !itemId || !warehouseId) return { success: false }
+    try {
+      const stockRow = {
+        warehouse_id: warehouseId,
+        item_id: itemId,
+        opening_balance: Number(quantity) || 0,
+        opening_date: date || null,
+        quantity: Number(newStock !== undefined ? newStock : quantity) || 0,
+        unit: unit || 'كرتونة',
+        updated_at: new Date().toISOString(),
+      }
+      const { error } = await supabase.from('ax_inventory_stock').upsert(stockRow, {
+        onConflict: 'warehouse_id,item_id',
+      })
+      if (error) throw error
+      try {
+        await supabase.from('ax_activity_logs').insert({
+          id: generateUUID(),
+          table_name: 'ax_inventory_stock',
+          action: 'UPDATE_OPENING_BALANCE',
+          record_id: `${warehouseId}:${itemId}`,
+          new_data: stockRow,
+          user_id: userProfile?.id || null,
+        })
+      } catch {}
+      return { success: true }
+    } catch (err) {
+      console.error('saveOpeningBalanceInDB error:', err)
+      return { success: false, error: err.message }
+    }
+  },
 }

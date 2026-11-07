@@ -1,4 +1,5 @@
 import { generateUUID } from '../utils/AX_UUID.js'
+import { recalculateItemStock } from '../components/warehouses/itemMovementHelpers.js'
 
 export const updateLocalCachePayload = (key, value) => {
   try {
@@ -67,12 +68,12 @@ export const processInvoiceStoreState = (state, inv) => {
     if (sIdx >= 0) {
       updatedStock[sIdx] = {
         ...updatedStock[sIdx],
-        quantity: Math.max(0, (updatedStock[sIdx].quantity || 0) + delta),
+        quantity: (updatedStock[sIdx].quantity || 0) + delta,
       }
-    } else if (delta > 0) {
+    } else {
       updatedStock.push({
         warehouseId: inv.warehouseId,
-        itemId: item.itemId,
+        itemId: item.itemId || item.id,
         quantity: delta,
         unit: item.unit || 'كرتونة',
       })
@@ -195,9 +196,9 @@ export const revertInvoiceStoreState = (state, inv) => {
     if (sIdx >= 0) {
       updatedStock[sIdx] = {
         ...updatedStock[sIdx],
-        quantity: Math.max(0, (updatedStock[sIdx].quantity || 0) + delta),
+        quantity: (updatedStock[sIdx].quantity || 0) + delta,
       }
-    } else if (delta > 0) {
+    } else {
       updatedStock.push({
         warehouseId: inv.warehouseId,
         itemId: item.itemId || item.id,
@@ -263,4 +264,44 @@ export const updateInvoiceStoreState = (state, invoiceIdOrInv, updatedInvData) =
   const cleanState = oldInv ? { ...state, ...revertInvoiceStoreState(state, oldInv), invoices: (state.invoices || []).filter((i) => i.id !== invoiceId) } : state
   const fullUpdatedInv = { ...oldInv, ...updatedInv, id: invoiceId }
   return processInvoiceStoreState(cleanState, fullUpdatedInv)
+}
+
+export const saveItemOpeningBalanceState = (state, { itemId, warehouseId, quantity, date, unit }) => {
+  const purchases = state.invoices?.filter((i) => i.type === 'purchase' || i.type === 'purchase_return') || []
+  const sales = state.invoices?.filter((i) => i.type === 'sale' || i.type === 'sale_return') || []
+
+  let updatedInventory = [...(state.inventoryStock || [])]
+  const idx = updatedInventory.findIndex((s) => s.warehouseId === warehouseId && s.itemId === itemId)
+  const prevItem = idx !== -1 ? updatedInventory[idx] : null
+  const baseUnit = unit || prevItem?.unit || 'كرتونة'
+
+  const tempStockRow = {
+    ...(prevItem || { warehouseId, itemId, unit: baseUnit }),
+    openingBalance: Number(quantity) || 0,
+    openingDate: date || null,
+  }
+
+  if (idx !== -1) {
+    updatedInventory[idx] = tempStockRow
+  } else {
+    updatedInventory.push(tempStockRow)
+  }
+
+  const nextCurrentStock = recalculateItemStock({
+    itemId,
+    warehouseId,
+    inventoryStock: updatedInventory,
+    purchases,
+    sales,
+    transfers: state.transfers || [],
+    stockAudits: state.stockAudits || [],
+  })
+
+  const finalStockRow = { ...tempStockRow, quantity: nextCurrentStock }
+  const finalInventory = updatedInventory.map((s) =>
+    s.warehouseId === warehouseId && s.itemId === itemId ? finalStockRow : s
+  )
+
+  updateLocalCachePayload('inventoryStock', finalInventory)
+  return { inventoryStock: finalInventory, newStock: nextCurrentStock, finalStockRow }
 }

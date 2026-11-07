@@ -14,6 +14,8 @@ import {
   BarChart3,
   Trash2,
   ShieldCheck,
+  TrendingUp,
+  ShoppingBag,
 } from 'lucide-react'
 import { useAXStore } from '../../store/useAXStore'
 import { hasModuleAccess } from '../../utils/permissionsConfig'
@@ -31,8 +33,9 @@ export function AX_MobileNavbar({ activeTab, onSelectTab }) {
     { id: 'warehouses', label: 'المخازن', icon: Warehouse, badge: pendingStockCount },
     { id: 'manufacturing', label: 'التصنيع', icon: Scissors, badge: 0 },
     { id: 'distribution', label: 'السيارات', icon: Truck, badge: 0 },
+    { id: 'sales', label: 'المبيعات', icon: TrendingUp, badge: 0 },
+    { id: 'purchases', label: 'المشتريات', icon: ShoppingBag, badge: 0 },
     { id: 'treasury', label: 'الخزينة', icon: Wallet, badge: pendingCashCount },
-    { id: 'invoices', label: 'الفواتير', icon: FileText, badge: 0 },
     { id: 'customers', label: 'العملاء', icon: UserCheck, badge: 0 },
     { id: 'suppliers', label: 'الموردين', icon: Building2, badge: 0 },
     { id: 'sales_reps', label: 'المناديب', icon: BadgePercent, badge: 0 },

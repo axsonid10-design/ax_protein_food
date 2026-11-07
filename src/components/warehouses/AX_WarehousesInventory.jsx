@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useMemo } from 'react'
 import {
   Boxes, ArrowLeftRight, Plus, Clock, Search,
   PackageCheck, Tag, ClipboardCheck, Ban, AlertTriangle,
@@ -21,8 +21,9 @@ export function AX_WarehousesInventory() {
   const inventoryStock = useAXStore((state) => state.inventoryStock) || []
   const transfers = useAXStore((state) => state.transfers) || []
   const stockAudits = useAXStore((state) => state.stockAudits) || []
-  const purchaseInvoices = useAXStore((state) => state.purchaseInvoices) || []
-  const salesInvoices = useAXStore((state) => state.salesInvoices) || []
+  const invoices = useAXStore((state) => state.invoices) || []
+  const purchaseInvoices = useMemo(() => (invoices || []).filter((i) => i.type === 'purchase' || i.type === 'purchase_return'), [invoices])
+  const salesInvoices = useMemo(() => (invoices || []).filter((i) => i.type === 'sale' || i.type === 'sale_return'), [invoices])
   const cancelTransfer = useAXStore((state) => state.cancelTransfer)
   const deleteWarehouse = useAXStore((state) => state.deleteWarehouse)
 
@@ -478,6 +479,7 @@ export function AX_WarehousesInventory() {
         isOpen={Boolean(selectedItemForCard)}
         onClose={() => setSelectedItemForCard(null)}
         item={selectedItemForCard}
+        initialWarehouseId={selectedWarehouseId}
         warehouses={warehouses}
         inventoryStock={inventoryStock}
         purchaseInvoices={purchaseInvoices}

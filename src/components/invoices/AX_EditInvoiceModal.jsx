@@ -163,8 +163,8 @@ export function AX_EditInvoiceModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-sm animate-in fade-in overflow-y-auto">
-      <div className="bg-surface-lowest border border-outline-variant/30 rounded-3xl p-5 sm:p-6 shadow-level3 max-w-4xl w-full space-y-4 my-auto max-h-[92vh] overflow-y-auto">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-0 sm:p-4 bg-black/60 backdrop-blur-sm animate-in fade-in overflow-y-auto">
+      <div className="bg-surface-lowest border border-outline-variant/30 rounded-none sm:rounded-3xl p-4 sm:p-6 shadow-level3 sm:max-w-6xl lg:max-w-7xl w-full space-y-4 my-auto h-full sm:h-auto max-h-[100dvh] sm:max-h-[94vh] overflow-y-auto mobile-form-zoom">
         <div className="flex items-center justify-between border-b border-surface-container pb-3">
           <div className="flex items-center gap-2.5">
             <div className="w-10 h-10 rounded-full bg-secondary/10 text-secondary flex items-center justify-center">

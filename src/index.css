@@ -25,6 +25,12 @@ body {
   overflow-x: clip;
 }
 
+@media (max-width: 640px) {
+  .mobile-form-zoom {
+    zoom: 0.90;
+  }
+}
+
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
