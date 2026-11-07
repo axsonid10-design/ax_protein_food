@@ -54,7 +54,19 @@ export function AX_InvoiceReturnModal({
 
   const handleToggleSelect = (idx) => {
     setReturnItems((prev) =>
-      prev.map((it, i) => (i === idx ? { ...it, selected: !it.selected } : it))
+      prev.map((it, i) => (i === idx ? { ...it, selected: !it.selected, returnQty: !it.selected ? (it.returnQty || it.originalQty) : 0 } : it))
+    )
+  }
+
+  const handleSelectAll = () => {
+    setReturnItems((prev) =>
+      prev.map((it) => ({ ...it, selected: true, returnQty: it.originalQty }))
+    )
+  }
+
+  const handleDeselectAll = () => {
+    setReturnItems((prev) =>
+      prev.map((it) => ({ ...it, selected: false, returnQty: 0 }))
     )
   }
 
@@ -189,17 +201,46 @@ export function AX_InvoiceReturnModal({
           </div>
         </div>
 
+        <div className="p-3 rounded-2xl bg-purple-500/10 border border-purple-500/20 text-xs flex items-start gap-2 text-on-surface">
+          <AlertTriangle className="w-4 h-4 text-purple-700 shrink-0 mt-0.5" />
+          <div className="space-y-0.5">
+            <span className="font-black text-purple-900 block">ضمان النزاهة المحاسبية:</span>
+            <span className="text-on-surface-variant leading-relaxed block text-[11px]">
+              الفاتورة الأصلية <strong>({invoice.code})</strong> ستبقى ثابتة بكامل قيمتها وبنودها دفترياً، وسيتم إنشاء مستند مردود مستقل <strong>({targetType === 'purchase_return' ? 'مردود مشتريات' : 'مردود مبيعات'})</strong> يظهر في صفحة {targetType === 'purchase_return' ? 'مردودات المشتريات' : 'مردودات المبيعات'}.
+            </span>
+          </div>
+        </div>
+
         <div className="space-y-2">
-          <span className="text-xs font-black text-on-surface block">
-            حدد بنود وكميات المرتجع:
-          </span>
+          <div className="flex items-center justify-between gap-2 flex-wrap">
+            <span className="text-xs font-black text-on-surface block">
+              حدد بنود وكميات المرتجع:
+            </span>
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={handleSelectAll}
+                className="px-3 py-1 rounded-full text-xs font-black bg-purple-500/15 hover:bg-purple-500/25 text-purple-800 transition-all cursor-pointer"
+              >
+                إرجاع الفاتورة كاملة
+              </button>
+              <button
+                type="button"
+                onClick={handleDeselectAll}
+                className="px-3 py-1 rounded-full text-xs font-black bg-surface-low hover:bg-surface-container text-on-surface-variant transition-all cursor-pointer"
+              >
+                تحديد بنود معينة
+              </button>
+            </div>
+          </div>
+
           <div className="overflow-hidden rounded-2xl border border-surface-container">
             <table className="w-full text-right text-xs">
               <thead className="bg-surface-low border-b border-surface-container text-on-surface-variant font-black">
                 <tr className="h-9">
                   <th className="px-3 w-8 text-center">اختيار</th>
                   <th className="px-3">الصنف</th>
-                  <th className="px-3 text-center">الكمية المباعة</th>
+                  <th className="px-3 text-center">{isReturnOfSale ? 'الكمية المباعة' : 'الكمية المشتراة'}</th>
                   <th className="px-3 text-center">الكمية المرتجعة</th>
                   <th className="px-3 text-left">السعر</th>
                   <th className="px-3 text-left">إجمالي المردود</th>

@@ -67,10 +67,16 @@ export function AX_Dashboard() {
   }, [invoices, period, startDate, endDate])
 
   const salesInvoices = filteredInvoices.filter((i) => i.type === 'sale')
-  const salesTotal = salesInvoices.reduce((acc, inv) => acc + (Number(inv.total) || 0), 0)
+  const salesReturns = filteredInvoices.filter((i) => i.type === 'sale_return')
+  const grossSales = salesInvoices.reduce((acc, inv) => acc + (Number(inv.total) || 0), 0)
+  const salesReturnsTotal = salesReturns.reduce((acc, inv) => acc + (Number(inv.total) || 0), 0)
+  const salesTotal = grossSales - salesReturnsTotal
 
   const purchaseInvoices = filteredInvoices.filter((i) => i.type === 'purchase')
-  const purchasesTotal = purchaseInvoices.reduce((acc, inv) => acc + (Number(inv.total) || 0), 0)
+  const purchaseReturns = filteredInvoices.filter((i) => i.type === 'purchase_return')
+  const grossPurchases = purchaseInvoices.reduce((acc, inv) => acc + (Number(inv.total) || 0), 0)
+  const purchaseReturnsTotal = purchaseReturns.reduce((acc, inv) => acc + (Number(inv.total) || 0), 0)
+  const purchasesTotal = grossPurchases - purchaseReturnsTotal
 
   const salesTrend = useMemo(() => {
     const now = new Date()

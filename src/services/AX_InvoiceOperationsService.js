@@ -16,7 +16,7 @@ export const AX_InvoiceOperationsService = {
       const invoiceRow = {
         id: invoiceId,
         code: inv.code || (isSaleReturn ? `RET-SALE-${Date.now().toString().slice(-4)}` : isPurchaseReturn ? `RET-PURCHASE-${Date.now().toString().slice(-4)}` : `INV-${Date.now().toString().slice(-5)}`),
-        type: dbType,
+        type: inv.type || dbType,
         party_name: inv.partyName || inv.party_name || '',
         party_type: inv.partyKind || inv.partyType || (dbType === 'sale' ? 'customer' : 'supplier'),
         party_id: inv.partyId || inv.party_id || null,

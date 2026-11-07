@@ -245,7 +245,11 @@ export function AX_SalesManager() {
                   const canReturn = inv.type === 'sale'
 
                   return (
-                    <tr key={inv.id} className={`h-11 transition-colors ${theme.rowClass}`}>
+                    <tr
+                      key={inv.id}
+                      onClick={() => setSelectedInvoiceForModal(inv)}
+                      className={`h-11 transition-colors cursor-pointer ${theme.rowClass}`}
+                    >
                       <td className={`px-3.5 whitespace-nowrap font-mono font-black ${theme.codeClass}`}>
                         {inv.code}
                       </td>
@@ -275,7 +279,7 @@ export function AX_SalesManager() {
                         </span>
                       </td>
                       <td className="px-3.5 whitespace-nowrap text-center">
-                        <div className="flex items-center justify-center gap-1.5">
+                        <div className="flex items-center justify-center gap-1.5" onClick={(e) => e.stopPropagation()}>
                           {canReturn && (
                             <button
                               type="button"
@@ -420,7 +424,7 @@ export function AX_SalesManager() {
         invoice={invoiceForReturn}
         warehouses={warehouses}
         treasuryAccounts={treasuryAccounts}
-        onSaveReturn={addInvoice}
+        onSaveReturn={(ret) => { addInvoice(ret); setSalesTab('returns_only') }}
       />
 
       <AX_CreateInvoiceModal
@@ -456,7 +460,7 @@ export function AX_SalesManager() {
         invoice={selectedInvoiceForModal}
         warehouses={warehouses}
         treasuryAccounts={treasuryAccounts}
-        onSaveReturn={addInvoice}
+        onSaveReturn={(ret) => { addInvoice(ret); setSalesTab('returns_only') }}
         onEdit={(inv) => setSelectedInvoiceForEdit(inv)}
         onDelete={(id) => {
           const inv = (invoices || []).find((i) => i.id === id)
@@ -467,11 +471,7 @@ export function AX_SalesManager() {
       <AX_ConfirmModal
         isOpen={Boolean(invoiceToDelete)}
         title="تأكيد حذف الفاتورة"
-        message={
-          invoiceToDelete
-            ? `هل أنت متأكد من حذف الفاتورة ${invoiceToDelete.code}؟ سيتم إلغاء أثرها وعكس حركاتها وترحيلها لسجل المحذوفات.`
-            : ''
-        }
+        message={invoiceToDelete ? `هل أنت متأكد من حذف الفاتورة ${invoiceToDelete.code}؟ سيتم إلغاء أثرها وعكس حركاتها وترحيلها لسجل المحذوفات.` : ''}
         confirmText="حذف وترحيل للمحذوفات"
         cancelText="إلغاء"
         isDestructive={true}
