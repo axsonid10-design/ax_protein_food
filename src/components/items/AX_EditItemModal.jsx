@@ -31,6 +31,8 @@ export function AX_EditItemModal({
   const [compositeName, setCompositeName] = useState('')
   const [code, setCode] = useState('')
   const [unitType, setUnitType] = useState('كرتونة')
+  const [subUnitType, setSubUnitType] = useState('كيس')
+  const [minStockAlert, setMinStockAlert] = useState('')
   const [weightPerCarton, setWeightPerCarton] = useState('10')
   const [piecesPerCarton, setPiecesPerCarton] = useState('')
   const [grainsPerPiece, setGrainsPerPiece] = useState('')
@@ -54,6 +56,8 @@ export function AX_EditItemModal({
       setCompositeName(item.compositeName || '')
       setCode(item.code || '')
       setUnitType(item.unitType || 'كرتونة')
+      setSubUnitType(item.subUnitType || item.sub_unit_type || 'كيس')
+      setMinStockAlert(item.minStockAlert !== null && item.minStockAlert !== undefined && item.minStockAlert !== '' ? String(item.minStockAlert) : (item.min_stock_alert !== null && item.min_stock_alert !== undefined ? String(item.min_stock_alert) : ''))
       setWeightPerCarton(String(item.weightPerCarton || 10))
       setPiecesPerCarton(String(item.piecesPerCarton || ''))
       setGrainsPerPiece(String(item.grainsPerPiece || ''))
@@ -102,7 +106,9 @@ export function AX_EditItemModal({
       secondaryCategory: secondaryCategory?.trim() || null,
       compositeName: finalName,
       unitType,
-      units: [unitType, Number(piecesPerCarton) > 0 ? 'قطعة' : null, 'كيلو'].filter(Boolean),
+      subUnitType: unitType === 'كرتونة' ? (subUnitType || 'كيس') : null,
+      minStockAlert: minStockAlert !== '' && minStockAlert !== null && minStockAlert !== undefined ? Number(minStockAlert) : null,
+      units: [unitType, Number(piecesPerCarton) > 0 ? (subUnitType || 'قطعة') : null, 'كيلو'].filter(Boolean),
       weightPerCarton: unitType === 'كرتونة' ? Number(weightPerCarton) || 10 : 1,
       piecesPerCarton: Number(piecesPerCarton) || null,
       grainsPerPiece: Number(grainsPerPiece) || null,
@@ -239,6 +245,10 @@ export function AX_EditItemModal({
             setKgBuyPrice={setKgBuyPrice}
             kgSellPrice={kgSellPrice}
             setKgSellPrice={setKgSellPrice}
+            subUnitType={subUnitType}
+            setSubUnitType={setSubUnitType}
+            minStockAlert={minStockAlert}
+            setMinStockAlert={setMinStockAlert}
           />
 
           <div className="pt-3 border-t border-surface-container flex items-center justify-end gap-2.5">

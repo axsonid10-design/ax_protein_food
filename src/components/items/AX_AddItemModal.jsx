@@ -50,22 +50,19 @@ export function AX_AddItemModal({
   const [code, setCode] = useState('')
   const [isScanning, setIsScanning] = useState(false)
   const [unitType, setUnitType] = useState('كرتونة')
+  const [subUnitType, setSubUnitType] = useState('كيس')
+  const [minStockAlert, setMinStockAlert] = useState('')
   const [openingQty, setOpeningQty] = useState('')
   const [openingStockDate, setOpeningStockDate] = useState(() => new Date().toISOString().split('T')[0])
   const [weightPerCarton, setWeightPerCarton] = useState('10')
   const [piecesPerCarton, setPiecesPerCarton] = useState('')
   const [grainsPerPiece, setGrainsPerPiece] = useState('')
-  const [pieceWeight, setPieceWeight] = useState('')
-  const [grainWeight, setGrainWeight] = useState('')
+  const [pieceWeight, setPieceWeight] = useState(''); const [grainWeight, setGrainWeight] = useState('')
   const [targetWarehouseId, setTargetWarehouseId] = useState(warehouses[0]?.id || '')
-  const [buyPrice, setBuyPrice] = useState('')
-  const [sellPrice, setSellPrice] = useState('')
-  const [pieceBuyPrice, setPieceBuyPrice] = useState('')
-  const [pieceSellPrice, setPieceSellPrice] = useState('')
-  const [grainBuyPrice, setGrainBuyPrice] = useState('')
-  const [grainSellPrice, setGrainSellPrice] = useState('')
-  const [kgBuyPrice, setKgBuyPrice] = useState('')
-  const [kgSellPrice, setKgSellPrice] = useState('')
+  const [buyPrice, setBuyPrice] = useState(''); const [sellPrice, setSellPrice] = useState('')
+  const [pieceBuyPrice, setPieceBuyPrice] = useState(''); const [pieceSellPrice, setPieceSellPrice] = useState('')
+  const [grainBuyPrice, setGrainBuyPrice] = useState(''); const [grainSellPrice, setGrainSellPrice] = useState('')
+  const [kgBuyPrice, setKgBuyPrice] = useState(''); const [kgSellPrice, setKgSellPrice] = useState('')
   const [errorMsg, setErrorMsg] = useState(null)
 
   const [isQuickWarehouseOpen, setIsQuickWarehouseOpen] = useState(false)
@@ -76,7 +73,7 @@ export function AX_AddItemModal({
   useEffect(() => {
     if (isOpen) {
       setPrimaryCategory(categories[0] || 'الكبده'); setSubCategory(''); setSecondaryCategory(''); setCompositeName('')
-      setCode(`PF-${Math.floor(1000 + Math.random() * 9000)}`); setUnitType('كرتونة'); setOpeningQty('')
+      setCode(`PF-${Math.floor(1000 + Math.random() * 9000)}`); setUnitType('كرتونة'); setSubUnitType('كيس'); setMinStockAlert(''); setOpeningQty('')
       setOpeningStockDate(new Date().toISOString().split('T')[0]); setWeightPerCarton('10')
       setPiecesPerCarton(''); setGrainsPerPiece(''); setPieceWeight(''); setGrainWeight('')
       setTargetWarehouseId(warehouses[0]?.id || '')
@@ -148,7 +145,9 @@ export function AX_AddItemModal({
       secondaryCategory: secondaryCategory?.trim() || null,
       compositeName: finalName,
       unitType,
-      units: [unitType, Number(piecesPerCarton) > 0 ? 'قطعة' : null, 'كيلو'].filter(Boolean),
+      subUnitType: unitType === 'كرتونة' ? (subUnitType || 'كيس') : null,
+      minStockAlert: minStockAlert !== '' && minStockAlert !== null && minStockAlert !== undefined ? Number(minStockAlert) : null,
+      units: [unitType, Number(piecesPerCarton) > 0 ? (subUnitType || 'قطعة') : null, 'كيلو'].filter(Boolean),
       weightPerCarton: unitType === 'كرتونة' ? Number(weightPerCarton) || 10 : 1,
       piecesPerCarton: Number(piecesPerCarton) || null,
       grainsPerPiece: Number(grainsPerPiece) || null,
@@ -375,6 +374,10 @@ export function AX_AddItemModal({
             setKgBuyPrice={setKgBuyPrice}
             kgSellPrice={kgSellPrice}
             setKgSellPrice={setKgSellPrice}
+            subUnitType={subUnitType}
+            setSubUnitType={setSubUnitType}
+            minStockAlert={minStockAlert}
+            setMinStockAlert={setMinStockAlert}
           />
 
           <div className="pt-3 border-t border-surface-container flex items-center justify-end gap-2.5">

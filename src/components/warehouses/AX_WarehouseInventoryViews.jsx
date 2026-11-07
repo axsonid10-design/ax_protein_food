@@ -1,5 +1,7 @@
 import React from 'react'
 import { LayoutGrid, Table as TableIcon, FolderKanban, Tag } from 'lucide-react'
+import { AX_ItemStatusIndicators } from '../items/AX_ItemStatusIndicators'
+import { formatDualUnits, isItemNearDepletion } from '../../utils/itemUnitFormatters'
 
 export function AX_WarehouseInventoryViews({
   viewMode = 'grid',
@@ -30,6 +32,7 @@ export function AX_WarehouseInventoryViews({
           {stockRows.map((s, idx) => {
             const it = s.item || {}
             const isNegative = Number(s.quantity) < 0
+            const nearDepletion = isItemNearDepletion(it, s.quantity)
             return (
               <div
                 key={idx}
@@ -37,15 +40,20 @@ export function AX_WarehouseInventoryViews({
                 className={`p-3 rounded-2xl border transition-all cursor-pointer flex flex-col justify-between gap-2 text-right group ${
                   isNegative
                     ? 'bg-rose-500/5 border-rose-500/30 hover:border-rose-500 hover:bg-rose-500/10'
+                    : nearDepletion
+                    ? 'bg-rose-500/5 border-2 border-rose-500/60 hover:border-rose-600 shadow-rose-500/10'
                     : 'bg-surface-lowest border-outline-variant/30 hover:border-primary/50 hover:bg-surface-low/50 shadow-xs'
                 }`}
                 title="انقر لعرض حركة الصنف 360°"
               >
                 <div>
                   <div className="flex items-start justify-between gap-1">
-                    <span className="font-mono text-[10px] text-on-surface-variant font-bold">
-                      {it.code || ''}
-                    </span>
+                    <div className="flex items-center gap-1.5">
+                      <span className="font-mono text-[10px] text-on-surface-variant font-bold">
+                        {it.code || ''}
+                      </span>
+                      <AX_ItemStatusIndicators item={it} currentStock={s.quantity} showBadges={false} />
+                    </div>
                     <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-surface-container text-on-surface-variant font-bold truncate max-w-[80px]">
                       {it.primaryCategory || 'عام'}
                     </span>
@@ -53,15 +61,20 @@ export function AX_WarehouseInventoryViews({
                   <h4 className="text-xs font-black text-on-surface mt-1 line-clamp-2 leading-snug">
                     {it.compositeName || 'صنف'}
                   </h4>
+                  {nearDepletion && (
+                    <div className="mt-1">
+                      <AX_ItemStatusIndicators item={it} currentStock={s.quantity} showBadges={true} />
+                    </div>
+                  )}
                 </div>
 
-                <div className="pt-2 border-t border-surface-container/40 flex items-center justify-between">
-                  <span className="text-[10px] font-bold text-on-surface-variant">
-                    {s.unit}
+                <div className="pt-2 border-t border-surface-container/40 flex items-center justify-between gap-1 flex-wrap">
+                  <span className="text-[10px] font-bold text-on-surface-variant truncate">
+                    {formatDualUnits(s.quantity, s.unit, it)}
                   </span>
                   <span
                     className={`font-mono font-black text-xs px-2 py-0.5 rounded-full border ${
-                      isNegative
+                      isNegative || nearDepletion
                         ? 'text-error bg-error/10 border-error/30'
                         : 'text-primary bg-primary/10 border-primary/20'
                     }`}
@@ -107,7 +120,10 @@ export function AX_WarehouseInventoryViews({
                       {it.code || '—'}
                     </td>
                     <td className="px-3 text-on-surface font-black">
-                      {it.compositeName || 'صنف'}
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span>{it.compositeName || 'صنف'}</span>
+                        <AX_ItemStatusIndicators item={it} currentStock={s.quantity} showBadges={true} />
+                      </div>
                     </td>
                     <td className="px-3 text-on-surface-variant text-[11px]">
                       {it.primaryCategory || 'عام'}
@@ -124,8 +140,8 @@ export function AX_WarehouseInventoryViews({
                         {isNegative && <span className="mr-1 text-[10px]">(سالب)</span>}
                       </span>
                     </td>
-                    <td className="px-3 text-center text-on-surface-variant text-[11px]">
-                      {s.unit}
+                    <td className="px-3 text-center text-on-surface-variant text-[11px] font-bold">
+                      {formatDualUnits(s.quantity, s.unit, it)}
                     </td>
                     <td className="px-3 text-center">
                       <button

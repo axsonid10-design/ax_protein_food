@@ -10,6 +10,8 @@ import { AX_EditItemModal } from './AX_EditItemModal'
 import { AX_BulkAddItemsModal } from './AX_BulkAddItemsModal'
 import { AX_ItemMovementCardModal } from '../warehouses/AX_ItemMovementCardModal'
 import { AX_ItemOpeningBalanceModal } from './AX_ItemOpeningBalanceModal'
+import { AX_ItemStatusIndicators } from './AX_ItemStatusIndicators'
+import { formatDualUnits, isItemNearDepletion } from '../../utils/itemUnitFormatters'
 import { getCategoryClass } from '../../utils/categoryColors'
 
 export function AX_ItemsCatalog() {
@@ -38,6 +40,37 @@ export function AX_ItemsCatalog() {
 
   const purchaseInvoices = useMemo(() => (invoices || []).filter((i) => i.type === 'purchase' || i.type === 'purchase_return'), [invoices])
   const salesInvoices = useMemo(() => (invoices || []).filter((i) => i.type === 'sale' || i.type === 'sale_return'), [invoices])
+
+  const getItemStock = (itemId) => {
+    return (inventoryStock || []).filter((s) => s.itemId === itemId).reduce((sum, s) => sum + Number(s.quantity || 0), 0)
+  }
+
+  const categoryHandlers = {
+    addCategory, editCategory, deleteCategory,
+    addSubCategory, editSubCategory, deleteSubCategory,
+    addSecondaryCategory, editSecondaryCategory, deleteSecondaryCategory,
+  }
+
+  const renderItemActions = (item, isMobile = false) => (
+    <div className="flex items-center justify-center gap-1.5">
+      <button type="button" onClick={() => setSelectedItemForCard(item)} className="p-1 rounded-full text-primary hover:bg-primary/10 transition-colors cursor-pointer" title="عرض كارت حركة الصنف 360°">
+        <Activity className={isMobile ? 'w-4 h-4' : 'w-3.5 h-3.5'} />
+      </button>
+      <button type="button" onClick={() => setItemForOpeningBalance(item)} className="p-1 rounded-full text-amber-700 hover:bg-amber-500/10 transition-colors cursor-pointer" title="تسجيل وتعديل رصيد أول المدة">
+        <Layers className={isMobile ? 'w-4 h-4' : 'w-3.5 h-3.5'} />
+      </button>
+      <button type="button" onClick={() => setItemToEdit(item)} className="p-1 rounded-full text-secondary hover:bg-secondary/10 transition-colors cursor-pointer" title="تعديل بيانات الصنف">
+        <Edit3 className={isMobile ? 'w-4 h-4' : 'w-3.5 h-3.5'} />
+      </button>
+      <button type="button" onClick={() => handleQuickVariant(item)} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-secondary/10 hover:bg-secondary/20 text-secondary text-[11px] font-black transition-all cursor-pointer" title="إضافة وزن أو تفريع بديل لنفس الصنف">
+        <Copy className="w-3 h-3" />
+        <span>تفريع</span>
+      </button>
+      <button type="button" onClick={() => setItemToDelete(item)} className="p-1 rounded-full text-error hover:bg-error-container/40 transition-colors cursor-pointer" title="حذف الصنف">
+        <Trash2 className={isMobile ? 'w-4 h-4' : 'w-3.5 h-3.5'} />
+      </button>
+    </div>
+  )
 
   const handleConfirmDelete = async () => {
     if (!itemToDelete) return
@@ -116,15 +149,7 @@ export function AX_ItemsCatalog() {
           subCategories={subCategories}
           secondaryCategories={secondaryCategories}
           warehouses={warehouses}
-          addCategory={addCategory}
-          editCategory={editCategory}
-          deleteCategory={deleteCategory}
-          addSubCategory={addSubCategory}
-          editSubCategory={editSubCategory}
-          deleteSubCategory={deleteSubCategory}
-          addSecondaryCategory={addSecondaryCategory}
-          editSecondaryCategory={editSecondaryCategory}
-          deleteSecondaryCategory={deleteSecondaryCategory}
+          {...categoryHandlers}
         />
       )}
 
@@ -148,15 +173,7 @@ export function AX_ItemsCatalog() {
           categories={categories}
           subCategories={subCategories}
           secondaryCategories={secondaryCategories}
-          addCategory={addCategory}
-          editCategory={editCategory}
-          deleteCategory={deleteCategory}
-          addSubCategory={addSubCategory}
-          editSubCategory={editSubCategory}
-          deleteSubCategory={deleteSubCategory}
-          addSecondaryCategory={addSecondaryCategory}
-          editSecondaryCategory={editSecondaryCategory}
-          deleteSecondaryCategory={deleteSecondaryCategory}
+          {...categoryHandlers}
         />
       )}
 
@@ -217,201 +234,139 @@ export function AX_ItemsCatalog() {
             </tr>
           </thead>
           <tbody className="divide-y divide-surface-container text-on-surface font-bold">
-            {paginatedItems.map((item) => (
-              <tr key={item.id} className="h-11 hover:bg-surface-low/50 transition-colors">
-                {showCodeColumn && (
-                  <td className="px-3.5 whitespace-nowrap font-mono text-primary font-black">{item.code}</td>
-                )}
-                <td className="px-3.5 whitespace-nowrap font-black text-sm text-on-surface">
-                  {!showCodeColumn && item.code && (
-                    <button
-                      type="button"
-                      onClick={() => setShowCodeColumn(true)}
-                      className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-primary/10 hover:bg-primary/20 text-primary font-bold transition-all cursor-pointer ml-2 border border-primary/20"
-                      title="كود الصنف - انقر لإظهار عمود الأكواد"
-                    >
-                      {item.code}
-                    </button>
+            {paginatedItems.map((item) => {
+              const stock = getItemStock(item.id)
+              const nearDepletion = isItemNearDepletion(item, stock)
+              return (
+                <tr key={item.id} className={`h-11 transition-colors ${nearDepletion ? 'bg-rose-500/5 hover:bg-rose-500/10' : 'hover:bg-surface-low/50'}`}>
+                  {showCodeColumn && (
+                    <td className="px-3.5 whitespace-nowrap font-mono text-primary font-black">{item.code}</td>
                   )}
-                  <span
-                    onClick={() => setSelectedItemForCard(item)}
-                    className="cursor-pointer hover:text-primary hover:underline transition-colors"
-                    title="انقر لعرض كارت حركة الصنف 360°"
-                  >
-                    {item.compositeName}
-                  </span>
-                  <span className="text-[11px] font-normal text-on-surface-variant mr-1.5 font-mono">
-                    ({item.weightPerCarton} كجم)
-                  </span>
-                </td>
-                <td className="px-3.5 whitespace-nowrap">
-                  <span className={`inline-block px-2.5 py-0.5 rounded-full text-[11px] font-black border ${getCategoryClass(item.primaryCategory)}`}>
-                    {item.primaryCategory}
-                  </span>
-                </td>
-                <td className="px-3.5 whitespace-nowrap">
-                  <span className="inline-flex items-center gap-1 text-[11px] font-bold text-on-surface">
-                    <span>{item.subCategory}</span>
-                    {item.secondaryCategory && (
-                      <>
-                        <span className="text-outline-variant">•</span>
-                        <span className="px-1.5 py-0.2 rounded bg-surface-low text-on-surface-variant border border-outline-variant/20">
-                          {item.secondaryCategory}
-                        </span>
-                      </>
-                    )}
-                    {Number(item.piecesPerCarton) > 0 && (
-                      <span className="px-1.5 py-0.2 rounded bg-primary/10 text-primary border border-primary/20 text-[10px]">
-                        {item.piecesPerCarton} قطعة
+                  <td className="px-3.5 whitespace-nowrap font-black text-sm text-on-surface">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      {!showCodeColumn && item.code && (
+                        <button
+                          type="button"
+                          onClick={() => setShowCodeColumn(true)}
+                          className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-primary/10 hover:bg-primary/20 text-primary font-bold transition-all cursor-pointer ml-1 border border-primary/20"
+                          title="كود الصنف - انقر لإظهار عمود الأكواد"
+                        >
+                          {item.code}
+                        </button>
+                      )}
+                      <span
+                        onClick={() => setSelectedItemForCard(item)}
+                        className="cursor-pointer hover:text-primary hover:underline transition-colors"
+                        title="انقر لعرض كارت حركة الصنف 360°"
+                      >
+                        {item.compositeName}
                       </span>
-                    )}
-                  </span>
-                </td>
-                <td className="px-3.5 whitespace-nowrap">
-                  <span className="px-2.5 py-0.5 rounded-full bg-surface-low border border-outline-variant/30 text-[11px]">
-                    {item.unitType}
-                  </span>
-                </td>
-                <td className="px-3.5 whitespace-nowrap font-mono font-bold text-on-surface-variant">{item.buyPrice} ج.م</td>
-                <td className="px-3.5 whitespace-nowrap font-mono font-black text-primary">{item.sellPrice} ج.م</td>
-                <td className="px-3.5 whitespace-nowrap text-center">
-                  <div className="flex items-center justify-center gap-1.5">
-                    <button
-                      type="button"
-                      onClick={() => setSelectedItemForCard(item)}
-                      className="p-1 rounded-full text-primary hover:bg-primary/10 transition-colors cursor-pointer"
-                      title="عرض كارت حركة الصنف 360°"
-                    >
-                      <Activity className="w-3.5 h-3.5" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setItemForOpeningBalance(item)}
-                      className="p-1 rounded-full text-amber-700 hover:bg-amber-500/10 transition-colors cursor-pointer"
-                      title="تسجيل وتعديل رصيد أول المدة"
-                    >
-                      <Layers className="w-3.5 h-3.5" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setItemToEdit(item)}
-                      className="p-1 rounded-full text-secondary hover:bg-secondary/10 transition-colors cursor-pointer"
-                      title="تعديل بيانات الصنف"
-                    >
-                      <Edit3 className="w-3.5 h-3.5" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleQuickVariant(item)}
-                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-secondary/10 hover:bg-secondary/20 text-secondary text-[11px] font-black transition-all cursor-pointer"
-                      title="إضافة وزن أو تفريع بديل لنفس الصنف"
-                    >
-                      <Copy className="w-3 h-3" />
-                      <span>تفريع/وزن</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setItemToDelete(item)}
-                      className="p-1 rounded-full text-error hover:bg-error-container/40 transition-colors cursor-pointer"
-                      title="حذف الصنف"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            ))}
+                      <span className="text-[11px] font-normal text-on-surface-variant font-mono">
+                        ({item.weightPerCarton} كجم)
+                      </span>
+                      <AX_ItemStatusIndicators item={item} currentStock={stock} showBadges={true} />
+                    </div>
+                  </td>
+                  <td className="px-3.5 whitespace-nowrap">
+                    <span className={`inline-block px-2.5 py-0.5 rounded-full text-[11px] font-black border ${getCategoryClass(item.primaryCategory)}`}>
+                      {item.primaryCategory}
+                    </span>
+                  </td>
+                  <td className="px-3.5 whitespace-nowrap">
+                    <span className="inline-flex items-center gap-1 text-[11px] font-bold text-on-surface">
+                      <span>{item.subCategory}</span>
+                      {item.secondaryCategory && (
+                        <>
+                          <span className="text-outline-variant">•</span>
+                          <span className="px-1.5 py-0.2 rounded bg-surface-low text-on-surface-variant border border-outline-variant/20">
+                            {item.secondaryCategory}
+                          </span>
+                        </>
+                      )}
+                      {Number(item.piecesPerCarton) > 0 && (
+                        <span className="px-1.5 py-0.2 rounded bg-primary/10 text-primary border border-primary/20 text-[10px]">
+                          {item.piecesPerCarton} {item.subUnitType || 'كيس'}
+                        </span>
+                      )}
+                    </span>
+                  </td>
+                  <td className="px-3.5 whitespace-nowrap">
+                    <span className="px-2.5 py-0.5 rounded-full bg-surface-low border border-outline-variant/30 text-[11px] font-bold">
+                      {item.unitType}
+                      {Number(item.piecesPerCarton) > 0 && (
+                        <span className="text-on-surface-variant mr-1 font-mono">({item.piecesPerCarton} {item.subUnitType || 'كيس'})</span>
+                      )}
+                    </span>
+                  </td>
+                  <td className="px-3.5 whitespace-nowrap font-mono font-bold text-on-surface-variant">{item.buyPrice} ج.م</td>
+                  <td className="px-3.5 whitespace-nowrap font-mono font-black text-primary">{item.sellPrice} ج.م</td>
+                  <td className="px-3.5 whitespace-nowrap text-center">
+                    {renderItemActions(item)}
+                  </td>
+                </tr>
+              )
+            })}
           </tbody>
         </table>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 lg:hidden">
-        {paginatedItems.map((item) => (
-          <div
-            key={item.id}
-            className="bg-surface-lowest border border-outline-variant/30 rounded-2xl p-4 shadow-level1 space-y-3"
-          >
-            <div className="flex items-start justify-between gap-2">
-              <div>
-                <span className="font-mono text-xs font-bold text-primary">{item.code}</span>
-                <h3
-                  onClick={() => setSelectedItemForCard(item)}
-                  className="font-black text-sm text-on-surface mt-0.5 cursor-pointer hover:text-primary transition-colors"
-                  title="انقر لعرض كارت حركة الصنف 360°"
-                >
-                  {item.compositeName}
-                </h3>
-                <span className="text-[11px] text-on-surface-variant font-bold block mt-0.5">
-                  {item.subCategory}
-                  {item.secondaryCategory ? ` • ${item.secondaryCategory}` : ''}
-                  {Number(item.piecesPerCarton) > 0 ? ` • ${item.piecesPerCarton} قطعة` : ''}
+        {paginatedItems.map((item) => {
+          const stock = getItemStock(item.id)
+          const nearDepletion = isItemNearDepletion(item, stock)
+          return (
+            <div
+              key={item.id}
+              className={`rounded-2xl p-4 shadow-level1 space-y-3 transition-all ${
+                nearDepletion
+                  ? 'bg-rose-500/5 border-2 border-rose-500/60 shadow-rose-500/10'
+                  : 'bg-surface-lowest border border-outline-variant/30'
+              }`}
+            >
+              <div className="flex items-start justify-between gap-2">
+                <div>
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className="font-mono text-xs font-bold text-primary">{item.code}</span>
+                    <AX_ItemStatusIndicators item={item} currentStock={stock} showBadges={true} />
+                  </div>
+                  <h3
+                    onClick={() => setSelectedItemForCard(item)}
+                    className="font-black text-sm text-on-surface mt-0.5 cursor-pointer hover:text-primary transition-colors"
+                    title="انقر لعرض كارت حركة الصنف 360°"
+                  >
+                    {item.compositeName}
+                  </h3>
+                  <span className="text-[11px] text-on-surface-variant font-bold block mt-0.5">
+                    {item.subCategory}
+                    {item.secondaryCategory ? ` • ${item.secondaryCategory}` : ''}
+                    {Number(item.piecesPerCarton) > 0 ? ` • ${item.piecesPerCarton} ${item.subUnitType || 'كيس'}` : ''}
+                  </span>
+                </div>
+                <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-black border ${getCategoryClass(item.primaryCategory)}`}>
+                  {item.primaryCategory}
                 </span>
               </div>
-              <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-black border ${getCategoryClass(item.primaryCategory)}`}>
-                {item.primaryCategory}
-              </span>
-            </div>
 
-            <div className="grid grid-cols-2 gap-2 text-xs pt-2 border-t border-surface-container">
-              <div>
-                <span className="text-on-surface-variant text-[11px] block">سعر الشراء</span>
-                <span className="font-mono font-bold text-on-surface">{item.buyPrice} ج.م</span>
+              <div className="grid grid-cols-2 gap-2 text-xs pt-2 border-t border-surface-container">
+                <div>
+                  <span className="text-on-surface-variant text-[11px] block">سعر الشراء</span>
+                  <span className="font-mono font-bold text-on-surface">{item.buyPrice} ج.م</span>
+                </div>
+                <div>
+                  <span className="text-on-surface-variant text-[11px] block">سعر البيع</span>
+                  <span className="font-mono font-black text-primary">{item.sellPrice} ج.م</span>
+                </div>
               </div>
-              <div>
-                <span className="text-on-surface-variant text-[11px] block">سعر البيع</span>
-                <span className="font-mono font-black text-primary">{item.sellPrice} ج.م</span>
-              </div>
-            </div>
 
-            <div className="flex items-center justify-between text-xs pt-2 border-t border-surface-container">
-              <span className="text-on-surface-variant font-mono">
-                {item.unitType} ({item.weightPerCarton} كجم)
-              </span>
-              <div className="flex items-center gap-1.5">
-                <button
-                  type="button"
-                  onClick={() => setSelectedItemForCard(item)}
-                  className="p-1 rounded-full text-primary hover:bg-primary/10 cursor-pointer"
-                  title="عرض كارت حركة الصنف 360°"
-                >
-                  <Activity className="w-4 h-4" />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setItemForOpeningBalance(item)}
-                  className="p-1 rounded-full text-amber-700 hover:bg-amber-500/10 cursor-pointer"
-                  title="تسجيل وتعديل رصيد أول المدة"
-                >
-                  <Layers className="w-4 h-4" />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setItemToEdit(item)}
-                  className="p-1 rounded-full text-secondary hover:bg-secondary/10 cursor-pointer"
-                  title="تعديل بيانات الصنف"
-                >
-                  <Edit3 className="w-4 h-4" />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleQuickVariant(item)}
-                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-secondary/10 text-secondary text-xs font-bold"
-                >
-                  <Copy className="w-3 h-3" />
-                  <span>وزن/تفريع</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setItemToDelete(item)}
-                  className="p-1 rounded-full text-error hover:bg-error-container/40"
-                  title="حذف الصنف"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
+              <div className="flex items-center justify-between text-xs pt-2 border-t border-surface-container">
+                <span className="text-on-surface-variant font-mono text-[11px] font-bold">
+                  {formatDualUnits(stock, item.unitType, item)}
+                </span>
+                {renderItemActions(item, true)}
               </div>
             </div>
-          </div>
-        ))}
+          )
+        })}
       </div>
 
       {totalPages > 1 && (

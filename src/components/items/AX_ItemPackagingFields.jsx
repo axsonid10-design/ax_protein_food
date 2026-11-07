@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { Package, Boxes, Scale, CircleDot, DollarSign, Sparkles, CheckCircle2, RotateCcw } from 'lucide-react'
+import { Package, Boxes, Scale, CircleDot, DollarSign, Sparkles, CheckCircle2, RotateCcw, AlertTriangle, Layers } from 'lucide-react'
 import { calculateSuggestedUnitPrices, isPriceOverridden } from '../../utils/pricingCalculations'
 
 export function AX_ItemPackagingFields({
@@ -31,6 +31,10 @@ export function AX_ItemPackagingFields({
   setKgBuyPrice,
   kgSellPrice,
   setKgSellPrice,
+  subUnitType = 'كيس',
+  setSubUnitType,
+  minStockAlert = '',
+  setMinStockAlert,
 }) {
   const isCarton = unitType === 'كرتونة'
   const hasPieces = Boolean(Number(piecesPerCarton) > 0)
@@ -103,12 +107,39 @@ export function AX_ItemPackagingFields({
         <div className="flex items-center justify-between">
           <span className="text-xs font-black text-on-surface flex items-center gap-1.5">
             <Boxes className="w-3.5 h-3.5 text-primary" />
-            <span>تفاصيل التعبئة والتحويل (اختياري)</span>
+            <span>تفاصيل التعبئة والوحدة الصغرى</span>
           </span>
           <span className="text-[10px] text-on-surface-variant font-bold">
-            يتيح البيع بالكرتونة والقطعة والكيلو
+            يتيح البيع بالكرتونة والوحدات الصغرى
           </span>
         </div>
+
+        {isCarton && (
+          <div className="space-y-1.5">
+            <label className="block text-[11px] font-bold text-on-surface-variant text-right">
+              الوحدة الصغرى للتجزئة داخل الكرتونة
+            </label>
+            <div className="grid grid-cols-4 gap-2">
+              {['كيس', 'طبق', 'قطعة', 'كيلو'].map((sub) => {
+                const isSelected = (subUnitType || 'كيس') === sub
+                return (
+                  <button
+                    key={sub}
+                    type="button"
+                    onClick={() => setSubUnitType?.(sub)}
+                    className={`py-1.5 px-2 rounded-xl text-xs font-black border transition-all cursor-pointer flex items-center justify-center gap-1 ${
+                      isSelected
+                        ? 'bg-secondary text-white border-secondary shadow-xs'
+                        : 'bg-surface-lowest border-outline-variant/30 text-on-surface hover:bg-surface-container'
+                    }`}
+                  >
+                    <span>{sub}</span>
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        )}
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {isCarton && (
@@ -130,12 +161,12 @@ export function AX_ItemPackagingFields({
 
           <div>
             <label className="block text-[11px] font-bold text-on-surface-variant mb-1 text-right">
-              عدد القطع في الكرتونة
+              عدد {isCarton ? (subUnitType || 'الوحدات') : 'القطع'} بالكرتونة
             </label>
             <input
               type="number"
               min="0"
-              placeholder="مثال: 12 (اختياري)"
+              placeholder="مثال: 12 أو 20"
               value={piecesPerCarton}
               onChange={(e) => setPiecesPerCarton(e.target.value)}
               className="w-full px-3 py-2 rounded-xl bg-surface-lowest border border-outline-variant/40 text-xs font-mono font-bold text-on-surface focus:outline-none focus:border-primary text-right"
@@ -147,7 +178,7 @@ export function AX_ItemPackagingFields({
           <div className="pt-2 border-t border-surface-container/60">
             <div>
               <label className="block text-[11px] font-bold text-on-surface-variant mb-1 text-right">
-                وزن القطعة الواحدة (اختياري)
+                وزن {subUnitType || 'القطعة'} الواحدة (اختياري)
               </label>
               <input
                 type="text"
@@ -159,6 +190,27 @@ export function AX_ItemPackagingFields({
             </div>
           </div>
         )}
+
+        <div className="pt-2 border-t border-surface-container/60">
+          <label className="block text-[11px] font-black text-rose-700 mb-1 text-right flex items-center justify-between">
+            <span className="flex items-center gap-1">
+              <AlertTriangle className="w-3.5 h-3.5 text-rose-600" />
+              <span>حد النواقص للتنبيه (الحد الأدنى للرصيد)</span>
+            </span>
+            <span className="text-[10px] text-on-surface-variant font-bold">
+              تلوين الصنف بالأحمر عند النقص
+            </span>
+          </label>
+          <input
+            type="number"
+            min="0"
+            step="any"
+            placeholder="مثال: 10 كرتونة للتنبيه"
+            value={minStockAlert}
+            onChange={(e) => setMinStockAlert?.(e.target.value)}
+            className="w-full px-3 py-2 rounded-xl bg-surface-lowest border border-rose-300 focus:border-rose-500 text-xs font-mono font-bold text-on-surface focus:outline-none text-right"
+          />
+        </div>
       </div>
 
       <div className="space-y-3">
