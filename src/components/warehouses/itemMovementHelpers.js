@@ -287,6 +287,8 @@ export function calculateItemMovements({
             date: trfDate,
             title: `تحويل داخلي [${trf.code || 'تحويل'}]`,
             party: `من ${fromName} إلى ${toName}`,
+            fromWarehouseName: fromName,
+            toWarehouseName: toName,
             inQty: qty,
             outQty: qty,
             isInternal: true,
@@ -298,6 +300,8 @@ export function calculateItemMovements({
             date: trfDate,
             title: `تحويل صادر [${trf.code || 'تحويل'}]`,
             party: `منصرف إلى: ${toName}`,
+            fromWarehouseName: fromName,
+            toWarehouseName: toName,
             inQty: 0,
             outQty: qty,
           })
@@ -308,6 +312,8 @@ export function calculateItemMovements({
             date: trfDate,
             title: `تحويل وارد [${trf.code || 'تحويل'}]`,
             party: `وارد من: ${fromName}`,
+            fromWarehouseName: fromName,
+            toWarehouseName: toName,
             inQty: qty,
             outQty: 0,
           })

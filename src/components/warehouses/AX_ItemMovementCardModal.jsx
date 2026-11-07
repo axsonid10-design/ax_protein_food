@@ -283,11 +283,10 @@ export function AX_ItemMovementCardModal({
         <div className="flex-1 overflow-y-auto p-3 sm:p-4 space-y-3">
           {activeTab === 'timeline' && (
             <div>
-              {movementsList.length === 0 ? (
+              {movementsList.length === 0 && openingBalance === 0 ? (
                 <div className="py-16 text-center text-on-surface-variant space-y-2">
                   <Package className="w-10 h-10 mx-auto text-on-surface-variant/40" />
-                  <p className="text-xs font-bold">لا توجد حركات مسجلة لهذا الصنف في هذا النطاق</p>
-                  <p className="text-[11px]">رصيد أول المدة الحالي: {openingBalance} {item.unitType || 'كرتونة'}</p>
+                  <p className="text-xs font-bold">لا توجد حركات أو أرصدة مسجلة لهذا الصنف في هذا النطاق</p>
                 </div>
               ) : (
                 <div className="overflow-x-auto">
@@ -324,8 +323,25 @@ export function AX_ItemMovementCardModal({
                               {m.title}
                             </span>
                           </td>
-                          <td className="px-3 text-on-surface font-black truncate max-w-[180px]">
-                            {m.party}
+                          <td className="px-3 py-2 text-on-surface font-bold whitespace-nowrap">
+                            {m.type === 'transfer_out' ? (
+                              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-rose-500/10 text-rose-800 text-[11px] font-black border border-rose-500/20">
+                                <span>منصرف تحويل إلى:</span>
+                                <span className="font-black text-rose-950">{m.toWarehouseName || m.party}</span>
+                              </span>
+                            ) : m.type === 'transfer_in' ? (
+                              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-800 text-[11px] font-black border border-emerald-500/20">
+                                <span>وارد تحويل من:</span>
+                                <span className="font-black text-emerald-950">{m.fromWarehouseName || m.party}</span>
+                              </span>
+                            ) : m.type === 'transfer' ? (
+                              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-surface-container text-on-surface text-[11px] font-bold border border-outline-variant/30">
+                                <span className="text-secondary font-black">{m.fromWarehouseName || 'المخزن'}</span>
+                                <span className="text-primary font-black">⬅️ إلى: {m.toWarehouseName || 'المخزن'}</span>
+                              </span>
+                            ) : (
+                              <span className="font-black text-on-surface text-xs">{m.party}</span>
+                            )}
                           </td>
                           <td className="px-3 text-center font-mono font-black text-emerald-600">
                             {m.inQty > 0 ? `+${m.inQty}` : '—'}

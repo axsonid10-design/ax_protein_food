@@ -13,6 +13,7 @@ import { AX_StockAuditModal } from './AX_StockAuditModal'
 import { AX_StockAuditsHistoryModal } from './AX_StockAuditsHistoryModal'
 import { AX_TransfersHistoryModal } from './AX_TransfersHistoryModal'
 import { AX_ItemMovementCardModal } from './AX_ItemMovementCardModal'
+import { AX_WarehouseInventoryViews } from './AX_WarehouseInventoryViews'
 import { AX_ConfirmModal } from '../common/AX_ConfirmModal'
 
 export function AX_WarehousesInventory() {
@@ -33,6 +34,7 @@ export function AX_WarehousesInventory() {
   const [selectedItemForCard, setSelectedItemForCard] = useState(null)
   const [selectedPrimaryCategory, setSelectedPrimaryCategory] = useState('الكل')
   const [searchTerm, setSearchTerm] = useState('')
+  const [viewMode, setViewMode] = useState('grid')
 
   useEffect(() => {
     if (warehouses.length > 0 && (!selectedWarehouseId || !warehouses.some((w) => w.id === selectedWarehouseId))) {
@@ -90,13 +92,6 @@ export function AX_WarehousesInventory() {
 
     return matchesCategory && matchesSearch
   })
-
-  const subCategoryGroups = filteredStock.reduce((acc, curr) => {
-    const sub = curr.item?.subCategory || 'عام'
-    if (!acc[sub]) acc[sub] = []
-    acc[sub].push(curr)
-    return acc
-  }, {})
 
   return (
     <div className="space-y-6 pb-20 lg:pb-6">
@@ -294,15 +289,53 @@ export function AX_WarehousesInventory() {
             </div>
           </div>
 
-          <div className="w-full sm:w-64 relative">
-            <input
-              type="text"
-              placeholder="ابحث في أصناف المخزن..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-9 pr-4 py-2 rounded-2xl bg-surface-low border border-outline-variant/40 text-on-surface text-xs font-bold focus:border-primary focus:outline-none"
-            />
-            <Search className="w-4 h-4 text-on-surface-variant absolute left-3 top-2.5 pointer-events-none" />
+          <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+            <div className="flex items-center gap-1 bg-surface-low p-1 rounded-full border border-outline-variant/30">
+              <button
+                type="button"
+                onClick={() => setViewMode('grid')}
+                className={`px-3 py-1 rounded-full text-xs font-black transition-all cursor-pointer ${
+                  viewMode === 'grid'
+                    ? 'bg-primary text-white shadow-xs'
+                    : 'text-on-surface-variant hover:text-on-surface'
+                }`}
+              >
+                كروت
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewMode('table')}
+                className={`px-3 py-1 rounded-full text-xs font-black transition-all cursor-pointer ${
+                  viewMode === 'table'
+                    ? 'bg-primary text-white shadow-xs'
+                    : 'text-on-surface-variant hover:text-on-surface'
+                }`}
+              >
+                جدول
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewMode('categories')}
+                className={`px-3 py-1 rounded-full text-xs font-black transition-all cursor-pointer ${
+                  viewMode === 'categories'
+                    ? 'bg-primary text-white shadow-xs'
+                    : 'text-on-surface-variant hover:text-on-surface'
+                }`}
+              >
+                أقسام
+              </button>
+            </div>
+
+            <div className="w-full sm:w-60 relative">
+              <input
+                type="text"
+                placeholder="ابحث في أصناف المخزن..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-9 pr-4 py-2 rounded-2xl bg-surface-low border border-outline-variant/40 text-on-surface text-xs font-bold focus:border-primary focus:outline-none"
+              />
+              <Search className="w-4 h-4 text-on-surface-variant absolute left-3 top-2.5 pointer-events-none" />
+            </div>
           </div>
         </div>
 
@@ -326,69 +359,12 @@ export function AX_WarehousesInventory() {
           </div>
         )}
 
-        {Object.keys(subCategoryGroups).length === 0 ? (
-          <div className="py-12 text-center text-on-surface-variant text-xs font-bold">
-            لا توجد بضاعة مسجلة مطابقة في هذا المخزن حالياً
-          </div>
-        ) : (
-          <div className="space-y-4">
-            {Object.entries(subCategoryGroups).map(([subCatName, stockRows]) => (
-              <div
-                key={subCatName}
-                className="bg-surface-low/50 border border-outline-variant/30 rounded-2xl p-4 space-y-3"
-              >
-                <div className="flex items-center justify-between border-b border-surface-container pb-2">
-                  <span className="text-xs font-black text-on-surface flex items-center gap-1.5">
-                    <Tag className="w-3.5 h-3.5 text-primary" />
-                    القسم الفرعي: {subCatName}
-                  </span>
-                  <span className="text-[11px] font-bold text-on-surface-variant">
-                    {stockRows.length} منتجات
-                  </span>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2.5">
-                  {stockRows.map((s, idx) => {
-                    const it = s.item || {}
-                    return (
-                      <div
-                        key={idx}
-                        onClick={() => setSelectedItemForCard(it)}
-                        className="bg-surface-lowest border border-outline-variant/30 rounded-2xl p-3 shadow-sm flex flex-col justify-between gap-2 cursor-pointer hover:border-primary/50 hover:bg-surface-low/50 transition-all group"
-                        title="انقر لعرض كارت حركة الصنف 360°"
-                      >
-                        <div>
-                          <span className="text-xs font-black text-on-surface block">
-                            {it.compositeName || 'صنف'}
-                          </span>
-                          <div className="flex items-center gap-1 text-[11px] text-on-surface-variant mt-0.5">
-                            <span className="font-bold">{it.primaryCategory || 'عام'}</span>
-                            <span>•</span>
-                            <span>{it.secondaryCategory || 'عادي'}</span>
-                          </div>
-                        </div>
-
-                        <div className="pt-2 border-t border-surface-container flex items-center justify-between">
-                          <span className="text-[11px] font-mono text-outline-variant font-bold">
-                            {it.code || ''}
-                          </span>
-                          <span className={`font-mono font-black text-xs px-2.5 py-1 rounded-full border ${
-                            Number(s.quantity) < 0
-                              ? 'text-error bg-error/10 border-error/30'
-                              : 'text-primary bg-primary/10 border-primary/20'
-                          }`}>
-                            {s.quantity} {s.unit}
-                            {Number(s.quantity) < 0 && <span className="mr-1 text-[10px] font-bold">(سالب)</span>}
-                          </span>
-                        </div>
-                      </div>
-                    )
-                  })}
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
+        <AX_WarehouseInventoryViews
+          viewMode={viewMode}
+          onChangeViewMode={setViewMode}
+          stockRows={filteredStock}
+          onSelectItem={setSelectedItemForCard}
+        />
       </div>
 
       <button
