@@ -1,8 +1,9 @@
 import React, { useState, useRef } from 'react'
-import { User, Camera, KeyRound, Lock, Check, X, ShieldAlert, CheckCircle2 } from 'lucide-react'
+import { User, Camera, KeyRound, Lock, Check, X, ShieldAlert, CheckCircle2, Building2, Hash, Phone, MapPin } from 'lucide-react'
 import { useAXStore } from '../../store/useAXStore'
 import { supabase, isSupabaseConfigured } from '../../services/supabaseClient'
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock'
+import { getCompanyProfile, saveCompanyProfile } from '../../services/axCompanyProfileService'
 
 export function AX_UserProfileModal({ isOpen, onClose }) {
   useBodyScrollLock(isOpen)
@@ -13,6 +14,8 @@ export function AX_UserProfileModal({ isOpen, onClose }) {
   const [name, setName] = useState(profile?.name || 'مدير النظام')
   const [email, setEmail] = useState(profile?.email || 'admin@protein-food.com')
   const [avatarPreview, setAvatarPreview] = useState(profile?.avatarUrl || '/logo-clean-original.png')
+
+  const [companyForm, setCompanyForm] = useState(getCompanyProfile)
 
   const [currentPassword, setCurrentPassword] = useState('')
   const [newPassword, setNewPassword] = useState('')
@@ -50,6 +53,13 @@ export function AX_UserProfileModal({ isOpen, onClose }) {
 
     updateProfile({ name: name.trim(), email: email.trim(), avatarUrl: avatarPreview })
     setFeedback({ type: 'success', message: 'تم حفظ بيانات الحساب بنجاح' })
+  }
+
+  const handleSaveCompany = (e) => {
+    e.preventDefault()
+    if (!companyForm.name?.trim()) return
+    saveCompanyProfile(companyForm)
+    setFeedback({ type: 'success', message: 'تم حفظ بيانات المؤسسة والترويسة بنجاح' })
   }
 
   const handleChangePassword = async (e) => {
@@ -131,7 +141,7 @@ export function AX_UserProfileModal({ isOpen, onClose }) {
           </button>
         </div>
 
-        <div className="flex rounded-full bg-surface-low p-1 border border-outline-variant/30">
+        <div className="flex rounded-full bg-surface-low p-1 border border-outline-variant/30 gap-1">
           <button
             type="button"
             onClick={() => {
@@ -142,7 +152,19 @@ export function AX_UserProfileModal({ isOpen, onClose }) {
               activeTab === 'profile' ? 'bg-primary text-white shadow-sm' : 'text-on-surface-variant hover:text-on-surface'
             }`}
           >
-            البيانات والصورة
+            البيانات الشخصية
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setActiveTab('company')
+              setFeedback({ type: '', message: '' })
+            }}
+            className={`flex-1 py-1.5 rounded-full text-xs font-black transition-all ${
+              activeTab === 'company' ? 'bg-primary text-white shadow-sm' : 'text-on-surface-variant hover:text-on-surface'
+            }`}
+          >
+            بيانات المؤسسة
           </button>
           <button
             type="button"
@@ -154,7 +176,7 @@ export function AX_UserProfileModal({ isOpen, onClose }) {
               activeTab === 'password' ? 'bg-primary text-white shadow-sm' : 'text-on-surface-variant hover:text-on-surface'
             }`}
           >
-            كلمة المرور
+            الأمان
           </button>
         </div>
 
@@ -238,6 +260,89 @@ export function AX_UserProfileModal({ isOpen, onClose }) {
                 حفظ التعديلات
               </button>
             </div>
+          </form>
+        )}
+
+        {activeTab === 'company' && (
+          <form onSubmit={handleSaveCompany} className="space-y-3">
+            <div className="space-y-1">
+              <label className="text-xs font-black text-on-surface flex items-center gap-1.5">
+                <Building2 className="w-3.5 h-3.5 text-primary" />
+                <span>اسم الشركة / المنشأة</span>
+              </label>
+              <input
+                type="text"
+                required
+                value={companyForm.name || ''}
+                onChange={(e) => setCompanyForm((p) => ({ ...p, name: e.target.value }))}
+                className="w-full px-3 py-2 rounded-2xl bg-surface-low border border-outline-variant/40 text-xs font-bold text-on-surface outline-none"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-xs font-black text-on-surface">النشاط / الوصف التجاري</label>
+              <input
+                type="text"
+                value={companyForm.subtitle || ''}
+                onChange={(e) => setCompanyForm((p) => ({ ...p, subtitle: e.target.value }))}
+                className="w-full px-3 py-2 rounded-2xl bg-surface-low border border-outline-variant/40 text-xs font-bold text-on-surface outline-none"
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
+              <div className="space-y-1">
+                <label className="text-xs font-black text-on-surface">س.ت (السجل)</label>
+                <input
+                  type="text"
+                  value={companyForm.crNumber || ''}
+                  onChange={(e) => setCompanyForm((p) => ({ ...p, crNumber: e.target.value }))}
+                  className="w-full px-3 py-2 rounded-2xl bg-surface-low border border-outline-variant/40 text-xs font-mono font-bold text-on-surface outline-none"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs font-black text-on-surface">ب.ض (الضريبة)</label>
+                <input
+                  type="text"
+                  value={companyForm.taxNumber || ''}
+                  onChange={(e) => setCompanyForm((p) => ({ ...p, taxNumber: e.target.value }))}
+                  className="w-full px-3 py-2 rounded-2xl bg-surface-low border border-outline-variant/40 text-xs font-mono font-bold text-on-surface outline-none"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-xs font-black text-on-surface flex items-center gap-1.5">
+                <Phone className="w-3.5 h-3.5 text-primary" />
+                <span>رقم الهاتف الرسمي</span>
+              </label>
+              <input
+                type="text"
+                value={companyForm.phone || ''}
+                onChange={(e) => setCompanyForm((p) => ({ ...p, phone: e.target.value }))}
+                className="w-full px-3 py-2 rounded-2xl bg-surface-low border border-outline-variant/40 text-xs font-mono font-bold text-on-surface outline-none"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-xs font-black text-on-surface flex items-center gap-1.5">
+                <MapPin className="w-3.5 h-3.5 text-primary" />
+                <span>العنوان / المقر</span>
+              </label>
+              <input
+                type="text"
+                value={companyForm.address || ''}
+                onChange={(e) => setCompanyForm((p) => ({ ...p, address: e.target.value }))}
+                className="w-full px-3 py-2 rounded-2xl bg-surface-low border border-outline-variant/40 text-xs font-bold text-on-surface outline-none"
+              />
+            </div>
+
+            <button
+              type="submit"
+              className="w-full py-2.5 px-4 rounded-full bg-primary hover:bg-primary-dark text-white text-xs font-black shadow-level1 transition-all active:scale-95 flex items-center justify-center gap-2 cursor-pointer"
+            >
+              <Check className="w-4 h-4" />
+              <span>حفظ بيانات المؤسسة</span>
+            </button>
           </form>
         )}
 

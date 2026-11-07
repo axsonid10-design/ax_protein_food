@@ -1,7 +1,7 @@
-import html2canvas from 'html2canvas'
+import * as htmlToImage from 'html-to-image'
 import { axToast } from './axToast.js'
 
-export async function captureInvoiceElement(element) {
+export async function getInvoiceImageBlob(element) {
   if (!element) throw new Error('عنصر الفاتورة غير موجود')
 
   const prevTransform = element.style.transform
@@ -10,29 +10,25 @@ export async function captureInvoiceElement(element) {
   element.style.transition = 'none'
 
   try {
-    const canvas = await html2canvas(element, {
-      scale: 2,
-      useCORS: true,
+    const blob = await htmlToImage.toBlob(element, {
+      pixelRatio: 2,
       backgroundColor: '#ffffff',
-      logging: false,
-      windowWidth: element.scrollWidth || 1200,
+      cacheBust: true,
+      style: {
+        transform: 'none',
+        margin: '0',
+      },
     })
-    return canvas
+    if (!blob) throw new Error('فشل إنشاء ملف الصورة')
+    return blob
   } finally {
     element.style.transform = prevTransform
     element.style.transition = prevTransition
   }
 }
 
-export async function getInvoiceImageBlob(element) {
-  const canvas = await captureInvoiceElement(element)
-  return new Promise((resolve, reject) => {
-    canvas.toBlob((blob) => {
-      if (blob) resolve(blob)
-      else reject(new Error('فشل إنشاء ملف الصورة'))
-    }, 'image/png', 0.98)
-  })
-}
+export const captureInvoiceElement = getInvoiceImageBlob
+export const captureInvoiceBlob = getInvoiceImageBlob
 
 export async function downloadInvoiceImage(invoice, element) {
   try {
@@ -95,7 +91,7 @@ export async function shareInvoiceImageToWhatsApp(invoice, element) {
         await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })])
         axToast.info('تم نسخ صورة الفاتورة للحافظة، يمكنك لصقها الآن في محادثة الواتساب')
       } catch (e) {
-        // clipboard write error handled by download fallback
+        // clipboard fallback
       }
     }
 

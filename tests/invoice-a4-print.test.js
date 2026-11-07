@@ -3,22 +3,14 @@ import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import path from 'node:path'
 import * as invoiceImageService from '../src/services/axInvoiceImageService.js'
-import { formatDualUnits } from '../src/utils/itemUnitFormatters.js'
+import {
+  getInvoiceTitle,
+  getItemUnitDisplay,
+  formatPrintDate,
+  PAPER_FORMATS,
+} from '../src/components/invoices/invoicePrintConstants.js'
 
 describe('A4 Branded Invoice Printing Template & WhatsApp Image Master', () => {
-  const getInvoiceTitle = (type) => {
-    switch (type) {
-      case 'purchase':
-        return 'فاتورة مشتريات وتوريد'
-      case 'sale_return':
-        return 'إشعار مردود مبيعات معتمد'
-      case 'purchase_return':
-        return 'إشعار مردود مشتريات معتمد'
-      default:
-        return 'فاتورة مبيعات نقدية وآجلة'
-    }
-  }
-
   const computeInvoiceFinancials = (inv) => {
     const items = inv.items || []
     const subtotal = items.reduce((s, it) => s + (Number(it.quantity) || 0) * (Number(it.price) || 0), 0)
@@ -43,10 +35,10 @@ describe('A4 Branded Invoice Printing Template & WhatsApp Image Master', () => {
   }
 
   it('generates correct official titles for all 4 invoice categories', () => {
-    assert.equal(getInvoiceTitle('sale'), 'فاتورة مبيعات نقدية وآجلة')
-    assert.equal(getInvoiceTitle('purchase'), 'فاتورة مشتريات وتوريد')
-    assert.equal(getInvoiceTitle('sale_return'), 'إشعار مردود مبيعات معتمد')
-    assert.equal(getInvoiceTitle('purchase_return'), 'إشعار مردود مشتريات معتمد')
+    assert.equal(getInvoiceTitle('sale'), 'فاتورة مبيعات')
+    assert.equal(getInvoiceTitle('purchase'), 'فاتورة مشتريات')
+    assert.equal(getInvoiceTitle('sale_return'), 'مردود مبيعات')
+    assert.equal(getInvoiceTitle('purchase_return'), 'مردود مشتريات')
   })
 
   it('computes accurate totals with transport and loading costs for printing', () => {
@@ -70,7 +62,6 @@ describe('A4 Branded Invoice Printing Template & WhatsApp Image Master', () => {
   })
 
   it('verifies axInvoiceImageService exports required WhatsApp and image functions', () => {
-    assert.equal(typeof invoiceImageService.captureInvoiceElement, 'function')
     assert.equal(typeof invoiceImageService.getInvoiceImageBlob, 'function')
     assert.equal(typeof invoiceImageService.downloadInvoiceImage, 'function')
     assert.equal(typeof invoiceImageService.copyInvoiceImageToClipboard, 'function')
@@ -87,9 +78,34 @@ describe('A4 Branded Invoice Printing Template & WhatsApp Image Master', () => {
     assert.ok(cssContent.includes('format-a5'), 'Must support format-a5')
   })
 
-  it('formats dual units properly for invoice line items', () => {
-    const item = { unitType: 'كرتونة', piecesPerCarton: 20, subUnitType: 'كيس' }
-    const formatted = formatDualUnits(5, 'كرتونة', item)
-    assert.equal(formatted, '5 كرتونة (100 كيس)')
+  it('displays unit name strictly without prefixing quantity in unit column', () => {
+    const itemWithSub = { unitType: 'كرتونة', piecesPerCarton: 20, subUnitType: 'كيس' }
+    assert.equal(getItemUnitDisplay(itemWithSub), 'كرتونة (20 كيس)')
+
+    const itemPlain = { unitType: 'كرتونة' }
+    assert.equal(getItemUnitDisplay(itemPlain), 'كرتونة')
+
+    const itemBag = { unit: 'كيس' }
+    assert.equal(getItemUnitDisplay(itemBag), 'كيس')
+  })
+
+  it('formats print dates safely for bidirectional rendering', () => {
+    assert.equal(formatPrintDate('2026-11-07T12:00:00Z'), '2026/11/07')
+    assert.equal(formatPrintDate('2026-11-07'), '2026/11/07')
+    assert.equal(formatPrintDate(null), '—')
+  })
+
+  it('verifies all 3 standard paper formats exist and have valid physical dimensions', () => {
+    assert.ok(PAPER_FORMATS.a4_portrait)
+    assert.equal(PAPER_FORMATS.a4_portrait.width, '210mm')
+    assert.equal(PAPER_FORMATS.a4_portrait.minHeight, '297mm')
+
+    assert.ok(PAPER_FORMATS.a4_landscape)
+    assert.equal(PAPER_FORMATS.a4_landscape.width, '297mm')
+    assert.equal(PAPER_FORMATS.a4_landscape.minHeight, '210mm')
+
+    assert.ok(PAPER_FORMATS.a5)
+    assert.equal(PAPER_FORMATS.a5.width, '148mm')
+    assert.equal(PAPER_FORMATS.a5.minHeight, '210mm')
   })
 })
