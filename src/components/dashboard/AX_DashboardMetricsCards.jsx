@@ -214,67 +214,29 @@ export function AX_DashboardMetricsCards({
   }
 
   return (
-    <div className="space-y-2.5">
-      <div className="flex items-center justify-between gap-2 flex-wrap">
-        <div className="inline-flex items-center p-1 rounded-full bg-surface-lowest border border-outline-variant/40 shadow-xs gap-1">
-          <button
-            type="button"
-            onClick={() => setActiveMetricSegment('operational')}
-            className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black transition-all cursor-pointer ${
-              activeMetricSegment === 'operational'
-                ? 'bg-primary text-white shadow-xs'
-                : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-low'
-            }`}
-          >
-            <Boxes className="w-3.5 h-3.5" />
-            <span>حركة التشغيل والمخزون</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setActiveMetricSegment('financial')}
-            className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black transition-all cursor-pointer ${
-              activeMetricSegment === 'financial'
-                ? 'bg-primary text-white shadow-xs'
-                : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-low'
-            }`}
-          >
-            <Scale className="w-3.5 h-3.5" />
-            <span>الديون والالتزامات</span>
-            {hasDebts && (
-              <span className="w-2 h-2 rounded-full bg-red-600 animate-pulse" />
-            )}
-          </button>
+    <div className="space-y-4">
+      <div className="space-y-2">
+        <div className="flex items-center gap-1.5 text-xs font-black text-on-surface">
+          <Boxes className="w-3.5 h-3.5 text-primary" />
+          <span>حركة التشغيل والمخزون</span>
         </div>
-
-        <button
-          type="button"
-          onClick={() =>
-            setActiveMetricSegment(activeMetricSegment === 'all' ? 'operational' : 'all')
-          }
-          className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-black border transition-all cursor-pointer ${
-            activeMetricSegment === 'all'
-              ? 'bg-primary/10 border-primary/30 text-primary'
-              : 'bg-surface-lowest border-outline-variant/30 text-on-surface-variant hover:bg-surface-low'
-          }`}
-          title="عرض جميع المؤشرات دفعة واحدة"
-        >
-          <Layers className="w-3 h-3" />
-          <span>{activeMetricSegment === 'all' ? 'طي المؤشرات' : 'عرض الكل'}</span>
-        </button>
-      </div>
-
-      {(activeMetricSegment === 'operational' || activeMetricSegment === 'all') && (
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3 animate-in fade-in duration-200">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3">
           {operationalCards.map(renderCard)}
         </div>
-      )}
+      </div>
 
-      {(activeMetricSegment === 'financial' || activeMetricSegment === 'all') && (
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3 animate-in fade-in duration-200">
+      <div className="space-y-2">
+        <div className="flex items-center gap-1.5 text-xs font-black text-on-surface">
+          <Scale className="w-3.5 h-3.5 text-primary" />
+          <span>الديون والالتزامات</span>
+          {hasDebts && (
+            <span className="w-2 h-2 rounded-full bg-red-600 animate-pulse mr-1" title="توجد ديون قائمة" />
+          )}
+        </div>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3">
           {financialCards.map(renderCard)}
         </div>
-      )}
+      </div>
     </div>
   )
 }

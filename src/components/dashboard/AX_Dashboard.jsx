@@ -4,12 +4,6 @@ import { AX_PeriodFilterBar } from './AX_PeriodFilterBar'
 import { AX_DashboardMetricsCards } from './AX_DashboardMetricsCards'
 import { AX_PinnedStockWidget } from './AX_PinnedStockWidget'
 import { AX_QuickActionsBar } from './AX_QuickActionsBar'
-import { AX_SalesFlowChart } from './AX_SalesFlowChart'
-import { AX_StockDistributionChart } from './AX_StockDistributionChart'
-import { AX_TopSellingItemsChart } from './AX_TopSellingItemsChart'
-import { AX_ColdStorageCapacityCard } from './AX_ColdStorageCapacityCard'
-import { AX_CashCreditSplitChart } from './AX_CashCreditSplitChart'
-import { AX_ManufacturingYieldCard } from './AX_ManufacturingYieldCard'
 import { AX_OperationalAlerts } from './AX_OperationalAlerts'
 import { AX_SkeletonLoader } from '../common/AX_SkeletonLoader'
 
@@ -199,7 +193,11 @@ export function AX_Dashboard() {
   const targetAchievementPct = totalSalesTarget > 0 ? Math.round((salesTotal / totalSalesTarget) * 100) : 0
 
   const pendingTransfers = transfers.filter((t) => t && t.status === 'pending')
-  const lowStockItems = inventoryStock.filter((s) => Number(s.quantity) > 0 && Number(s.quantity) <= 25)
+  const lowStockItems = inventoryStock.filter((s) => {
+    const it = getItem(s.itemId)
+    const alertThreshold = Number(it?.minStockAlert ?? it?.min_stock_alert ?? 25)
+    return Number(s.quantity) > 0 && Number(s.quantity) <= alertThreshold
+  })
 
   if (isAuthLoading) {
     return <AX_SkeletonLoader type="dashboard" />
@@ -246,43 +244,6 @@ export function AX_Dashboard() {
       <AX_PinnedStockWidget />
 
       <AX_QuickActionsBar onNavigateTab={setActiveTab} />
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-        <AX_SalesFlowChart
-          period={period}
-          startDate={startDate}
-          endDate={endDate}
-          invoices={invoices}
-        />
-
-        <AX_StockDistributionChart
-          items={items}
-          inventoryStock={inventoryStock}
-          warehouses={warehouses}
-        />
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-        <AX_TopSellingItemsChart
-          invoices={filteredInvoices}
-          items={items}
-        />
-
-        <AX_ColdStorageCapacityCard
-          warehouses={warehouses}
-          inventoryStock={inventoryStock}
-        />
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-        <AX_CashCreditSplitChart
-          invoices={filteredInvoices}
-        />
-
-        <AX_ManufacturingYieldCard
-          manufacturingOrders={manufacturingOrders}
-        />
-      </div>
 
       <AX_OperationalAlerts
         pendingTransfers={pendingTransfers}

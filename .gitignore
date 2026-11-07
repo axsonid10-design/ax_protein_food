@@ -11,4 +11,5 @@ dev-dist
 *.jpg
 AX_Logo_Kit_*
 .agents
+scratch/
 
