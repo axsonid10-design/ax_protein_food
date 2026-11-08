@@ -170,7 +170,8 @@ export function recalculateItemStock({
     tItems.forEach((it) => {
       const itId = it.itemId || it.item_id || it.id
       if (itId === itemId) {
-        const qty = Number(it.quantity) || 0
+        const targetItem = (items || []).find((i) => i.id === itemId)
+        const qty = getCartonEquivalent(it.quantity, it.unit, targetItem || it)
         if (toWhId === warehouseId) postIn += qty
         if (fromWhId === warehouseId) postOut += qty
       }
@@ -293,7 +294,9 @@ export function calculateItemMovements({
     tItems.forEach((it) => {
       const itId = it.itemId || it.item_id || it.id
       if (itId === itemId) {
-        const qty = Number(it.quantity) || 0
+        const targetItem = (items || []).find((i) => i.id === itemId)
+        const rawQty = Number(it.quantity) || 0
+        const cartonQty = getCartonEquivalent(rawQty, it.unit, targetItem || it)
         if (selectedWhId === 'ALL') {
           raw.push({
             id: `trf-${trf.id}-${itId}`,
@@ -303,8 +306,10 @@ export function calculateItemMovements({
             party: `من ${fromName} إلى ${toName}`,
             fromWarehouseName: fromName,
             toWarehouseName: toName,
-            inQty: qty,
-            outQty: qty,
+            rawQty,
+            unit: it.unit || 'كرتونة',
+            inQty: cartonQty,
+            outQty: cartonQty,
             isInternal: true,
           })
         } else if (fromWhId === selectedWhId) {
@@ -316,8 +321,10 @@ export function calculateItemMovements({
             party: `منصرف إلى: ${toName}`,
             fromWarehouseName: fromName,
             toWarehouseName: toName,
+            rawQty,
+            unit: it.unit || 'كرتونة',
             inQty: 0,
-            outQty: qty,
+            outQty: cartonQty,
           })
         } else if (toWhId === selectedWhId) {
           raw.push({
@@ -328,7 +335,9 @@ export function calculateItemMovements({
             party: `وارد من: ${fromName}`,
             fromWarehouseName: fromName,
             toWarehouseName: toName,
-            inQty: qty,
+            rawQty,
+            unit: it.unit || 'كرتونة',
+            inQty: cartonQty,
             outQty: 0,
           })
         }
@@ -369,7 +378,14 @@ export function calculateItemMovements({
     })
   })
 
-  raw.sort((a, b) => new Date(a.date || 0) - new Date(b.date || 0))
+  raw.sort((a, b) => {
+    const da = new Date(a.date || 0).getTime()
+    const db = new Date(b.date || 0).getTime()
+    if (da !== db) return da - db
+    const aPriority = a.type === 'purchase' || a.type === 'transfer_in' ? 1 : 2
+    const bPriority = b.type === 'purchase' || b.type === 'transfer_in' ? 1 : 2
+    return aPriority - bPriority
+  })
 
   let registeredOpening = 0
   let hasRegisteredOpening = false

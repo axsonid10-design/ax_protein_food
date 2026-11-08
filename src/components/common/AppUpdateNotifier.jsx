@@ -79,6 +79,8 @@ export function AppUpdateNotifier() {
     setIsUpdating(true)
     sessionStorage.removeItem('ax_dismissed_update_version')
     localStorage.removeItem('ax_app_version')
+    localStorage.removeItem('ax_cached_db_payload')
+    localStorage.removeItem('ax_cached_payload_version')
 
     const bustUrl = window.location.origin + window.location.pathname + '?_v=' + Date.now()
 

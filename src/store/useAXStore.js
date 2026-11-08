@@ -58,8 +58,14 @@ export const useAXStore = create((set, get) => ({
   ...(() => {
     let c = null
     try {
-      const s = localStorage.getItem('ax_cached_db_payload')
-      if (s) c = JSON.parse(s)
+      const cachedVer = localStorage.getItem('ax_cached_payload_version')
+      const currentVer = import.meta.env.VITE_APP_VERSION || '1.8.39'
+      if (cachedVer === currentVer) {
+        const s = localStorage.getItem('ax_cached_db_payload')
+        if (s) c = JSON.parse(s)
+      } else {
+        localStorage.removeItem('ax_cached_db_payload')
+      }
     } catch {}
     return {
       items: c?.items || initialItems, warehouses: c?.warehouses || initialWarehouses,

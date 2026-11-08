@@ -6,6 +6,8 @@ import { AX_UserProfileModal } from '../profile/AX_UserProfileModal'
 import { AX_ConfirmModal } from '../common/AX_ConfirmModal'
 import { AX_NotificationCenter } from '../notifications/AX_NotificationCenter'
 import { supabase, isSupabaseConfigured } from '../../services/supabaseClient'
+import { AX_DatabaseSync } from '../../services/AX_DatabaseSync'
+import { axToast } from '../../services/axToast'
 
 const tabTitles = {
   dashboard: 'لوحة التحكم',
@@ -25,13 +27,28 @@ const tabTitles = {
 
 export function AX_Header() {
   const { isOnline, pendingSyncCount, isSyncing, manualSync } = useNetworkStatus()
-  const { activeTab, profile, setProfile, notifications = [] } = useAXStore()
+  const { activeTab, profile, setProfile, notifications = [], hydrateFromSupabase } = useAXStore()
 
+  const [isRefreshing, setIsRefreshing] = useState(false)
   const [showProfileModal, setShowProfileModal] = useState(false)
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false)
   const [showNotifications, setShowNotifications] = useState(false)
 
   const unreadCount = notifications.filter((n) => !n.read).length
+
+  const handleManualRefresh = async () => {
+    if (isRefreshing || !isOnline) return
+    setIsRefreshing(true)
+    try {
+      const data = await AX_DatabaseSync.fetchFullDatabase()
+      if (data) hydrateFromSupabase(data)
+      axToast.success('تم تحديث البيانات بنجاح')
+    } catch {
+      axToast.error('تعذر تحديث البيانات')
+    } finally {
+      setIsRefreshing(false)
+    }
+  }
 
   const handleLogout = async () => {
     try {
@@ -98,6 +115,16 @@ export function AX_Header() {
                 <WifiOff className="w-3.5 h-3.5 text-rose-600" />
               </div>
             )}
+
+            <button
+              type="button"
+              onClick={handleManualRefresh}
+              disabled={isRefreshing || !isOnline}
+              className="flex items-center justify-center w-8 h-8 rounded-full bg-surface-low hover:bg-surface-container border border-outline-variant/30 text-on-surface-variant hover:text-primary transition-all active:scale-95 cursor-pointer disabled:opacity-50"
+              title="تحديث البيانات لحظياً من السيرفر"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin text-primary' : ''}`} />
+            </button>
 
             <div className="relative">
               <button

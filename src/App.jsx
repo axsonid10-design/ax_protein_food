@@ -61,7 +61,24 @@ export default function App() {
 
     syncDatabase()
 
-    if (!isSupabaseConfigured() || !supabase?.channel) return
+    const handleVisibilityOrFocus = () => {
+      if (document.visibilityState === 'visible') syncDatabase()
+    }
+
+    window.addEventListener('focus', syncDatabase)
+    window.addEventListener('online', syncDatabase)
+    window.addEventListener('ax-force-sync-db', syncDatabase)
+    document.addEventListener('visibilitychange', handleVisibilityOrFocus)
+
+    if (!isSupabaseConfigured() || !supabase?.channel) {
+      return () => {
+        window.removeEventListener('focus', syncDatabase)
+        window.removeEventListener('online', syncDatabase)
+        window.removeEventListener('ax-force-sync-db', syncDatabase)
+        document.removeEventListener('visibilitychange', handleVisibilityOrFocus)
+      }
+    }
+
     const dataChannel = supabase
       .channel('realtime:app_data_sync')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'ax_items' }, syncDatabase)
@@ -70,14 +87,24 @@ export default function App() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'ax_suppliers' }, syncDatabase)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'ax_invoices' }, syncDatabase)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'ax_inventory_stock' }, syncDatabase)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'ax_transfers' }, syncDatabase)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'ax_stock_audits' }, syncDatabase)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'ax_manufacturing_orders' }, syncDatabase)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'ax_categories' }, syncDatabase)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'ax_treasuries' }, syncDatabase)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'ax_cash_transactions' }, syncDatabase)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'ax_cash_transfers' }, syncDatabase)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'ax_notifications' }, syncDatabase)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'ax_company_employees' }, syncDatabase)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'ax_employee_attendance' }, syncDatabase)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'ax_recycle_bin' }, syncDatabase)
       .subscribe()
 
     return () => {
+      window.removeEventListener('focus', syncDatabase)
+      window.removeEventListener('online', syncDatabase)
+      window.removeEventListener('ax-force-sync-db', syncDatabase)
+      document.removeEventListener('visibilitychange', handleVisibilityOrFocus)
       supabase.removeChannel(dataChannel)
     }
   }, [hydrateFromSupabase])

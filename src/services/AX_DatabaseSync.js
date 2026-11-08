@@ -442,6 +442,7 @@ export const AX_DatabaseSync = {
 
       try {
         localStorage.setItem('ax_cached_db_payload', JSON.stringify(payload))
+        localStorage.setItem('ax_cached_payload_version', import.meta.env.VITE_APP_VERSION || '1.8.39')
         offlineDB.cacheData('full_database', payload).catch(() => {})
       } catch {}
 
