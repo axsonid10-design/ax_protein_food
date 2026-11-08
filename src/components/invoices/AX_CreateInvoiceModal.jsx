@@ -21,14 +21,17 @@ export function AX_CreateInvoiceModal({
 }) {
   useBodyScrollLock(isOpen, onClose)
 
+  const profile = useAXStore((s) => s.profile)
   const storeInventoryStock = useAXStore((s) => s.inventoryStock) || []
   const inventoryStock = propInventoryStock || storeInventoryStock
+  const userBranchId = profile?.branchId || profile?.branch_id
+  const defaultWarehouseId = (userBranchId && warehouses.some((w) => w.id === userBranchId)) ? userBranchId : (warehouses[0]?.id || '')
 
   const [invForm, setInvForm] = useState({
     type: defaultType || 'sale',
     partyName: clients[0]?.name || '',
     isCustomParty: false,
-    warehouseId: warehouses[0]?.id || '',
+    warehouseId: defaultWarehouseId,
     date: new Date().toISOString().split('T')[0],
     transportCost: '',
     loadingCost: '',
@@ -81,7 +84,7 @@ export function AX_CreateInvoiceModal({
 
   useEffect(() => {
     if (isOpen) {
-      const initialWarehouseId = warehouses[0]?.id || ''
+      const initialWarehouseId = defaultWarehouseId
       const resType = defaultType || 'sale'
       const initPartyKind = resType === 'purchase' || resType === 'purchase_return' ? 'supplier' : 'customer'
       const initPartyName = initPartyKind === 'customer' ? (clients[0]?.name || '') : (suppliers[0]?.companyName || suppliers[0]?.name || '')
@@ -100,7 +103,7 @@ export function AX_CreateInvoiceModal({
       setPreviewInvoice(null)
       setIsPostSavePrint(false)
     }
-  }, [isOpen, defaultType])
+  }, [isOpen, defaultType, defaultWarehouseId])
 
   useEffect(() => {
     if (!availableItems.some((it) => it.id === draftItem.itemId)) {

@@ -84,7 +84,7 @@ export function AX_CompanyDatePicker({ value, onChange, placeholder = 'اختر 
       </button>
 
       {isOpen && (
-        <div className="absolute z-50 top-full mt-2 right-0 w-80 bg-surface-lowest border border-outline-variant/30 rounded-3xl p-4 shadow-level3 backdrop-blur-md overflow-hidden animate-fadeIn">
+        <div className="absolute z-50 top-full mt-2 left-0 sm:left-auto right-auto sm:right-0 w-80 max-w-[calc(100vw-1.5rem)] bg-surface-lowest border border-outline-variant/30 rounded-3xl p-3 sm:p-4 shadow-level3 backdrop-blur-md overflow-hidden animate-fadeIn">
           <div className="absolute inset-0 opacity-5 pointer-events-none bg-center bg-no-repeat bg-contain" style={{ backgroundImage: "url('/site-bg-watermark.png')" }} />
 
           <div className="relative flex items-center justify-between pb-3 mb-3 border-b border-surface-container">

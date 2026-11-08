@@ -5,6 +5,7 @@ export const initialExpenseCategories = [
   { id: 'exp-main-adm', name: 'مصاريف إدارية ومقرات', level: 'main', parentId: null, code: 'EXP-ADM-MAIN', createdAt: '2026-01-01T00:00:00.000Z' },
   { id: 'exp-main-fin', name: 'مصاريف بنكية وتمويلية', level: 'main', parentId: null, code: 'EXP-FIN', createdAt: '2026-01-01T00:00:00.000Z' },
   { id: 'exp-main-mkt', name: 'مصاريف تسويق وبيوع', level: 'main', parentId: null, code: 'EXP-MKT', createdAt: '2026-01-01T00:00:00.000Z' },
+  { id: 'exp-main-adv', name: 'سلف وقروض العاملين', level: 'main', parentId: null, code: 'EXP-ADV', createdAt: '2026-01-01T00:00:00.000Z' },
 
   { id: 'exp-sub-trn', name: 'مصاريف شحن ونقل', level: 'sub', parentId: 'exp-main-ops', code: 'EXP-TRN', createdAt: '2026-01-01T00:00:00.000Z' },
   { id: 'exp-sub-mnt', name: 'صيانة وثلاجات وتجميد', level: 'sub', parentId: 'exp-main-ops', code: 'EXP-MNT', createdAt: '2026-01-01T00:00:00.000Z' },
@@ -17,6 +18,9 @@ export const initialExpenseCategories = [
   { id: 'exp-sub-bnk', name: 'رسوم بنكية وعمولات', level: 'sub', parentId: 'exp-main-fin', code: 'EXP-BNK', createdAt: '2026-01-01T00:00:00.000Z' },
 
   { id: 'exp-sub-adv', name: 'دعاية وترويج', level: 'sub', parentId: 'exp-main-mkt', code: 'EXP-ADM', createdAt: '2026-01-01T00:00:00.000Z' },
+
+  { id: 'exp-sub-emp-adv', name: 'سلف مؤقتة على الراتب', level: 'sub', parentId: 'exp-main-adv', code: 'EXP-ADV-SAL', createdAt: '2026-01-01T00:00:00.000Z' },
+  { id: 'exp-sub-emp-loan', name: 'قروض وسلف طويلة الأجل', level: 'sub', parentId: 'exp-main-adv', code: 'EXP-ADV-LON', createdAt: '2026-01-01T00:00:00.000Z' },
 
   { id: 'exp-sec-trn-freight', name: 'نولون ونقل بضائع خارجية', level: 'secondary', parentId: 'exp-sub-trn', createdAt: '2026-01-01T00:00:00.000Z' },
   { id: 'exp-sec-trn-fuel', name: 'وقود وسولار سيارات التوزيع', level: 'secondary', parentId: 'exp-sub-trn', createdAt: '2026-01-01T00:00:00.000Z' },
@@ -52,6 +56,11 @@ export const initialExpenseCategories = [
   { id: 'exp-sec-adv-print', name: 'مطبوعات وبروشورات تجارية', level: 'secondary', parentId: 'exp-sub-adv', createdAt: '2026-01-01T00:00:00.000Z' },
   { id: 'exp-sec-adv-digital', name: 'إعلانات رقمية ومواقع التواصل', level: 'secondary', parentId: 'exp-sub-adv', createdAt: '2026-01-01T00:00:00.000Z' },
   { id: 'exp-sec-adv-samples', name: 'عينات تذوق وهدايا ترويجية', level: 'secondary', parentId: 'exp-sub-adv', createdAt: '2026-01-01T00:00:00.000Z' },
+
+  { id: 'exp-sec-adv-factory', name: 'سلف عمال تشغيل وتقطيع', level: 'secondary', parentId: 'exp-sub-emp-adv', createdAt: '2026-01-01T00:00:00.000Z' },
+  { id: 'exp-sec-adv-drivers', name: 'سلف سائقي توزيع وحركة', level: 'secondary', parentId: 'exp-sub-emp-adv', createdAt: '2026-01-01T00:00:00.000Z' },
+  { id: 'exp-sec-adv-general', name: 'سلف عامة للموظفين', level: 'secondary', parentId: 'exp-sub-emp-adv', createdAt: '2026-01-01T00:00:00.000Z' },
+  { id: 'exp-sec-loan-personal', name: 'قروض شخصية للعاملين', level: 'secondary', parentId: 'exp-sub-emp-loan', createdAt: '2026-01-01T00:00:00.000Z' },
 ]
 
 export const getInitialExpenseCategories = () => JSON.parse(JSON.stringify(initialExpenseCategories))
@@ -59,7 +68,12 @@ export const getInitialExpenseCategories = () => JSON.parse(JSON.stringify(initi
 export const expenseCategoryHelpers = {
   getInitialExpenseCategories,
 
-  getMainCategories: (categories = []) =>
+  getMainCategories: (categories = [], includeAdvances = false) =>
+    (Array.isArray(categories) ? categories : []).filter(
+      (c) => c && c.level === 'main' && !c.isDeleted && (includeAdvances || c.id !== 'exp-main-adv')
+    ),
+
+  getAllMainCategories: (categories = []) =>
     (Array.isArray(categories) ? categories : []).filter((c) => c && c.level === 'main' && !c.isDeleted),
 
   getSubCategories: (categories = [], mainId = null) => {

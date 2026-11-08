@@ -225,22 +225,19 @@ export function AX_InvoiceItemsEditor({
             return (
               <div
                 key={idx}
-                className={`rounded-xl p-2.5 space-y-2 transition-all border ${
+                className={`rounded-2xl p-2.5 sm:p-3 space-y-2 transition-all border ${
                   isNegativeStock
                     ? 'bg-rose-500/10 border-2 border-rose-500/60 shadow-xs'
-                    : 'bg-surface-low border-outline-variant/30'
+                    : 'bg-surface-low border-outline-variant/30 hover:border-primary/40'
                 }`}
               >
-                <div className="flex items-center justify-between text-xs">
-                  <div className="flex items-center gap-2 min-w-0 flex-wrap">
+                <div className="flex items-center justify-between text-xs gap-2">
+                  <div className="flex items-center gap-2 min-w-0 flex-1">
                     <span className="font-mono text-[11px] text-primary font-black bg-primary/10 px-2 py-0.5 rounded-full shrink-0">
                       #{idx + 1}
                     </span>
-                    <span className="font-black text-on-surface truncate">
+                    <span className="font-black text-on-surface truncate text-xs sm:text-sm">
                       {getItemDisplayName(itObj || row)}
-                    </span>
-                    <span className="text-on-surface-variant text-[11px] font-mono">
-                      ({row.quantity} {currentUnit} × {row.price} ج.م)
                     </span>
                     {invType === 'sale' && (
                       <span className={`text-[10px] font-mono font-bold px-1.5 py-0.5 rounded border shrink-0 ${
@@ -254,21 +251,13 @@ export function AX_InvoiceItemsEditor({
                   </div>
 
                   <div className="flex items-center gap-2 shrink-0">
-                    <span className="font-mono font-black text-primary text-xs">
+                    <span className="font-mono font-black text-primary text-xs sm:text-sm bg-primary/5 px-2.5 py-0.5 rounded-full border border-primary/20">
                       {rowTotal.toLocaleString('en-US')} ج.م
                     </span>
                     <button
                       type="button"
-                      onClick={() => setExpandedRowIndex(isExpanded ? null : idx)}
-                      className="p-1 rounded-full text-on-surface-variant hover:bg-surface-container cursor-pointer"
-                      title={isExpanded ? 'طي التفاصيل' : 'تعديل الكمية والسعر'}
-                    >
-                      {isExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
-                    </button>
-                    <button
-                      type="button"
                       onClick={() => onRemoveItem(idx)}
-                      className="p-1 rounded-full text-error hover:bg-error-container/40 cursor-pointer"
+                      className="p-1 rounded-full text-error hover:bg-error-container/40 transition-colors cursor-pointer"
                       title="حذف البند"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
@@ -276,60 +265,54 @@ export function AX_InvoiceItemsEditor({
                   </div>
                 </div>
 
-                {isExpanded && (
-                  <div className="space-y-2 pt-2 border-t border-surface-container">
-                    <div className="flex items-center justify-between gap-2 flex-wrap">
-                      <span className="text-[10px] font-bold text-on-surface-variant">
-                        وحدة القياس والبيع:
-                      </span>
-                      <div className="flex items-center gap-1">
-                        {availableUnits.map((u) => (
-                          <button
-                            key={u}
-                            type="button"
-                            onClick={() => handleUnitChange(idx, u)}
-                            className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold border transition-all cursor-pointer ${
-                              currentUnit === u
-                                ? 'bg-primary text-white border-primary shadow-xs font-black'
-                                : 'bg-surface-lowest border-outline-variant/30 text-on-surface hover:bg-surface-container'
-                            }`}
-                          >
-                            {u}
-                          </button>
-                        ))}
-                      </div>
+                <div className="flex items-center justify-between gap-2 flex-wrap pt-1.5 border-t border-surface-container">
+                  <div className="flex items-center gap-1">
+                    <span className="text-[10px] font-bold text-on-surface-variant">الوحدة:</span>
+                    {availableUnits.map((u) => (
+                      <button
+                        key={u}
+                        type="button"
+                        onClick={() => handleUnitChange(idx, u)}
+                        className={`px-2 py-0.5 rounded-full text-[10px] sm:text-[11px] font-bold border transition-all cursor-pointer ${
+                          currentUnit === u
+                            ? 'bg-primary text-white border-primary shadow-xs font-black'
+                            : 'bg-surface-lowest border-outline-variant/30 text-on-surface hover:bg-surface-container'
+                        }`}
+                      >
+                        {u}
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1 bg-surface-lowest px-2 py-0.5 rounded-xl border border-outline-variant/40 focus-within:border-primary">
+                      <label className="text-[10px] font-bold text-on-surface-variant">الكمية:</label>
+                      <input
+                        type="number"
+                        min="0.01"
+                        step="any"
+                        value={row.quantity}
+                        onChange={(e) => onItemRowChange(idx, 'quantity', e.target.value)}
+                        className="w-14 sm:w-16 px-1 py-0.5 rounded-md bg-surface-low text-xs font-mono font-black text-primary border border-outline-variant/20 text-center outline-none focus:bg-white focus:border-primary"
+                      />
+                      <span className="text-[10px] font-bold text-on-surface-variant">{currentUnit}</span>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-2">
-                      <div>
-                        <label className="text-[10px] font-bold text-on-surface-variant block">
-                          الكمية ({currentUnit})
-                        </label>
-                        <input
-                          type="number"
-                          min="1"
-                          step="any"
-                          value={row.quantity}
-                          onChange={(e) => onItemRowChange(idx, 'quantity', e.target.value)}
-                          className="w-full px-2 py-1 rounded-lg bg-surface-lowest text-xs font-mono font-bold border border-outline-variant/30"
-                        />
-                      </div>
-                      <div>
-                        <label className="text-[10px] font-bold text-on-surface-variant block">
-                          السعر (ج.م / {currentUnit})
-                        </label>
-                        <input
-                          type="number"
-                          min="0.1"
-                          step="any"
-                          value={row.price}
-                          onChange={(e) => onItemRowChange(idx, 'price', e.target.value)}
-                          className="w-full px-2 py-1 rounded-lg bg-surface-lowest text-xs font-mono font-bold border border-outline-variant/30"
-                        />
-                      </div>
+                    <div className="flex items-center gap-1 bg-surface-lowest px-2 py-0.5 rounded-xl border border-primary/40 focus-within:border-primary focus-within:ring-1 focus-within:ring-primary shadow-2xs">
+                      <label className="text-[10px] font-bold text-primary">السعر:</label>
+                      <input
+                        type="number"
+                        min="0"
+                        step="any"
+                        value={row.price}
+                        onChange={(e) => onItemRowChange(idx, 'price', e.target.value)}
+                        className="w-16 sm:w-20 px-1 py-0.5 rounded-md bg-surface-low text-xs font-mono font-black text-primary border border-outline-variant/20 text-center outline-none focus:bg-white focus:border-primary"
+                        title="أدخل أي سعر بيع مخصص"
+                      />
+                      <span className="text-[10px] font-bold text-on-surface-variant">ج.م</span>
                     </div>
                   </div>
-                )}
+                </div>
               </div>
             )
           })

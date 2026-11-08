@@ -1,437 +1,280 @@
-# Technical Investigation Report: Requirements R4, R5, and R6
-**Project:** Protein Food (AX_FROZEN_FOODS)  
-**Explorer:** Explorer 3 (Dashboard Theme & Testing Explorer)  
-**Date:** 2026-10-31  
-**Status:** Read-Only Survey Complete
-
----
+# Comprehensive HR & Payroll Technical Survey & Architecture (R4, R5, R6)
 
 ## Executive Summary
-This report presents the complete codebase survey and technical blueprints for:
-1. **Requirement R4:** Dashboard Stock Drilldown & Financial Metrics (User-configurable pinned inventory widget, branch/warehouse stock drilldown modal, and real-time financial metrics for customer receivables, supplier liabilities, representative commission balances, and sales targets).
-2. **Requirement R5:** Brand Theme Color Alignment (Migrating from cold sky/cyan blue to meat red / burgundy `#991b1b` / `#b91c1c` across Tailwind tokens, HTML/PWA manifests, CSS scrollbars, SVG chart gradients, splash/update banners, and documentation).
-3. **Requirement R6:** Automated Testing & Verification (Vitest configuration setup, test suite inventory of 37 test cases covering R1 through R5, and backward compatibility with the existing 198 tests).
+This document provides a thorough audit of the Human Resources, Attendance, Wage Calculations, Employee Deductions, Employee Advances ("سلف"), and Wage Settlement architecture within the `AX_PROTEIN_FOOD` ERP system. It documents existing bugs, design defects, formulas, and specifies the exact components, store state adjustments, and test suites needed to fulfill Requirements R4, R5, and R6 under AXONID Master Invariants.
 
 ---
 
-## 1. Requirement R4: Dashboard Stock Drilldown & Financial Metrics
+## 1. Requirement R4: HR Navigation & Mobile Responsive Layout
 
-### 1.1 Existing Dashboard Component Architecture
-The dashboard resides in `src/components/dashboard/` and is mounted by `App.jsx` when `activeTab === 'dashboard'`.
+### 1.1 Current Implementation & Identified Defects
+- **Target File**: `src/components/employees/AX_EmployeesManager.jsx`
+- **Observations & Exact Line Citations**:
+  1. **Top Tab Container Clipping & Overflow**:
+     - At lines 77-119:
+       ```jsx
+       <div className="inline-flex items-center p-1 rounded-full bg-surface-low border border-outline-variant/30 gap-1 self-start sm:self-auto overflow-x-auto">
+       ```
+       On viewports <= 640px (mobile):
+       The parent header card (lines 64-75) uses `flex-col sm:flex-row items-stretch sm:items-center`.
+       The tab pill container is tagged with `self-start`. When active, on small screens (360px-390px) the 3 wide tabs ("سجل الحضور واليومية", "دليل الموظفين", "مسير الرواتب") overflow horizontally. Because the container is `self-start` without `max-w-full` or `w-full`, it clips or pushes against subsequent controls, cutting off the third tab or scrolling awkwardly.
+     - The header also contains descriptive bloat at lines 71-73 (`<span className="text-[11px] font-bold text-on-surface-variant block">إدارة كادر العمل، تسجيل الحضور والانصراف، احتساب اليوميات ومسير الرواتب</span>`), which occupies vertical real estate on mobile and violates Rule 4 (Zero Descriptive Bloat / No Subtitles).
+  2. **"Add Employee" Button Discoverability**:
+     - At lines 148-158:
+       ```jsx
+       {activeTab === 'directory' && (
+         <button
+           type="button"
+           onClick={handleOpenAddModal}
+           className="fixed bottom-20 lg:bottom-6 left-6 z-30 flex items-center gap-2 px-5 py-3 rounded-full bg-primary hover:bg-primary-dark text-white font-black text-xs sm:text-sm shadow-level3 active:scale-95 transition-all cursor-pointer"
+           title="إضافة موظف جديد"
+         >
+           <UserPlus className="w-4 h-4 sm:w-5 sm:h-5" />
+           <span>إضافة موظف جديد</span>
+         </button>
+       )}
+       ```
+       Defects:
+       a. When `activeTab === 'attendance'` (which is the default landing tab upon entering HR!), there is **ZERO visible "Add Employee" button** anywhere on screen.
+       b. When `activeTab === 'payroll'`, there is likewise no button. If a manager takes attendance or runs payroll and needs to register a new hire on the factory floor, they cannot discover how to add an employee.
+       c. The fixed floating button is positioned at `bottom-20 left-6 z-30`. On mobile devices, `AX_MobileNavbar` is mounted at `fixed bottom-0` with `h-16`, meaning `bottom-20` is directly on top of the mobile navigation bar touch target zone, causing touch misfires.
+  3. **Attendance Log, Daily Date & Date Picker Overlaps on Mobile**:
+     - **Target File**: `src/components/employees/AX_EmployeeAttendanceSheet.jsx` (lines 197-234)
+       ```jsx
+       <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+         <div className="flex items-center gap-3">
+           <div className="w-10 h-10 rounded-2xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
+             <Calendar className="w-5 h-5" />
+           </div>
+           <div>
+             <span className="text-xs font-bold text-on-surface-variant block">تاريخ اليومية وسجل الحضور</span>
+             <div className="w-48 mt-0.5">
+               <AX_CompanyDatePicker
+                 value={selectedDate}
+                 onChange={setSelectedDate}
+                 placeholder="اختر التاريخ..."
+               />
+             </div>
+           </div>
+         </div>
+       ```
+       Defects:
+       a. The date picker wrapper has a fixed width `w-48` (192px). On mobile, alongside the `w-10` icon, it forces the row to wrap awkwardly against the action buttons ("تحضير الكل", "حفظ اليومية").
+       b. Inside `src/components/common/AX_CompanyDatePicker.jsx` (line 87), the popup dropdown is hardcoded to `w-80` (320px) with `absolute right-0`. On a 360px-wide mobile screen in RTL, a 320px absolute container inside a constrained flex child causes horizontal viewport overflow and clips off the screen.
+       c. Inside `AX_EmployeeAttendanceSheet.jsx` (lines 326-345), each attendance row on mobile displays 5 separate status buttons with lengthy text ("حاضر (كامل)", "نصف يوم", "غياب بعذر", "غياب بدون عذر", "إجازة / راحة"). On mobile, these wrap into 3 disorganized lines, overlapping the notes field and employee identity block.
 
-```
-src/components/dashboard/
-├── AX_Dashboard.jsx                 # Master page container (196 lines)
-├── AX_PeriodFilterBar.jsx          # Timeframe pills (today, 7days, month, year, custom)
-├── AX_DashboardMetricsCards.jsx    # 4 top metric cards: Sales, Stock Value, Stock Qty, Cash
-├── AX_QuickActionsBar.jsx          # Tab navigation shortcuts
-├── AX_SalesFlowChart.jsx           # SVG Area curve chart with monthly/daily flow
-├── AX_StockDistributionChart.jsx   # Donut & distribution breakdown by category
-├── AX_TopSellingItemsChart.jsx     # Top moving products with bar meters
-├── AX_ColdStorageCapacityCard.jsx  # Warehouse cold capacity & temperature tracking
-├── AX_CashCreditSplitChart.jsx     # Cash vs Credit sales split
-├── AX_ManufacturingYieldCard.jsx   # Meat disassembly & yield percentage summary
-└── AX_OperationalAlerts.jsx        # Pending transfers & low stock warnings
-```
-
-### 1.2 Data Representation in State & Database
-- **Items (`items` in store / `ax_items` in Supabase):**
-  - Schema: `{ id, code, compositeName, primaryCategory, subCategory, secondaryCategory, unitType, units, weightPerCarton, buyPrice, sellPrice, pieceBuyPrice, pieceSellPrice, ... }`
-- **Warehouses & Branches (`warehouses` in store / `ax_warehouses` in Supabase):**
-  - Schema: `{ id, name, type, manager, phone }`
-  - Types in `WAREHOUSE_TYPES` (`AX_AddWarehouseModal.jsx`):
-    - `'cold_store'` (تجميد وحفظ رئيسي)
-    - `'raw_materials'` (خامات وتوريد)
-    - `'processing'` (تقطيع وتجهيز)
-    - `'finished_goods'` (مصنعات وتعبئة)
-    - `'van'` (سيارة توزيع / نقل)
-    - `'branch'` (فرع مبيعات)
-- **Inventory Stock (`inventoryStock` in store / `ax_inventory_stock` in Supabase):**
-  - Schema: `{ warehouseId, itemId, quantity, unit }`
-  - Stock is uniquely keyed by `(warehouseId, itemId)`.
-- **Invoices (`invoices` in store / `ax_invoices` in Supabase):**
-  - Schema: `{ id, code, type: 'sale' | 'purchase', partyName, date, total, paidAmount, remainingAmount, status, items: [...] }`
-- **Customers (`clients` in store / `ax_clients` in Supabase):**
-  - Current schema: `{ id, name, phone, balance, address }`
-  - Required R1 enhancements: opening balance (debit/credit), 2-level categories, geographic classification, ImageKit attachments.
-- **Suppliers (`suppliers` in store / `ax_suppliers` in Supabase):**
-  - Current schema: `{ id, name, phone, balance, address }`
-  - Required R2 enhancements: company name, supply type (`نوع التوريد`), category, opening balance.
-- **Sales Representatives (`salesReps` in store / `ax_sales_representatives` in Supabase):**
-  - Required R3 new structure: `{ id, name, phone, assignedBranch, targetAmount, openingBalance, currentBalance, commissionModel, commissionRate }`.
-
----
-
-### 1.3 Specification: User-Configurable Pinned Inventory Widget
-
-#### Purpose
-Allows managers to pin 3–8 high-priority meat products (e.g. frozen chicken thighs, beef shank, kofta, whole chicken) directly on the dashboard to track real-time stock levels at a glance without navigating to the item catalog.
-
-#### Placement in Dashboard
-Located immediately below `AX_DashboardMetricsCards` and above `AX_QuickActionsBar` or beside the operational charts in `AX_Dashboard.jsx`.
-
-#### Architecture & State Flow
-- **Persistence Key:** `localStorage.getItem('ax_dashboard_pinned_items')`
-- **Fallback Strategy:** If no pins are saved in `localStorage`, the widget defaults to the top 4 active items from `items`:
-  ```javascript
-  const defaultPinnedIds = (items || []).slice(0, 4).map((i) => i.id)
-  ```
-- **Store Actions:**
-  - `pinItem(itemId)`: Adds ID to `pinnedItemIds`, updates `localStorage`.
-  - `unpinItem(itemId)`: Removes ID, updates `localStorage`.
-  - `setPinnedItems(itemIds)`: Bulk replaces array of pinned IDs.
-
-#### Component Interface: `AX_PinnedStockWidget.jsx`
-```javascript
-export function AX_PinnedStockWidget({
-  items = [],
-  inventoryStock = [],
-  warehouses = [],
-  onOpenDrilldown, // (item) => void
-})
-```
-
-#### Widget UI Layout (Per Constitution & Anti-Patterns)
-1. **Header Bar:**
-   - Title: `الأصناف المثبتة للمتابعة الفورية`
-   - Subtitle: `مراقبة رصيد أهم المنتجات وتوزيعها المخزني`
-   - Actions: Pill button `تخصيص الأصناف` (with `SlidersHorizontal` / `Pin` icon) to open pin selection modal.
-2. **Pinned Grid:**
-   - Responsive Bento grid: `grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3`.
-   - Card structure:
-     - Top row: Category badge (`getCategoryClass`) + composite item name + Pin icon.
-     - Middle row: Total available stock formatted with unit (e.g. `275 كرتونة`).
-     - Bottom row: Stock health badge (`متوفر` in emerald, `رصيد منخفض` in amber if <= 25, `نافد` in rose if 0).
-     - Hover/Click effect: `cursor-pointer hover:border-primary/50 active:scale-98` with subtle arrow indicator to trigger drilldown.
+### 1.2 Proposed Architecture & Solutions for R4
+1. **Header & Navigation Bar Overhaul in `AX_EmployeesManager.jsx`**:
+   - Remove descriptive marketing fluff subtitle.
+   - Make the top tabs container fully responsive:
+     `w-full sm:w-auto overflow-x-auto no-scrollbar scroll-smooth flex items-center justify-start sm:justify-end gap-1 p-1 rounded-full bg-surface-low border border-outline-variant/30 shrink-0`
+   - Mount a primary "إضافة موظف" pill button directly in the top header card beside the tabs, visible **at all times** across all 3 tabs:
+     ```jsx
+     <button
+       type="button"
+       onClick={handleOpenAddModal}
+       className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-primary hover:bg-primary-dark text-white text-xs font-black shadow-xs shrink-0 cursor-pointer active:scale-95 transition-all"
+     >
+       <UserPlus className="w-3.5 h-3.5" />
+       <span>إضافة موظف</span>
+     </button>
+     ```
+   - Keep the secondary FAB on mobile, but adjust coordinates to `bottom-24 left-4 z-30` so it clears `AX_MobileNavbar` cleanly.
+2. **Mobile Date Picker & Attendance Sheet Alignment in `AX_EmployeeAttendanceSheet.jsx`**:
+   - In the header bar, use a responsive layout:
+     Mobile: `flex flex-col gap-3 w-full`. Date picker container expands to `w-full sm:w-56`.
+   - Update `AX_CompanyDatePicker.jsx` popover dropdown:
+     `w-[calc(100vw-2rem)] max-w-xs sm:w-80 right-0 sm:right-auto` so it never spills over the screen edge on mobile.
+   - For mobile attendance rows:
+     Add a compact 5-column grid segmented pill bar (`grid grid-cols-5 gap-1 w-full sm:w-auto`) with short labels ("حاضر", "نصف", "بعذر", "غياب", "راحة") and icons, preventing multi-line wrapping and layout overlap.
 
 ---
 
-### 1.4 Specification: Stock Drilldown Modal (`AX_StockDrilldownModal.jsx`)
+## 2. Requirement R5: Hold-to-Delete Confirmation, Wage Calculations & Deductions
 
-#### Trigger
-Clicking any pinned item card in `AX_PinnedStockWidget` opens `AX_StockDrilldownModal`.
+### 2.1 Hold-to-Delete Button with Animated Countdown Timer
+- **Current State**:
+  In `AX_EmployeesDirectory.jsx` (lines 192-200, 234-241), clicking delete immediately opens `AX_ConfirmModal`.
+- **Requirement**:
+  "Implement a hold-to-delete button with an animated countdown timer before executing deletions on employee records."
+- **Component Design (`src/components/common/AX_HoldToDeleteButton.jsx`)**:
+  - **Props**:
+    * `onTrigger`: `() => Promise<void> | void`
+    * `durationMs`: `2500` (2.5 seconds hold)
+    * `label`: Default "حذف"
+    * `compact`: Boolean (for table row icon mode)
+  - **Mechanism**:
+    * Uses `pointerdown` / `touchstart` / `mousedown` events to initiate hold state.
+    * Active timer tracks remaining time: counts down `3... 2... 1...`.
+    * Circular SVG or linear fill progress bar animates from 0% to 100% in crimson red (`#991b1b`).
+    * On `pointerup`, `mouseleave`, `touchend`, or `touchcancel`: timer immediately cancels and resets without executing deletion.
+    * Only upon 100% elapsed time does the callback trigger, accompanied by haptic vibration (`navigator.vibrate?.([40, 40, 80])`) and an `axToast.success` notification.
+  - **Integration**:
+    * Used in `AX_EmployeesDirectory.jsx` in both Desktop table rows and Mobile Bento cards.
 
-#### Component Interface
-```javascript
-export function AX_StockDrilldownModal({
-  isOpen,
-  onClose,
-  item = null,
-  warehouses = [],
-  inventoryStock = [],
-})
-```
+### 2.2 Wage & Attendance Calculations Audit & Formula Corrections
+- **Target File**: `src/store/employeeHelpers.js`
+- **Discrepancies & Flaws Found**:
+  1. **Daily Worker Paid for Non-Work Days**:
+     - Current line 61:
+       ```javascript
+       const workedUnits = presentDays + (halfDays * 0.5) + excusedDays + holidays
+       earnedSalary = Math.round(workedUnits * dailyRate * 100) / 100
+       ```
+       **Flaw**: In daily wage labor ("عمالة يومية"), a daily worker is paid strictly for days worked. Adding `excusedDays + holidays` artificially inflates their salary for days they never set foot in the factory! If an employee worked 2 days, had 5 excused absences and 4 weekend/holidays, the existing system pays them for 11 days (2 + 5 + 4 = 11 days * dailyRate)!
+       **Correction**:
+       For daily workers:
+       ```javascript
+       const workedUnits = presentDays + (halfDays * 0.5)
+       earnedSalary = Math.round(workedUnits * dailyRate * 100) / 100
+       ```
+  2. **Attendance Sheet Daily Earned Mismatch**:
+     - In `AX_EmployeeAttendanceSheet.jsx` (lines 81-90):
+       When status is set to `absent_excused` or `holiday`, `dailyEarned` is unconditionally assigned `r.dailyRate`.
+       **Correction**: For daily workers, `dailyEarned` on `absent_excused` and `holiday` must be `0`.
+  3. **Absence Deductions vs Direct Financial Penalties**:
+     - Current code only computes absence deductions: `unexcusedDays * dailyRate + halfDays * 0.5 * dailyRate`.
+     - It lacks support for direct financial penalties / deductions (جزاءات وخصومات مباشرة, e.g. disciplinary penalty, safety violation, equipment damage).
 
-#### Aggregation Algorithm
-```javascript
-const drilldownData = useMemo(() => {
-  if (!item?.id) return { totalQty: 0, locations: [] }
-
-  const itemStocks = inventoryStock.filter((s) => s.itemId === item.id)
-  const totalQty = itemStocks.reduce((sum, s) => sum + (Number(s.quantity) || 0), 0)
-
-  const locations = warehouses.map((wh) => {
-    const stockRow = itemStocks.find((s) => s.warehouseId === wh.id)
-    const qty = Number(stockRow?.quantity) || 0
-    const pct = totalQty > 0 ? Math.round((qty / totalQty) * 100) : 0
-    const unit = stockRow?.unit || item.unitType || 'كرتونة'
-
-    let status = 'out'
-    if (qty > 25) status = 'healthy'
-    else if (qty > 0) status = 'low'
-
-    return {
-      warehouseId: wh.id,
-      name: wh.name,
-      type: wh.type,
-      isBranch: wh.type === 'branch',
-      isColdStore: wh.type === 'cold_store',
-      manager: wh.manager || 'غير محدد',
-      quantity: qty,
-      unit,
-      sharePercentage: pct,
-      status,
-    }
-  })
-
-  // Sort locations: Branches and Main Cold Stores first, then descending by quantity
-  locations.sort((a, b) => b.quantity - a.quantity)
-
-  return { totalQty, locations }
-}, [item, warehouses, inventoryStock])
-```
-
-#### Modal Presentation
-- **Header:**
-  - Item Composite Name (`item.compositeName`), Code (`item.code`), Primary Category badge.
-  - Total Stock Pill (`إجمالي الرصيد: 410 كرتونة`).
-- **Desktop View (`hidden lg:block`):**
-  - Single-line compact table:
-    - فرع / مخزن (Name + Type badge)
-    - النوع (فرع مبيعات / تجميد رئيسي / سيارة توزيع)
-    - المسؤول (Manager)
-    - الرصيد المتاح (Formatted Quantity + Unit)
-    - النسبة من الإجمالي (Progress mini-bar + `pct%`)
-    - حالة الرصيد (Badge: متوفر / حرج / نافد)
-- **Mobile View (`lg:hidden`):**
-  - Responsive Bento cards per location with 2-column key metric pairs and progress bar.
-- **Packaging Drilldown Sub-bar:**
-  - If item has `piecesPerCarton` or `weightPerCarton`:
-    - Shows total cartons, total pieces, and estimated total weight in kg.
+### 2.3 Direct Deduction Action on Employee Records
+- **Component to Create**: `src/components/employees/AX_EmployeeDeductionModal.jsx`
+  - Allows HR or supervisors to apply direct wage penalties/deductions to an employee.
+  - Deduction fields:
+    * `type`: "financial_penalty" (مبلغ مالي بالجنيه), "days_deduction" (خصم أيام عمل), or "damage_compensation" (تعويض تلفيات).
+    * `amount`: EGP amount (or days converted via `dailyRate`).
+    * `date`: Operational date via `AX_CompanyDatePicker`.
+    * `reason`: Disciplinary reason or violation notes.
+    * `targetMonth`: Year-Month string (e.g. `2026-11`).
+  - Stored in store state `employeeDeductions` (and `localStorage.setItem('ax_employee_deductions')`).
+  - Reflects immediately in `computeMonthlyPayrollStats`:
+    `totalDeductionAmount = absenceDeductions + directDeductions`.
+  - Added as an action button on employee directory rows/cards and payroll ledger rows.
 
 ---
 
-### 1.5 Specification: Real-Time Financial Summary Metrics
+## 3. Requirement R6: Employee Advances & Wage Settlements
 
-#### Business Requirements
-Display real-time totals for:
-1. **Total Customer Debts (Receivables - مستحقات المنظومة لدى العملاء)**
-2. **Total Supplier Liabilities (Payables - التزامات المنظومة للموردين)**
-3. **Sales Representative Balances (أرصدة ومستحقات المناديب)**
-4. **Sales Target Progress (نسبة تحقيق المستهدف البيعي للمبيعات)**
+### 3.1 Dedicated Main Expense Category for Employee Advances ("سلف")
+- **Target File**: `src/store/expenseCategoryHelpers.js`
+- **Modifications**:
+  Add a dedicated 3-tier expense category structure for employee advances:
+  - **Main Category**:
+    * `id`: `'exp-main-adv'`
+    * `name`: `'سلف وقروض العاملين'`
+    * `code`: `'EXP-ADV'`
+    * `level`: `'main'`
+    * `parentId`: `null`
+  - **Sub-Categories**:
+    * `'exp-sub-emp-adv'`: `'سلف مؤقتة على الراتب'` (`parentId`: `'exp-main-adv'`, code: `'EXP-ADV-SAL'`)
+    * `'exp-sub-emp-loan'`: `'قروض وسلف طويلة الأجل'` (`parentId`: `'exp-main-adv'`, code: `'EXP-ADV-LON'`)
+  - **Secondary Categories**:
+    * `'exp-sec-adv-factory'`: `'سلف عمال تشغيل وتقطيع'` (`parentId`: `'exp-sub-emp-adv'`)
+    * `'exp-sec-adv-drivers'`: `'سلف سائقي توزيع وحركة'` (`parentId`: `'exp-sub-emp-adv'`)
+    * `'exp-sec-adv-general'`: `'سلف عامة للموظفين'` (`parentId`: `'exp-sub-emp-adv'`)
+    * `'exp-sec-loan-personal'`: `'قروض شخصية للعاملين'` (`parentId`: `'exp-sub-emp-loan'`)
 
-#### Calculation Formulations
-```javascript
-// 1. Total Customer Debts (Receivables)
-// Accounts where customer owes money (positive receivables balance)
-const totalCustomerDebts = useMemo(() => {
-  return (clients || []).reduce((sum, c) => {
-    const bal = Number(c.balance) || 0
-    return sum + (bal > 0 ? bal : 0)
-  }, 0)
-}, [clients])
+### 3.2 Recording Advances with Dynamic Balance & Overdraw Support
+- **Requirements**:
+  "When recording an advance against an employee, display their current remaining balance and net dues; allow recording amounts exceeding their balance, resulting in a negative balance."
+- **Implementation**:
+  - Create a dedicated modal `src/components/employees/AX_EmployeeAdvanceModal.jsx` and link it to both `AX_EmployeePayrollLedger.jsx` and `AX_TreasuryTransactionModal.jsx`.
+  - Upon selecting an employee:
+    1. System computes:
+       * `earnedSalary`: Current accrued earnings in active period.
+       * `deductions`: Total absence and direct deductions.
+       * `existingAdvances`: Total unsettled advances previously taken.
+       * `netDues`: `earnedSalary - deductions - existingAdvances`.
+    2. Input field for advance amount `advanceAmount`.
+    3. Live projection banner:
+       * `projectedBalance = netDues - advanceAmount`.
+       * If `projectedBalance >= 0`: Green badge showing remaining dues.
+       * If `projectedBalance < 0`: Amber/Rose warning badge:
+         `رصيد سالب (مديونية سلفة على الموظف): ${Math.abs(projectedBalance)} ج.م`.
+       * System explicitly allows submission with negative balance (no blocking or clamping).
+    4. Upon save:
+       * Disburses cash from selected treasury account (`addCashTransaction`).
+       * Records transaction with `type: 'payroll'`, `subType: 'advance'`, `partyType: 'employee'`, `partyId: employee.id`.
+       * Appends advance to employee's active ledger.
 
-const indebtedCustomersCount = useMemo(() => {
-  return (clients || []).filter((c) => (Number(c.balance) || 0) > 0).length
-}, [clients])
-
-// 2. Total Supplier Liabilities (Payables)
-// Accounts where supplier is owed money (positive payable liabilities)
-const totalSupplierLiabilities = useMemo(() => {
-  return (suppliers || []).reduce((sum, s) => {
-    const bal = Number(s.balance) || 0
-    return sum + (bal > 0 ? bal : 0)
-  }, 0)
-}, [suppliers])
-
-const creditorSuppliersCount = useMemo(() => {
-  return (suppliers || []).filter((s) => (Number(s.balance) || 0) > 0).length
-}, [suppliers])
-
-// 3. Sales Representative Balances (Accrued Net Commissions Payable)
-const totalSalesRepsBalance = useMemo(() => {
-  return (salesReps || []).reduce((sum, rep) => {
-    const bal = Number(rep.netBalance ?? rep.currentBalance ?? rep.balance) || 0
-    return sum + (bal > 0 ? bal : 0)
-  }, 0)
-}, [salesReps])
-
-// 4. Sales Target Attainment Progress
-const salesTargetMetrics = useMemo(() => {
-  const totalTarget = (salesReps || []).reduce((sum, rep) => {
-    return sum + (Number(rep.salesTarget ?? rep.targetAmount) || 0)
-  }, 0)
-
-  // Current period total sales from filteredInvoices
-  const achievementPct = totalTarget > 0 ? Math.round((salesTotal / totalTarget) * 100) : 0
-  const remainingTarget = Math.max(0, totalTarget - salesTotal)
-
-  return {
-    totalTarget,
-    achievementPct,
-    remainingTarget,
-  }
-}, [salesReps, salesTotal])
-```
-
-#### UI Presentation Options
-- **Option A (Integrated Dual-Row Metrics in `AX_DashboardMetricsCards.jsx`):**
-  - Row 1: Operational Assets (إجمالي المبيعات، قيمة المخزون، رصيد الوحدات، السيولة والخزن).
-  - Row 2: Financial Balances & Liabilities (مديونيات العملاء، التزامات الموردين، مستحقات المناديب، تحقيق المستهدف).
-- **Option B (Dedicated `AX_FinancialSummaryRow.jsx`):**
-  - 4 specialized cards with distinct indicator colors:
-    - Card 1: `مديونيات العملاء (لنا)` → Rose/Primary tint, icon `ArrowDownLeft` / `Users`, subtitle `${indebtedCustomersCount} عميل مدين`.
-    - Card 2: `التزامات الموردين (علينا)` → Amber/Orange tint, icon `ArrowUpRight` / `Truck`, subtitle `${creditorSuppliersCount} مورد دائن`.
-    - Card 3: `أرصدة وعمولات المناديب` → Purple/Indigo tint, icon `BadgePercent` / `UserCheck`, subtitle `مستحقات معلقة للمناديب`.
-    - Card 4: `تحقيق المستهدف البيعي` → Emerald tint, icon `Target`, percentage badge with progress ring/bar.
+### 3.3 Employee Settlement Process (Period Clearing & Balance Carry-Forward)
+- **Current Bug & Critical Flaw**:
+  In `employeeHelpers.js` (lines 66-74):
+  `advancesPaid` filters transactions using:
+  `txDate.startsWith(yearMonth)`.
+  This produces two catastrophic errors:
+  1. **Lost Unpaid Dues / Advances Across Months**: If an employee has unpaid salary or outstanding advance in October, navigating to November completely forgets October's balance because `txDate` doesn't match November!
+  2. **Double-Counting or Misattribution**: If an employer pays October's remaining salary on November 2nd, the system subtracts that payment from November's earned salary, double-counting or corrupting November's dues!
+- **Settlement Architecture**:
+  1. **Store State**: `payrollSettlements` (persisted in `localStorage.getItem('ax_payroll_settlements')`).
+  2. **Settlement Schema**:
+     ```javascript
+     {
+       id: `settle_${yearMonth}_${employee.id}`,
+       employeeId: employee.id,
+       employeeName: employee.name,
+       yearMonth: '2026-11',
+       settledAt: new Date().toISOString(),
+       earnedSalary: 6000,
+       absenceDeductions: 200,
+       directDeductions: 100,
+       advancesDeducted: 1500,
+       priorCarriedBalance: 0,
+       netPayable: 4200,
+       amountPaid: 4200,
+       closingBalance: 0, // 0 if fully paid; residual (+ or -) carried to next period
+       treasuryId: 'treasury-1',
+       status: 'settled',
+       notes: 'تسوية مسير شهر نوفمبر 2026'
+     }
+     ```
+  3. **Settlement Workflow**:
+     - In `AX_EmployeePayrollLedger.jsx`:
+       Add a "تسوية الشهر" (Settle Period) button per employee and a "تسوية جماعية للمسير" (Batch Settle) button.
+     - When a month is settled:
+       * It creates a settlement record.
+       * The period is marked as settled.
+       * All attendance and advance records for that period are tagged as cleared/settled so they are **NEVER double-counted** in subsequent months.
+       * Any remaining balance (e.g. if salary was only partially paid, or if advances exceeded salary leaving a negative debt) is recorded as `closingBalance` and automatically carried forward into the employee's active balance for subsequent unsettled periods.
+  4. **Formula for Active Periods**:
+     ```javascript
+     // Prior balance carried from last settled period or cumulative past unsettled periods:
+     const carriedBalance = computeEmployeeCarriedBalance(emp.id, yearMonth, payrollSettlements, allAttendance, allTransactions, allDeductions);
+     const currentPeriodNet = earnedSalary - totalDeductions - periodAdvances;
+     const totalNetPayable = currentPeriodNet + carriedBalance;
+     ```
 
 ---
 
-## 2. Requirement R5: Brand Theme Color Alignment
+## 4. File Inventory & Line Count Governance
 
-### 2.1 Current Color System Audit
-Currently, the codebase uses a cool marine/ice blue palette intended for arctic cold storage (`#0284c7`, `#0c4a6e`, `#0891b2`). The Protein Food corporate brand requires warm meat red and rich burgundy tones (`#991b1b`, `#b91c1c`, `#450a0a`).
+To comply strictly with the project invariant of **<= 500 lines per file** and clean component separation:
 
-### 2.2 Complete Codebase Occurrences of Blue/Cyan Palette
-
-| File Path | Line(s) | Existing Value | Required Replacement |
+| Target File | Current Lines | Proposed Action | Estimated Result Lines |
 |---|---|---|---|
-| `tailwind.config.js` | 16-20 | `primary.DEFAULT: '#0284c7'`<br>`primary.container: '#0c4a6e'`<br>`primary.on-container: '#bae6fd'`<br>`primary.dark: '#0369a1'` | `primary.DEFAULT: '#991b1b'` (Red-800)<br>`primary.container: '#450a0a'` (Red-950)<br>`primary.on-container: '#fecaca'` (Red-200)<br>`primary.dark: '#7f1d1d'` (Red-900) |
-| `tailwind.config.js` | 22-26 | `secondary.DEFAULT: '#0891b2'`<br>`secondary.container: '#cffafe'`<br>`secondary.on-container: '#155e75'`<br>`secondary.hover: '#0e7490'` | `secondary.DEFAULT: '#b91c1c'` (Red-700)<br>`secondary.container: '#fee2e2'` (Red-100)<br>`secondary.on-container: '#7f1d1d'` (Red-900)<br>`secondary.hover: '#991b1b'` (Red-800) |
-| `index.html` | 11 | `<meta name="theme-color" content="#0284c7" />` | `<meta name="theme-color" content="#991b1b" />` |
-| `public/manifest.json` | 5 | `"theme_color": "#0284c7"` | `"theme_color": "#991b1b"` |
-| `vite.config.js` | 39 | `theme_color: '#0284c7'` | `theme_color: '#991b1b'` |
-| `src/index.css` | 40 | `::-webkit-scrollbar-thumb:hover { background: #0284c7; }` | `background: #991b1b;` |
-| `src/components/common/AppUpdateNotifier.jsx` | 121 | `from-[#0284c7] via-[#0c4a6e] to-[#0284c7]` | `from-[#991b1b] via-[#450a0a] to-[#991b1b]` |
-| `src/components/common/AppUpdateNotifier.jsx` | 126 | `text-cyan-300` | `text-rose-200` |
-| `src/components/common/AX_InstallPwaBanner.jsx` | 81 | `bg-[#0c4a6e] border-[#0284c7]/40` | `bg-[#450a0a] border-[#991b1b]/40` |
-| `src/components/common/AX_InstallPwaBanner.jsx` | 95 | `bg-[#0284c7] hover:bg-[#0369a1]` | `bg-[#991b1b] hover:bg-[#7f1d1d]` |
-| `src/components/common/AX_WelcomeOverlay.jsx` | 41 | `radial-gradient(..., #0c4a6e 0%, #032b43 55%, #02121e 100%)` | `radial-gradient(..., #450a0a 0%, #290404 55%, #140202 100%)` |
-| `src/components/common/AX_WelcomeOverlay.jsx` | 45 | `bg-cyan-500/15` | `bg-red-500/15` |
-| `src/components/common/AX_WelcomeOverlay.jsx` | 49, 50, 51 | `border-cyan-400/40 text-cyan-300` | `border-red-400/40 text-rose-300` |
-| `src/components/common/AX_WelcomeOverlay.jsx` | 65 | `from-sky-100 via-cyan-400 to-sky-200 drop-shadow-[0_8px_20px_rgba(2,132,199,0.45)]` | `from-rose-100 via-red-400 to-rose-200 drop-shadow-[0_8px_20px_rgba(153,27,27,0.45)]` |
-| `src/components/common/AX_WelcomeOverlay.jsx` | 68, 72 | `via-cyan-400`, `text-cyan-400` | `via-rose-400`, `text-rose-400` |
-| `src/components/dashboard/AX_SalesFlowChart.jsx` | 227, 228, 263, 276, 284 | SVG stops, stroke, fill `#0284c7` | `#991b1b` |
-| `src/components/dashboard/AX_StockDistributionChart.jsx` | 21, 50 | `['#0284c7', '#0c4a6e', '#0891b2', '#38bdf8', '#0369a1']` | `['#991b1b', '#450a0a', '#b91c1c', '#e11d48', '#7f1d1d']` |
-| `src/components/dashboard/AX_TopSellingItemsChart.jsx` | 83 | `['bg-primary', 'bg-secondary', 'bg-cyan-600', 'bg-sky-500', 'bg-teal-600']` | `['bg-primary', 'bg-secondary', 'bg-rose-600', 'bg-red-600', 'bg-amber-600']` |
-| `src/components/dashboard/AX_DashboardMetricsCards.jsx` | 49 | `text-sky-600 bg-sky-500/10` | `text-rose-700 bg-rose-500/10` |
-| `DESIGN.md` | 17, 19, 21, 23, 75 | Blue color specs | Updated Meat Red / Burgundy tokens |
-| `GEMINI.md` | 8 | Blue color specs | `#991b1b`, `#450a0a`, `#b91c1c` |
-
-### 2.3 Exact Proposed Tailwind Color Configuration
-```javascript
-// tailwind.config.js
-module.exports = {
-  theme: {
-    extend: {
-      colors: {
-        primary: {
-          DEFAULT: '#991b1b',        // Red-800: Rich meat red (buttons, active tabs, main accents)
-          container: '#450a0a',      // Red-950: Deep burgundy container (banners, headers)
-          'on-container': '#fecaca',  // Red-200: Soft high-contrast text on container
-          dark: '#7f1d1d',           // Red-900: Active and hover state
-        },
-        secondary: {
-          DEFAULT: '#b91c1c',        // Red-700: Crimson meat accent
-          container: '#fee2e2',      // Red-100: Soft tinted badge background
-          'on-container': '#7f1d1d',  // Red-900: Deep burgundy text
-          hover: '#991b1b',          // Red-800
-        },
-        burgundy: {
-          50: '#fff1f2',
-          100: '#ffe4e6',
-          200: '#fecdd3',
-          300: '#fda4af',
-          400: '#fb7185',
-          500: '#f43f5e',
-          600: '#e11d48',
-          700: '#be123c',
-          800: '#9f1239',
-          900: '#881337',
-          950: '#4c0519',
-        },
-        // Remaining surface, on-surface, outline tokens remain identical
-      }
-    }
-  }
-}
-```
+| `src/components/employees/AX_EmployeesManager.jsx` | 176 | Update navigation tabs, remove fluff text, add header "Add Employee" button | ~190 lines (OK) |
+| `src/components/employees/AX_EmployeesDirectory.jsx` | 272 | Integrate `AX_HoldToDeleteButton` and "خصم" trigger | ~295 lines (OK) |
+| `src/components/employees/AX_EmployeeAttendanceSheet.jsx` | 364 | Fix mobile date picker wrapping & compact mobile status segmented bar | ~390 lines (OK) |
+| `src/components/employees/AX_EmployeePayrollLedger.jsx` | 413 | Extract modals to separate files; add settlement & advance triggers | ~380 lines (OK) |
+| `src/components/common/AX_HoldToDeleteButton.jsx` | *NEW* | Reusable Hold-to-Delete button with animated radial countdown | ~120 lines (OK) |
+| `src/components/employees/AX_EmployeeDeductionModal.jsx` | *NEW* | Disciplinary deductions and penalties modal | ~180 lines (OK) |
+| `src/components/employees/AX_EmployeeAdvanceModal.jsx` | *NEW* | Employee advance modal with dynamic balance & negative balance support | ~200 lines (OK) |
+| `src/components/employees/AX_EmployeeSettlementModal.jsx` | *NEW* | Period wage settlement & balance carry-forward modal | ~210 lines (OK) |
+| `src/store/employeeHelpers.js` | 134 | Update formulas (daily worker fix, deductions, settlements, carry-forward) | ~260 lines (OK) |
+| `src/store/expenseCategoryHelpers.js` | 170 | Add 3-tier employee advances expense category hierarchy | ~205 lines (OK) |
+| `src/store/useAXStore.js` | 498 | Add settlements & deductions slices by delegating to helpers (keep <= 500) | ~495 lines (OK) |
 
 ---
 
-## 3. Requirement R6: Automated Testing & Verification
-
-### 3.1 Current Test Infrastructure Status
-- **Current Runner:** Node.js native test runner (`node:test` + `node:assert/strict`) configured in `package.json`:
-  ```json
-  "scripts": {
-    "test": "node --test tests/*.test.js"
-  }
-  ```
-- **Current Test Count:** 198 tests across 9 files, all passing in 398ms.
-- **Requirement R6:** Explicitly mandates automated tests using **Vitest** for verifying customer/supplier balance calculations, commission models, and dashboard balance aggregations.
-
-### 3.2 Vitest Configuration & Setup Architecture
-To seamlessly satisfy R6 without breaking existing tests:
-1. **Package Dependency:**
-   Add `vitest` to `devDependencies` in `package.json`.
-2. **Vite / Vitest Configuration (`vite.config.js` or `vitest.config.js`):**
-   ```javascript
-   // vitest.config.js or in vite.config.js test block
-   import { defineConfig } from 'vitest/config'
-   import react from '@vitejs/plugin-react'
-
-   export default defineConfig({
-     plugins: [react()],
-     test: {
-       environment: 'node',
-       globals: true,
-       include: ['tests/**/*.test.{js,jsx}'],
-     },
-   })
-   ```
-3. **Execution Script:**
-   ```json
-   "scripts": {
-     "test": "vitest run",
-     "test:watch": "vitest",
-     "test:node": "node --test tests/*.test.js"
-   }
-   ```
-   *Note:* Vitest natively executes `describe`, `it`, and `node:assert` assertions seamlessly, so existing 198 tests run identically under Vitest.
-
----
-
-### 3.3 Vitest Test Case Inventory (Requirements R1 to R5)
-
-#### Test Suite 1: Customers Module (`tests/customers.test.js`) — 8 Test Cases
-1. `should create customer with full profile including commercial registration and tax number`
-2. `should enforce quick add with incomplete warning badge when only name is provided`
-3. `should assign and validate two-level category hierarchy (primary and subcategory)`
-4. `should assign independent geographic classification (governorate, center/city, district)`
-5. `should calculate debit opening balance as customer receivables (مستحق على العميل)`
-6. `should calculate credit opening balance as advance deposit (رصيد دائن للعميل)`
-7. `should construct valid ImageKit attachment URLs for customer identity and tax documents`
-8. `should update customer balance upon sales invoice registration and cash receipt`
-
-#### Test Suite 2: Suppliers Module (`tests/suppliers.test.js`) — 6 Test Cases
-1. `should create supplier profile with contact details and company name`
-2. `should categorize supplier by supply type (لحوم مجمدة، دواجن، أسماك، تعبئة)`
-3. `should map supplier to operational factory/warehouse category`
-4. `should record supplier opening balance as payable liability (مستحق للمورد)`
-5. `should increase supplier liability upon purchase invoice addition`
-6. `should decrease supplier liability upon cash disbursement payout`
-
-#### Test Suite 3: Sales Representatives & Commissions Engine (`tests/sales-reps-commissions.test.js`) — 9 Test Cases
-1. `should create sales representative profile with assigned target and initial balance`
-2. `[Model A] should calculate volume-based commission (e.g. 50 EGP per 1,000 EGP sales)`
-   - *Formula:* `Math.floor(invoiceTotal / 1000) * 50`
-   - *Example:* 34,700 EGP invoice → 34 × 50 = 1,700 EGP.
-3. `[Model B] should calculate category-specific percentage commission`
-   - *Fish items (2%):* 15,000 EGP → 300 EGP.
-   - *Processed items (3.5%):* 20,000 EGP → 700 EGP.
-   - *Raw items (1.5%):* 10,000 EGP → 150 EGP.
-   - *Total:* 1,150 EGP.
-4. `[Model C] should apply tiered target attainment multiplier`
-   - Attainment < 80%: 1.0x (Base rate).
-   - Attainment 80%–99%: 1.2x.
-   - Attainment >= 100%: 1.5x bonus.
-5. `should compute chronological statement of account running net balance`
-   - `Net = Opening + AccruedCommissions - Payouts`
-6. `should deduct cash payout from sales rep ledger balance`
-7. `should link sales representative ID to invoice on invoice creation`
-8. `should safely handle zero sales target without division by zero or NaN`
-9. `should export clean representative ledger formatted for print/audit`
-
-#### Test Suite 4: Dashboard Aggregations, Pinned Items & Drilldowns (`tests/dashboard-aggregations.test.js`) — 8 Test Cases
-1. `should persist and load user pinned items to/from localStorage`
-2. `should fallback to top 4 stock items when no user pins exist`
-3. `should aggregate item stock across all warehouses and branch locations accurately`
-4. `should distinguish sales branches from central cold storage and vans in drilldown`
-5. `should compute total customer debts (receivables) across all customer accounts`
-6. `should compute total supplier liabilities (payables) across all supplier accounts`
-7. `should compute aggregate sales rep net commission balances`
-8. `should compute overall sales target achievement percentage accurately`
-
-#### Test Suite 5: Brand Theme & Architectural Invariants (`tests/theme-invariants.test.js`) — 6 Test Cases
-1. `should ensure tailwind.config.js primary tokens match meat red (#991b1b)`
-2. `should ensure tailwind.config.js secondary tokens match crimson (#b91c1c)`
-3. `should ensure index.html meta theme-color matches #991b1b`
-4. `should ensure manifest.json and vite.config.js theme_color matches #991b1b`
-5. `should verify zero occurrences of obsolete #0284c7 in theme token definitions`
-6. `should enforce 500 lines per file hard limit on all new and existing source files`
-
----
-
-## 4. Implementation Readiness & Handoff Summary
-All findings, data schemas, component interfaces, token mappings, and test specifications have been codified and ready for the implementation phase.
+## 5. Automated Verification Plan
+1. `tests/employee-r4-navigation-mobile.test.js`:
+   - Verifies responsive tab bar class invariants and absence of marketing subtitle text.
+   - Verifies "إضافة موظف" button existence and accessibility across all tabs.
+   - Verifies `AX_CompanyDatePicker` popover mobile max-width containment.
+2. `tests/employee-r5-hold-to-delete-wages.test.js`:
+   - Verifies daily worker wage calculation does not pay for excused absences or holidays.
+   - Verifies monthly worker wage calculation correctly deducts unexcused absences.
+   - Verifies financial penalties / direct deductions subtract accurately from net salary.
+3. `tests/employee-r6-advances-settlements.test.js`:
+   - Verifies presence of 3-tier "سلف وقروض العاملين" expense category in `initialExpenseCategories`.
+   - Verifies advance calculation allows negative balance when advance exceeds accrued dues.
+   - Verifies period settlement marks month as settled, prevents double-counting in next month, and correctly carries forward unpaid balances or overdrawn debt.

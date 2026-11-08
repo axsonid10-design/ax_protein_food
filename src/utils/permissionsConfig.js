@@ -162,6 +162,19 @@ export const MODULE_PERMISSIONS_CONFIG = [
       { key: 'manage_permissions', label: 'تعديل مصفوفة الصلاحيات', default: false },
     ],
   },
+  {
+    id: 'expenses',
+    label: 'المصروفات ومراكز التكلفة',
+    icon: Receipt,
+    type: 'options',
+    options: [
+      { key: 'create', label: 'تسجيل مصروف جديد', default: true },
+      { key: 'edit', label: 'تعديل المصروفات', default: false },
+      { key: 'delete', label: 'حذف مصروف', default: false },
+      { key: 'manage_categories', label: 'إدارة بنود المصروفات', default: false },
+      { key: 'settle_installments', label: 'سداد الأقساط المؤجلة', default: true },
+    ],
+  },
 ]
 
 export const PRESET_PERMISSIONS = {
@@ -180,6 +193,7 @@ export const PRESET_PERMISSIONS = {
       sales_reps: { view: false, create: false, edit: false, delete: false, manage_commissions: false, view_ledger: false },
       reports: { view: false, view_financial: false, view_ledgers: false, view_inventory: false, export_reports: false },
       staff: { view: false, invite_users: false, manage_permissions: false },
+      expenses: { view: true, create: true, edit: false, delete: false, manage_categories: false, settle_installments: false },
     },
   },
   warehouse: {
@@ -197,6 +211,7 @@ export const PRESET_PERMISSIONS = {
       sales_reps: { view: false, create: false, edit: false, delete: false, manage_commissions: false, view_ledger: false },
       reports: { view: false, view_financial: false, view_ledgers: false, view_inventory: false, export_reports: false },
       staff: { view: false, invite_users: false, manage_permissions: false },
+      expenses: { view: false, create: false, edit: false, delete: false, manage_categories: false, settle_installments: false },
     },
   },
   cutting_supervisor: {
@@ -214,6 +229,7 @@ export const PRESET_PERMISSIONS = {
       sales_reps: { view: false, create: false, edit: false, delete: false, manage_commissions: false, view_ledger: false },
       reports: { view: false, view_financial: false, view_ledgers: false, view_inventory: false, export_reports: false },
       staff: { view: false, invite_users: false, manage_permissions: false },
+      expenses: { view: false, create: false, edit: false, delete: false, manage_categories: false, settle_installments: false },
     },
   },
   van_driver: {
@@ -231,6 +247,7 @@ export const PRESET_PERMISSIONS = {
       sales_reps: { view: false, create: false, edit: false, delete: false, manage_commissions: false, view_ledger: false },
       reports: { view: false, view_financial: false, view_ledgers: false, view_inventory: false, export_reports: false },
       staff: { view: false, invite_users: false, manage_permissions: false },
+      expenses: { view: false, create: false, edit: false, delete: false, manage_categories: false, settle_installments: false },
     },
   },
   accountant: {
@@ -248,6 +265,7 @@ export const PRESET_PERMISSIONS = {
       sales_reps: { view: true, create: true, edit: true, delete: false, manage_commissions: true, view_ledger: true },
       reports: { view: true, view_financial: true, view_ledgers: true, view_inventory: true, export_reports: true },
       staff: { view: false, invite_users: false, manage_permissions: false },
+      expenses: { view: true, create: true, edit: true, delete: false, manage_categories: true, settle_installments: true },
     },
   },
   admin: {
@@ -265,6 +283,7 @@ export const PRESET_PERMISSIONS = {
       sales_reps: { view: true, create: true, edit: true, delete: true, manage_commissions: true, view_ledger: true },
       reports: { view: true, view_financial: true, view_ledgers: true, view_inventory: true, export_reports: true },
       staff: { view: true, invite_users: true, manage_permissions: true },
+      expenses: { view: true, create: true, edit: true, delete: true, manage_categories: true, settle_installments: true },
     },
   },
   sales_rep: {
@@ -282,6 +301,7 @@ export const PRESET_PERMISSIONS = {
       sales_reps: { view: true, create: false, edit: false, delete: false, manage_commissions: false, view_ledger: true },
       reports: { view: false, view_financial: false, view_ledgers: false, view_inventory: false, export_reports: false },
       staff: { view: false, invite_users: false, manage_permissions: false },
+      expenses: { view: false, create: false, edit: false, delete: false, manage_categories: false, settle_installments: false },
     },
   },
   warehouse_manager: {
@@ -299,6 +319,7 @@ export const PRESET_PERMISSIONS = {
       sales_reps: { view: false, create: false, edit: false, delete: false, manage_commissions: false, view_ledger: false },
       reports: { view: true, view_financial: false, view_ledgers: false, view_inventory: true, export_reports: true },
       staff: { view: false, invite_users: false, manage_permissions: false },
+      expenses: { view: true, create: true, edit: false, delete: false, manage_categories: false, settle_installments: false },
     },
   },
 }
@@ -370,6 +391,12 @@ export function hasModuleAccess(user, moduleId) {
   if (moduleId === 'employees') {
     return isMasterUser(user) || user.role === 'super_admin' || user.role === 'admin' || user.role === 'accountant' || user.role === 'branch_manager'
   }
+  if (moduleId === 'expenses') {
+    if (isMasterUser(user) || user.role === 'admin' || user.role === 'super_admin' || user.role === 'accountant') return true
+    const perms = Array.isArray(user.permissions) ? normalizePermissions(user.permissions) : (user.permissions || {})
+    const mod = perms[moduleId]
+    return Boolean(mod && mod.view)
+  }
   if (moduleId === 'sales' || moduleId === 'purchases') {
     if (isMasterUser(user) || user.role === 'admin' || user.role === 'super_admin') return true
     const perms = Array.isArray(user.permissions) ? normalizePermissions(user.permissions) : (user.permissions || {})
@@ -391,6 +418,7 @@ export function getFirstAccessibleTab(user) {
     'manufacturing',
     'distribution',
     'treasury',
+    'expenses',
     'customers',
     'suppliers',
     'sales_reps',

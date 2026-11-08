@@ -16,6 +16,7 @@ import {
   ShieldCheck,
   TrendingUp,
   ShoppingBag,
+  Receipt,
 } from 'lucide-react'
 import { useAXStore } from '../../store/useAXStore'
 import { hasModuleAccess } from '../../utils/permissionsConfig'
@@ -36,6 +37,7 @@ export function AX_MobileNavbar({ activeTab, onSelectTab }) {
     { id: 'sales', label: 'المبيعات', icon: TrendingUp, badge: 0 },
     { id: 'purchases', label: 'المشتريات', icon: ShoppingBag, badge: 0 },
     { id: 'treasury', label: 'الخزينة', icon: Wallet, badge: pendingCashCount },
+    { id: 'expenses', label: 'المصروفات', icon: Receipt, badge: 0 },
     { id: 'customers', label: 'العملاء', icon: UserCheck, badge: 0 },
     { id: 'suppliers', label: 'الموردين', icon: Building2, badge: 0 },
     { id: 'sales_reps', label: 'المناديب', icon: BadgePercent, badge: 0 },

@@ -35,3 +35,21 @@ Integrity mode: development
 - R5. Dynamic Multi-Unit Stock Counting
 - R6. Warehouse Valuation & Multi-Device Inventory Sync
 - R7. Verification & Architectural Invariants
+
+
+## 2026-11-08T21:47:41Z
+Sender: ffe5849c-ffd5-4508-a987-6e6a6fe7a68d
+Priority: MESSAGE_PRIORITY_HIGH
+
+Implement distribution van management and daily settlement workflows, standalone multi-tier expense and cost-center accounting, and employee HR navigation, calculations, hold-to-delete confirmation, and expense advance tracking in the Protein Food ERP production system.
+
+Working directory: d:\AXONID_PROJECTS\AX_FROZEN_FOODS
+Integrity mode: development
+
+## Requirements
+- R1. Distribution Vans Management & Stock Loading
+- R2. Van Daily Settlement (Financial, Stock & Expenses)
+- R3. Standalone Expenses & Multi-Tier Cost Centers
+- R4. HR Navigation & Mobile Responsive Layout
+- R5. Hold-to-Delete Confirmation, Wage Calculations & Deductions
+- R6. Employee Advances & Wage Settlements

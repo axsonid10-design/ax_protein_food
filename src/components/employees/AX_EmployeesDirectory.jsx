@@ -7,26 +7,36 @@ import {
   Briefcase,
   Building,
   Edit2,
-  Trash2,
   DollarSign,
   Calendar,
   CheckCircle,
   XCircle,
+  AlertOctagon,
+  Coins,
 } from 'lucide-react'
-import { AX_ConfirmModal } from '../common/AX_ConfirmModal'
+import { AX_HoldToDeleteButton } from './AX_HoldToDeleteButton'
+import { AX_EmployeeDeductionModal } from './AX_EmployeeDeductionModal'
+import { AX_EmployeeAdvanceModal } from './AX_EmployeeAdvanceModal'
 import { axToast } from '../common/AX_Toast'
 
 export function AX_EmployeesDirectory({
   employees = [],
+  attendanceRecords = [],
+  cashTransactions = [],
+  treasuryAccounts = [],
+  directDeductions = [],
+  payrollSettlements = [],
   onAddEmployee,
   onEditEmployee,
   onDeleteEmployee,
+  onSaveDeduction,
+  onSaveAdvance,
 }) {
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedDept, setSelectedDept] = useState('ALL')
   const [statusFilter, setStatusFilter] = useState('ALL')
-  const [employeeToDelete, setEmployeeToDelete] = useState(null)
-  const [isDeleting, setIsDeleting] = useState(false)
+  const [employeeForDeduction, setEmployeeForDeduction] = useState(null)
+  const [employeeForAdvance, setEmployeeForAdvance] = useState(null)
 
   const departments = useMemo(() => {
     const set = new Set(employees.map((e) => e.department).filter(Boolean))
@@ -49,17 +59,13 @@ export function AX_EmployeesDirectory({
     })
   }, [employees, searchQuery, selectedDept, statusFilter])
 
-  const handleConfirmDelete = async () => {
-    if (!employeeToDelete) return
+  const handleHoldDelete = async (emp) => {
+    if (!emp) return
     try {
-      setIsDeleting(true)
-      await onDeleteEmployee(employeeToDelete.id)
-      axToast.success(`تم حذف الموظف "${employeeToDelete.name}" ونقله لسلة المحذوفات بنجاح`)
-      setEmployeeToDelete(null)
+      await onDeleteEmployee(emp.id)
+      axToast.success(`تم حذف الموظف "${emp.name}" ونقله لسلة المحذوفات بنجاح`)
     } catch {
       axToast.error('حدث خطأ أثناء حذف الموظف')
-    } finally {
-      setIsDeleting(false)
     }
   }
 
@@ -183,20 +189,34 @@ export function AX_EmployeesDirectory({
                       <div className="inline-flex items-center gap-1.5">
                         <button
                           type="button"
-                          onClick={() => onEditEmployee(emp)}
-                          className="w-7 h-7 rounded-full bg-surface-low hover:bg-surface-container flex items-center justify-center text-on-surface-variant hover:text-primary transition-colors cursor-pointer"
-                          title="تعديل"
+                          onClick={() => setEmployeeForAdvance(emp)}
+                          className="w-7 h-7 rounded-full bg-surface-low hover:bg-amber-500/10 flex items-center justify-center text-on-surface-variant hover:text-amber-700 transition-colors cursor-pointer"
+                          title="صرف سلفة للموظف"
                         >
-                          <Edit2 className="w-3.5 h-3.5" />
+                          <Coins className="w-3.5 h-3.5" />
                         </button>
                         <button
                           type="button"
-                          onClick={() => setEmployeeToDelete(emp)}
+                          onClick={() => setEmployeeForDeduction(emp)}
                           className="w-7 h-7 rounded-full bg-surface-low hover:bg-rose-500/10 flex items-center justify-center text-on-surface-variant hover:text-rose-700 transition-colors cursor-pointer"
-                          title="حذف"
+                          title="تسجيل خصم أو جزاء"
                         >
-                          <Trash2 className="w-3.5 h-3.5" />
+                          <AlertOctagon className="w-3.5 h-3.5" />
                         </button>
+                        <button
+                          type="button"
+                          onClick={() => onEditEmployee(emp)}
+                          className="w-7 h-7 rounded-full bg-surface-low hover:bg-surface-container flex items-center justify-center text-on-surface-variant hover:text-primary transition-colors cursor-pointer"
+                          title="تعديل بيانات الموظف"
+                        >
+                          <Edit2 className="w-3.5 h-3.5" />
+                        </button>
+                        <AX_HoldToDeleteButton
+                          compact={true}
+                          durationMs={2500}
+                          onTrigger={() => handleHoldDelete(emp)}
+                          title="اضغط مطولاً لمدة 2.5 ثانية لحذف الموظف"
+                        />
                       </div>
                     </td>
                   </tr>
@@ -226,18 +246,34 @@ export function AX_EmployeesDirectory({
                 <div className="flex items-center gap-1">
                   <button
                     type="button"
-                    onClick={() => onEditEmployee(emp)}
-                    className="w-7 h-7 rounded-full bg-surface-low flex items-center justify-center text-on-surface-variant cursor-pointer"
+                    onClick={() => setEmployeeForAdvance(emp)}
+                    className="w-7 h-7 rounded-full bg-surface-low text-amber-700 flex items-center justify-center cursor-pointer"
+                    title="سلفة"
                   >
-                    <Edit2 className="w-3.5 h-3.5" />
+                    <Coins className="w-3.5 h-3.5" />
                   </button>
                   <button
                     type="button"
-                    onClick={() => setEmployeeToDelete(emp)}
+                    onClick={() => setEmployeeForDeduction(emp)}
                     className="w-7 h-7 rounded-full bg-surface-low text-rose-700 flex items-center justify-center cursor-pointer"
+                    title="خصم"
                   >
-                    <Trash2 className="w-3.5 h-3.5" />
+                    <AlertOctagon className="w-3.5 h-3.5" />
                   </button>
+                  <button
+                    type="button"
+                    onClick={() => onEditEmployee(emp)}
+                    className="w-7 h-7 rounded-full bg-surface-low flex items-center justify-center text-on-surface-variant cursor-pointer"
+                    title="تعديل"
+                  >
+                    <Edit2 className="w-3.5 h-3.5" />
+                  </button>
+                  <AX_HoldToDeleteButton
+                    compact={true}
+                    durationMs={2500}
+                    onTrigger={() => handleHoldDelete(emp)}
+                    title="اضغط مطولاً لمدة 2.5 ثانية لحذف الموظف"
+                  />
                 </div>
               </div>
 
@@ -254,18 +290,30 @@ export function AX_EmployeesDirectory({
         })}
       </div>
 
-      {employeeToDelete && (
-        <AX_ConfirmModal
-          isOpen={Boolean(employeeToDelete)}
-          title="تأكيد حذف الموظف"
-          message={`هل أنت متأكد من حذف الموظف "${employeeToDelete.name}"؟ سيتم نقل بياناته إلى سلة المحذوفات بحيث يمكنك استرجاعه في أي وقت.`}
-          confirmText="نعم، حذف الموظف"
-          cancelText="تراجع"
-          isDestructive={true}
-          onConfirm={handleConfirmDelete}
-          onCancel={() => setEmployeeToDelete(null)}
+      {employeeForDeduction && (
+        <AX_EmployeeDeductionModal
+          isOpen={Boolean(employeeForDeduction)}
+          onClose={() => setEmployeeForDeduction(null)}
+          employee={employeeForDeduction}
+          onSaveDeduction={onSaveDeduction}
+        />
+      )}
+
+      {employeeForAdvance && (
+        <AX_EmployeeAdvanceModal
+          isOpen={Boolean(employeeForAdvance)}
+          onClose={() => setEmployeeForAdvance(null)}
+          employee={employeeForAdvance}
+          attendanceRecords={attendanceRecords}
+          cashTransactions={cashTransactions}
+          treasuryAccounts={treasuryAccounts}
+          directDeductions={directDeductions}
+          payrollSettlements={payrollSettlements}
+          onSaveAdvance={onSaveAdvance}
         />
       )}
     </div>
   )
 }
+
+export default AX_EmployeesDirectory

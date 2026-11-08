@@ -1,47 +1,66 @@
-import React, { useState } from 'react'
-import { Truck, Wallet, Boxes, MapPin, CheckCircle2, Clock, ArrowUpRight, Plus, ShoppingCart, PackagePlus } from 'lucide-react'
+import React, { useState, useMemo } from 'react'
+import {
+  Truck,
+  Plus,
+  ShoppingCart,
+  Boxes,
+  CheckCircle2,
+} from 'lucide-react'
 import { useAXStore } from '../../store/useAXStore'
-import { AX_SearchableSelect } from '../common/AX_SearchableSelect'
 import { generateUUID } from '../../utils/AX_UUID'
-import { showToast } from '../common/AX_Toast'
+import { axToast } from '../common/AX_Toast'
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock'
+import {
+  getVanWarehouses,
+  getVanCashAccount,
+} from '../../store/vanDistributionHelpers'
+import { AX_AddVehicleModal } from './AX_AddVehicleModal'
+import { AX_VanStockLoadingModal } from './AX_VanStockLoadingModal'
+import { AX_VanCustodySummaryCard } from './AX_VanCustodySummaryCard'
+import { AX_VanSettlementModal } from './AX_VanSettlementModal'
+import { AX_VanSettlementReceiptModal } from './AX_VanSettlementReceiptModal'
+import { AX_SearchableSelect } from '../common/AX_SearchableSelect'
 
 export function AX_VanDistribution() {
-  const {
-    warehouses = [],
-    distributors = [],
-    treasuryAccounts = [],
-    inventoryStock = [],
-    items = [],
-    clients = [],
-    addPendingCashTransfer,
-    confirmTransfer,
-    addTransfer,
-    addInvoice,
-  } = useAXStore()
+  const warehouses = useAXStore((state) => state.warehouses) || []
+  const distributors = useAXStore((state) => state.distributors) || []
+  const treasuryAccounts = useAXStore((state) => state.treasuryAccounts) || []
+  const inventoryStock = useAXStore((state) => state.inventoryStock) || []
+  const items = useAXStore((state) => state.items) || []
+  const clients = useAXStore((state) => state.clients) || []
+  const addInvoice = useAXStore((state) => state.addInvoice)
 
-  const vanWarehouses = (distributors && distributors.length > 0)
-    ? distributors.map((d) => ({ id: d.id, name: d.name, manager: d.vanNumber || 'المندوب' }))
-    : (warehouses || []).filter((w) => w.type === 'van').length > 0
-      ? warehouses.filter((w) => w.type === 'van')
-      : [{ id: 'b0000000-0000-0000-0000-000000000010', name: 'سيارة التوزيع الميداني (1)', manager: 'مندوب التوزيع' }]
+  const vanWarehouses = useMemo(() => {
+    return getVanWarehouses(warehouses, distributors)
+  }, [warehouses, distributors])
 
-  const [selectedVanId, setSelectedVanId] = useState(vanWarehouses[0]?.id || 'b0000000-0000-0000-0000-000000000010')
-  const [remitAmount, setRemitAmount] = useState('')
-  const [remitToTreasuryId, setRemitToTreasuryId] = useState('')
-  const [showRemitModal, setShowRemitModal] = useState(false)
+  const [selectedVanId, setSelectedVanId] = useState(() => vanWarehouses[0]?.id || '')
+
+  const currentVan = useMemo(() => {
+    return vanWarehouses.find((w) => w.id === selectedVanId) || vanWarehouses[0]
+  }, [vanWarehouses, selectedVanId])
+
+  const currentVanCash = useMemo(() => {
+    return getVanCashAccount(treasuryAccounts, currentVan)
+  }, [treasuryAccounts, currentVan])
+
+  const currentVanStock = useMemo(() => {
+    if (!currentVan?.id) return []
+    return inventoryStock.filter(
+      (s) =>
+        (s.warehouseId === currentVan.id || s.warehouse_id === currentVan.id) &&
+        Number(s.quantity) > 0
+    )
+  }, [inventoryStock, currentVan])
+
+  const [showAddVehicleModal, setShowAddVehicleModal] = useState(false)
   const [showLoadModal, setShowLoadModal] = useState(false)
   const [showSaleModal, setShowSaleModal] = useState(false)
+  const [showSettlementModal, setShowSettlementModal] = useState(false)
+  const [showReceiptModal, setShowReceiptModal] = useState(false)
+  const [activeSettlementReceipt, setActiveSettlementReceipt] = useState(null)
 
-  useBodyScrollLock(showRemitModal, () => setShowRemitModal(false))
-  useBodyScrollLock(showLoadModal, () => setShowLoadModal(false))
   useBodyScrollLock(showSaleModal, () => setShowSaleModal(false))
-
-  const [loadForm, setLoadForm] = useState({
-    fromWarehouseId: warehouses.find((w) => w.type !== 'van')?.id || warehouses[0]?.id || '',
-    itemId: items[0]?.id || '',
-    quantity: 10,
-  })
 
   const [saleForm, setSaleForm] = useState({
     itemId: '',
@@ -50,84 +69,31 @@ export function AX_VanDistribution() {
     price: 100,
   })
 
-  const getVanCashAccount = (vanId) => {
-    return (treasuryAccounts || []).find((t) => t.type === 'van_cash') || { balance: 0, id: 'c0000000-0000-0000-0000-000000000005', name: 'عهدة سيارة التوزيع', type: 'van_cash' }
+  const getItemObj = (id) => items.find((i) => i.id === id) || {}
+
+  const handleOpenDirectSale = () => {
+    const firstStockItem = currentVanStock[0]
+    const itObj = firstStockItem ? getItemObj(firstStockItem.itemId) : null
+    setSaleForm({
+      itemId: firstStockItem?.itemId || '',
+      clientName: clients[0]?.name || 'عميل نقدي',
+      quantity: 1,
+      price: itObj?.sellPrice || 100,
+    })
+    setShowSaleModal(true)
   }
 
-  const getItemName = (id) => (items || []).find((i) => i.id === id)?.compositeName || id
-  const getItemObj = (id) => (items || []).find((i) => i.id === id)
-
-  const currentVan = vanWarehouses.find((w) => w.id === selectedVanId) || vanWarehouses[0] || { id: 'b0000000-0000-0000-0000-000000000010', name: 'سيارة التوزيع', manager: 'المندوب' }
-  const currentVanStock = (inventoryStock || []).filter((s) => s.warehouseId === currentVan?.id)
-  const currentVanCash = getVanCashAccount(currentVan?.id)
-
-  const targetTreasuryOptions = (treasuryAccounts || [])
-    .filter((t) => t.id !== currentVanCash.id)
-    .map((t) => ({ value: t.id, label: t.name, badge: `${(Number(t.balance) || 0).toLocaleString('en-US')} ج.م` }))
-
-  const handleRemitCash = (e) => {
+  const handleExecuteVanSale = (e) => {
     e.preventDefault()
-    const amt = Number(remitAmount)
-    if (!amt || amt <= 0) return
-
-    const destId = remitToTreasuryId || targetTreasuryOptions[0]?.value || 'c0000000-0000-0000-0000-000000000001'
-    if (currentVanCash.id === destId) {
-      showToast('لا يمكن التصفية لنفس حساب عهدة السيارة، يرجى اختيار خزينة استلام مختلفة', 'warning')
+    if (!saleForm.itemId || Number(saleForm.quantity) <= 0) {
+      axToast.error('يرجى اختيار صنف وتحديد كمية مباعة صحيحة')
       return
     }
-
-    try {
-      const newPct = {
-        id: generateUUID(),
-        code: `REMIT-${Date.now().toString().slice(-4)}`,
-        fromTreasuryId: currentVanCash.id,
-        toTreasuryId: destId,
-        amount: amt,
-        status: 'pending',
-        date: new Date().toISOString().split('T')[0],
-        senderName: currentVan.manager || 'مندوب التوزيع',
-        notes: `توريد وتصفية نقدية من ${currentVan.name}`,
-      }
-
-      addPendingCashTransfer(newPct)
-      setRemitAmount('')
-      setShowRemitModal(false)
-      showToast('تم إرسال إشعار توريد وتصفية النقدية بنجاح', 'success')
-    } catch (err) {
-      showToast(err?.message || 'حدث خطأ أثناء إرسال إشعار التوريد', 'error')
-    }
-  }
-
-  const handleLoadStock = (e) => {
-    e.preventDefault()
-    if (!loadForm.itemId || Number(loadForm.quantity) <= 0 || !loadForm.fromWarehouseId) return
-
-    const itObj = getItemObj(loadForm.itemId)
-    const newTrf = {
-      id: generateUUID(),
-      code: `TRF-${Date.now().toString().slice(-4)}`,
-      fromId: loadForm.fromWarehouseId,
-      toId: currentVan.id,
-      items: [{ itemId: loadForm.itemId, quantity: Number(loadForm.quantity), unit: itObj?.unitType || 'كرتونة' }],
-      status: 'confirmed',
-      requestedAt: new Date().toISOString(),
-      confirmedAt: new Date().toISOString(),
-      notes: `شحن بضاعة لسيارة التوزيع ${currentVan.name}`,
-    }
-
-    addTransfer(newTrf)
-    confirmTransfer(newTrf.id)
-    setShowLoadModal(false)
-  }
-
-  const handleVanSale = (e) => {
-    e.preventDefault()
-    if (!saleForm.itemId || Number(saleForm.quantity) <= 0) return
 
     const itObj = getItemObj(saleForm.itemId)
     const qty = Number(saleForm.quantity)
     const unitPrice = Number(saleForm.price) || 0
-    const tot = qty * unitPrice
+    const totalAmount = qty * unitPrice
 
     const newInv = {
       id: generateUUID(),
@@ -136,246 +102,158 @@ export function AX_VanDistribution() {
       partyName: saleForm.clientName.trim(),
       date: new Date().toISOString().split('T')[0],
       warehouseId: currentVan.id,
-      items: [{ itemId: saleForm.itemId, compositeName: itObj?.compositeName || '', quantity: qty, unit: itObj?.unitType || 'كرتونة', price: unitPrice, total: tot }],
+      items: [
+        {
+          itemId: saleForm.itemId,
+          compositeName: itObj?.compositeName || itObj?.name || '',
+          quantity: qty,
+          unit: itObj?.unitType || 'كرتونة',
+          price: unitPrice,
+          total: totalAmount,
+        },
+      ],
       transportCost: 0,
       loadingCost: 0,
-      subtotal: tot,
-      total: tot,
-      paidAmount: tot,
+      subtotal: totalAmount,
+      total: totalAmount,
+      paidAmount: totalAmount,
       remainingAmount: 0,
       status: 'paid',
       paymentTerms: 'مدفوع كلي',
       treasuryId: currentVanCash.id,
     }
 
-    addInvoice(newInv)
-    setShowSaleModal(false)
+    try {
+      addInvoice(newInv)
+      axToast.success(`تم قيد البيع النقدي الميداني [${newInv.code}] بنجاح`)
+      setShowSaleModal(false)
+    } catch {
+      axToast.error('فشل في تسجيل عملية البيع')
+    }
+  }
+
+  const handleVehicleCreated = (newVehicle) => {
+    setSelectedVanId(newVehicle.id)
+  }
+
+  const handleSettlementFinished = (settlementRecord) => {
+    setActiveSettlementReceipt(settlementRecord)
+    setShowReceiptModal(true)
   }
 
   return (
-    <div className="space-y-6">
+    <div className="w-full px-3 sm:px-6 lg:px-8 space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <span className="text-xs font-bold text-on-surface-variant">
-          اختر سيارة المندوب:
-        </span>
-
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar">
           {vanWarehouses.map((van) => (
             <button
               key={van.id}
               type="button"
               onClick={() => setSelectedVanId(van.id)}
-              className={`px-4 py-1.5 rounded-full text-xs font-black transition-all cursor-pointer ${
-                selectedVanId === van.id
+              className={`px-4 py-2 rounded-full text-xs font-black transition-all cursor-pointer flex items-center gap-1.5 shrink-0 ${
+                currentVan?.id === van.id
                   ? 'bg-primary text-white shadow-level1'
                   : 'bg-surface-lowest border border-outline-variant/30 text-on-surface hover:bg-surface-container'
               }`}
             >
-              {van.name}
+              <Truck className="w-3.5 h-3.5" />
+              <span>{van.name}</span>
             </button>
           ))}
         </div>
+
+        <button
+          type="button"
+          onClick={() => setShowAddVehicleModal(true)}
+          className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-secondary hover:bg-secondary-hover text-white text-xs font-black transition-all cursor-pointer shadow-xs"
+        >
+          <Plus className="w-4 h-4" />
+          <span>إضافة سيارة جديدة</span>
+        </button>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="bg-surface-lowest border border-outline-variant/30 rounded-3xl p-5 shadow-level1 space-y-4">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-on-surface-variant">بيانات السيارة والمندوب</span>
-            <span className="px-2.5 py-0.5 rounded-full bg-secondary-container text-secondary-on-container text-[11px] font-bold">
-              متصل ميدانياً
-            </span>
-          </div>
+      <AX_VanCustodySummaryCard
+        currentVan={currentVan}
+        currentVanCash={currentVanCash}
+        currentVanStock={currentVanStock}
+        items={items}
+        onOpenLoadModal={() => setShowLoadModal(true)}
+        onOpenSaleModal={handleOpenDirectSale}
+        onOpenSettlementModal={() => setShowSettlementModal(true)}
+      />
 
-          <div>
-            <h3 className="font-black text-base text-on-surface">{currentVan?.name}</h3>
-            <span className="text-xs text-on-surface-variant font-bold block mt-1">
-              المندوب المسؤول: {currentVan?.manager}
-            </span>
-            <div className="flex items-center gap-1.5 text-xs text-primary font-bold mt-2">
-              <MapPin className="w-3.5 h-3.5" />
-              <span>خط سير الدلتا • طنطا والمحلة الكبرى</span>
-            </div>
-          </div>
-
-          <div className="p-4 rounded-2xl bg-surface-low border border-outline-variant/30 space-y-3">
-            <div className="flex items-center justify-between text-xs">
-              <span className="text-on-surface-variant font-bold flex items-center gap-1">
-                <Wallet className="w-4 h-4 text-primary" /> عهدة نقدية بالسيارة:
-              </span>
-              <span className="font-mono font-black text-primary text-sm">
-                {(Number(currentVanCash?.balance) || 0).toLocaleString('en-US')} ج.م
-              </span>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
-              <button type="button" onClick={() => setShowSaleModal(true)} disabled={currentVanStock.length === 0} className="py-2 px-3 rounded-full bg-secondary hover:bg-secondary-hover text-white text-xs font-black shadow-sm transition-all flex items-center justify-center gap-1.5 disabled:opacity-40 cursor-pointer">
-                <ShoppingCart className="w-3.5 h-3.5" />
-                <span>تسجيل بيع</span>
-              </button>
-              <button type="button" onClick={() => setShowRemitModal(true)} className="py-2 px-3 rounded-full bg-primary hover:bg-primary-dark text-white text-xs font-black shadow-sm transition-all flex items-center justify-center gap-1.5 cursor-pointer">
-                <ArrowUpRight className="w-3.5 h-3.5" />
-                <span>تصفية وتوريد نقدية</span>
-              </button>
-            </div>
-          </div>
-        </div>
-
-        <div className="md:col-span-2 bg-surface-lowest border border-outline-variant/30 rounded-3xl p-5 shadow-level1 space-y-4">
-          <div className="flex items-center justify-between">
-            <h3 className="text-sm font-black text-on-surface flex items-center gap-2">
-              <Boxes className="w-4 h-4 text-primary" />
-              بضاعة السيارة
-            </h3>
-
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-bold text-on-surface-variant">
-                أصناف: {currentVanStock.length}
-              </span>
-
-              <button
-                type="button"
-                onClick={() => setShowLoadModal(true)}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-primary text-white text-xs font-black hover:bg-primary-dark transition-all cursor-pointer shadow-xs"
-              >
-                <PackagePlus className="w-3.5 h-3.5" />
-                <span>شحن بضاعة للسيارة</span>
-              </button>
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            {currentVanStock.length === 0 ? (
-              <div className="py-8 text-center space-y-2">
-                <p className="text-xs text-on-surface-variant font-bold">
-                  السيارة خالية حالياً، يمكنك شحن أصناف من المخازن المركزية.
-                </p>
-                <button
-                  type="button"
-                  onClick={() => setShowLoadModal(true)}
-                  className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full bg-surface-low border border-outline-variant/40 hover:border-primary text-xs font-bold text-primary transition-all cursor-pointer"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  <span>تحميل أصناف للسيارة</span>
-                </button>
-              </div>
-            ) : (
-              currentVanStock.map((s, idx) => (
-                <div
-                  key={idx}
-                  className="flex items-center justify-between p-3 rounded-2xl bg-surface-low border border-outline-variant/20"
-                >
-                  <div className="space-y-0.5">
-                    <span className="font-black text-sm text-on-surface">{getItemName(s.itemId)}</span>
-                  </div>
-                  <div className="text-left font-mono font-black text-base text-primary">
-                    {s.quantity} {s.unit}
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        </div>
-      </div>
+      <AX_AddVehicleModal
+        isOpen={showAddVehicleModal}
+        onClose={() => setShowAddVehicleModal(false)}
+        onCreated={handleVehicleCreated}
+      />
 
       {showLoadModal && (
-        <form
-          onSubmit={handleLoadStock}
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in"
-        >
-          <div className="bg-surface-lowest border-2 border-primary/30 rounded-3xl p-6 shadow-level3 max-w-md w-full space-y-4">
-            <div className="flex items-center justify-between border-b border-surface-container pb-3">
-              <span className="text-sm font-black text-on-surface flex items-center gap-2">
-                <PackagePlus className="w-4 h-4 text-primary" />
-                شحن بضاعة إلى {currentVan.name}
-              </span>
-            </div>
-
-            <div className="space-y-3">
-              <div>
-                <label className="text-xs font-bold text-on-surface-variant block mb-1">المخزن المصدر</label>
-                <AX_SearchableSelect
-                  value={loadForm.fromWarehouseId}
-                  onChange={(val) => setLoadForm({ ...loadForm, fromWarehouseId: val })}
-                  options={warehouses.filter((w) => w.id !== currentVan.id).map((w) => ({ value: w.id, label: w.name, badge: w.type === 'main' ? 'رئيسي' : 'فرع' }))}
-                  placeholder="اختر المخزن المصدر..."
-                />
-              </div>
-
-              <div>
-                <label className="text-xs font-bold text-on-surface-variant block mb-1">الصنف المراد شحنه</label>
-                <AX_SearchableSelect
-                  value={loadForm.itemId}
-                  onChange={(val) => setLoadForm({ ...loadForm, itemId: val })}
-                  options={items.map((it) => ({ value: it.id, label: it.compositeName, sublabel: it.unitType }))}
-                  placeholder="اختر الصنف..."
-                />
-              </div>
-
-              <div>
-                <label className="text-xs font-bold text-on-surface-variant block mb-1">الكمية المشحونة</label>
-                <input
-                  type="number"
-                  required
-                  min="1"
-                  value={loadForm.quantity}
-                  onChange={(e) => setLoadForm({ ...loadForm, quantity: e.target.value })}
-                  className="w-full px-3.5 py-2 rounded-2xl bg-surface-low border border-outline-variant/30 text-xs font-bold text-on-surface font-mono"
-                />
-              </div>
-            </div>
-
-            <div className="flex justify-end gap-2 pt-2 border-t border-surface-container">
-              <button
-                type="button"
-                onClick={() => setShowLoadModal(false)}
-                className="px-5 py-2 rounded-full bg-surface-container text-on-surface-variant text-xs font-bold cursor-pointer"
-              >
-                إلغاء
-              </button>
-              <button
-                type="submit"
-                className="px-6 py-2 rounded-full bg-primary text-white text-xs font-extrabold shadow-sm hover:bg-primary-dark cursor-pointer"
-              >
-                تأكيد الشحن للسيارة
-              </button>
-            </div>
-          </div>
-        </form>
+        <AX_VanStockLoadingModal
+          isOpen={showLoadModal}
+          onClose={() => setShowLoadModal(false)}
+          currentVan={currentVan}
+        />
       )}
+
+      {showSettlementModal && (
+        <AX_VanSettlementModal
+          isOpen={showSettlementModal}
+          onClose={() => setShowSettlementModal(false)}
+          currentVan={currentVan}
+          currentVanCash={currentVanCash}
+          currentVanStock={currentVanStock}
+          onSettlementCompleted={handleSettlementFinished}
+        />
+      )}
+
+      <AX_VanSettlementReceiptModal
+        isOpen={showReceiptModal}
+        onClose={() => setShowReceiptModal(false)}
+        settlement={activeSettlementReceipt}
+      />
 
       {showSaleModal && (
         <form
-          onSubmit={handleVanSale}
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in"
+          onSubmit={handleExecuteVanSale}
+          className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-sm animate-in fade-in"
         >
-          <div className="bg-surface-lowest border-2 border-secondary/30 rounded-3xl p-6 shadow-level3 max-w-md w-full space-y-4">
+          <div className="bg-surface-lowest border-2 border-secondary/30 rounded-3xl p-5 sm:p-6 shadow-level3 max-w-md w-full space-y-4">
             <div className="flex items-center justify-between border-b border-surface-container pb-3">
               <span className="text-sm font-black text-on-surface flex items-center gap-2">
                 <ShoppingCart className="w-4 h-4 text-secondary" />
-                تسجيل بيع نقدي من {currentVan.name}
+                تسجيل بيع نقدي من {currentVan?.name}
               </span>
             </div>
 
             <div className="space-y-3">
               <div>
-                <label className="text-xs font-bold text-on-surface-variant block mb-1">الصنف المباع من السيارة</label>
+                <label className="text-xs font-bold text-on-surface-variant block mb-1">
+                  الصنف المباع من السيارة
+                </label>
                 <AX_SearchableSelect
                   value={saleForm.itemId || currentVanStock[0]?.itemId || ''}
                   onChange={(val) => {
                     const it = getItemObj(val)
-                    setSaleForm({ ...saleForm, itemId: val, price: it?.sellPrice || 100 })
+                    setSaleForm({
+                      ...saleForm,
+                      itemId: val,
+                      price: it?.sellPrice || 100,
+                    })
                   }}
                   options={currentVanStock.map((s) => ({
                     value: s.itemId,
-                    label: getItemName(s.itemId),
-                    badge: `${s.quantity} ${s.unit} متاح`,
+                    label: getItemObj(s.itemId)?.compositeName || s.itemId,
+                    badge: `${s.quantity} ${s.unit || 'كرتونة'} متاح`,
                   }))}
-                  placeholder="اختر الصنف من السيارة..."
+                  placeholder="اختر الصنف من رصيد السيارة..."
                 />
               </div>
 
               <div>
-                <label className="text-xs font-bold text-on-surface-variant block mb-1">اسم العميل / المستلم</label>
+                <label className="text-xs font-bold text-on-surface-variant block mb-1">
+                  اسم العميل / المستلم
+                </label>
                 <input
                   type="text"
                   required
@@ -388,19 +266,23 @@ export function AX_VanDistribution() {
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-xs font-bold text-on-surface-variant block mb-1">الكمية المباعة</label>
+                  <label className="text-xs font-bold text-on-surface-variant block mb-1">
+                    الكمية المباعة (كرتونة)
+                  </label>
                   <input
                     type="number"
+                    step="any"
                     required
-                    min="1"
-                    max={currentVanStock.find((s) => s.itemId === (saleForm.itemId || currentVanStock[0]?.itemId))?.quantity || 999}
+                    min="0.1"
                     value={saleForm.quantity}
                     onChange={(e) => setSaleForm({ ...saleForm, quantity: e.target.value })}
                     className="w-full px-3 py-2 rounded-2xl bg-surface-low border border-outline-variant/30 text-xs font-bold text-on-surface font-mono"
                   />
                 </div>
                 <div>
-                  <label className="text-xs font-bold text-on-surface-variant block mb-1">سعر الوحدة (ج.م)</label>
+                  <label className="text-xs font-bold text-on-surface-variant block mb-1">
+                    سعر الكرتونة (ج.م)
+                  </label>
                   <input
                     type="number"
                     required
@@ -413,7 +295,7 @@ export function AX_VanDistribution() {
               </div>
 
               <div className="p-3 rounded-2xl bg-surface-low flex items-center justify-between text-xs font-black">
-                <span className="text-on-surface-variant">إجمالي المبلغ المحصل بالسيارة:</span>
+                <span className="text-on-surface-variant">إجمالي التحصيل الميداني:</span>
                 <span className="font-mono text-primary text-sm">
                   {((Number(saleForm.quantity) || 0) * (Number(saleForm.price) || 0)).toLocaleString('en-US')} ج.م
                 </span>
@@ -430,58 +312,9 @@ export function AX_VanDistribution() {
               </button>
               <button
                 type="submit"
-                className="px-6 py-2 rounded-full bg-secondary text-white text-xs font-extrabold shadow-sm hover:bg-secondary-hover cursor-pointer"
+                className="px-6 py-2 rounded-full bg-secondary hover:bg-secondary-hover text-white text-xs font-black shadow-xs cursor-pointer transition-all"
               >
                 قيد البيع واستلام النقدية
-              </button>
-            </div>
-          </div>
-        </form>
-      )}
-
-      {showRemitModal && (
-        <form onSubmit={handleRemitCash} className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in">
-          <div className="bg-surface-lowest border-2 border-primary/30 rounded-3xl p-6 shadow-level3 max-w-md w-full space-y-4">
-            <div className="flex items-center justify-between border-b border-surface-container pb-3">
-              <span className="text-sm font-black text-on-surface flex items-center gap-2">
-                <ArrowUpRight className="w-4 h-4 text-primary" />
-                تصفية وتوريد نقدية السيارة للخزينة
-              </span>
-            </div>
-
-            <div className="space-y-1.5">
-              <label className="text-xs font-bold text-on-surface-variant">الخزينة المستلمة للتوريد</label>
-              <AX_SearchableSelect
-                value={remitToTreasuryId || targetTreasuryOptions[0]?.value || ''}
-                onChange={setRemitToTreasuryId}
-                options={targetTreasuryOptions}
-                searchable={false}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-xs font-bold text-on-surface-variant">المبلغ المراد توريده (ج.م)</label>
-              <input
-                type="number"
-                required
-                min="1"
-                max={currentVanCash?.balance || 999999}
-                placeholder="0"
-                value={remitAmount}
-                onChange={(e) => setRemitAmount(e.target.value)}
-                className="w-full px-4 py-2.5 rounded-2xl bg-surface-low border border-outline-variant/30 text-sm font-bold text-on-surface font-mono"
-              />
-              <span className="text-[11px] text-on-surface-variant block">
-                الرصيد المتاح بعهدة السيارة: {(Number(currentVanCash?.balance) || 0).toLocaleString('en-US')} ج.م
-              </span>
-            </div>
-
-            <div className="flex justify-end gap-3 pt-2 border-t border-surface-container">
-              <button type="button" onClick={() => setShowRemitModal(false)} className="px-5 py-2 rounded-full bg-surface-container text-on-surface-variant text-xs font-bold cursor-pointer">
-                إلغاء
-              </button>
-              <button type="submit" className="px-6 py-2 rounded-full bg-primary text-white text-xs font-extrabold shadow-sm hover:bg-primary-dark cursor-pointer">
-                إرسال إشعار التصفية والتوريد
               </button>
             </div>
           </div>

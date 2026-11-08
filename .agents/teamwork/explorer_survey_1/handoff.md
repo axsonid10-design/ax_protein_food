@@ -1,111 +1,176 @@
-# Handoff Report — Explorer Survey 1
-
-**Agent:** Explorer 1 (Codebase & Architecture Explorer)  
-**Task:** Project Survey & Architectural Mapping  
-**Working Directory:** `d:\AXONID_PROJECTS\AX_FROZEN_FOODS\.agents\teamwork\explorer_survey_1\`  
-**Target Recipient:** Orchestrator / Parent Agent (`dc5da5ed-817b-4784-a7e6-1365172c95ec`)  
-**Date:** 2026-10-31  
+# Handoff Report — Explorer Survey 1 (Requirements R1 & R2)
+**Agent**: `explorer_survey_1`  
+**Working Directory**: `d:\AXONID_PROJECTS\AX_FROZEN_FOODS\.agents\teamwork\explorer_survey_1`  
+**Date**: 2026-11-08  
+**Scope**: Requirements R1 (Distribution Vans Management & Stock Loading) & R2 (Van Daily Settlement)  
+**Type**: Hard Handoff (Investigation & Architecture Complete)
 
 ---
 
 ## 1. Observation
 
-1. **Build & Development Tooling (`package.json`, lines 1-32):**
-   - React 18.3.1, Vite 6.0.11, vite-plugin-pwa 1.3.0, Tailwind CSS 3.4.17, Zustand 5.0.3, @supabase/supabase-js 2.117.2, Lucide React 1.16.0.
-   - Script `"test": "node --test tests/*.test.js"`.
-2. **Local Port & Server Configuration (`vite.config.js`, lines 84-88):**
-   - Configured port is `8182` with `strictPort: true` and `host: true`.
-   - Manifest theme color is `'#0284c7'`.
-3. **Existing Test Suite Output (`npm test`):**
-   - Ran command `npm test`.
-   - Result: 9 test suites, **198 passing tests**, 0 failures, execution duration 259ms.
-   - Audited invariants in `tests/file-invariants.test.js`: every `.js`/`.jsx` file in `src/` must NOT exceed 500 lines.
-   - Audited invariants in `tests/hooks-integrity.test.js`: no component may execute early return before declaring React hooks.
-4. **Routing & Navigation Architecture (`src/App.jsx`, lines 34, 230-249):**
-   - Client-side tab state in Zustand: `activeTab`, persisted in URL `?tab=` and `localStorage`.
-   - Access controlled by `hasModuleAccess(profile, activeTab)`.
-   - Desktop sidebar (`AX_Sidebar.jsx`) and mobile navbar (`AX_MobileNavbar.jsx`).
-   - Modules currently present: `dashboard`, `items`, `warehouses`, `manufacturing`, `distribution`, `treasury`, `invoices`, `reports`, `staff`.
-   - Modules missing per user request: `customers`, `suppliers`, `sales_reps`.
-5. **State Management & Persistence (`src/store/useAXStore.js`, `src/services/`):**
-   - Dual persistence: `localStorage` + IndexedDB (`ax_frozen_foods_db` via `offlineDB.js` with `offline_queue` and `cache_store`).
-   - Supabase client in `supabaseClient.js` connected to `https://gwxumpjezcwxhpuicwfi.supabase.co`.
-   - `AX_DatabaseSync.js` performs startup hydration via `Promise.all` across 17 tables and subscribes to Postgres realtime replication.
-   - `clients` and `suppliers` exist in Zustand state (`initialClients`, `initialSuppliers`), but have no dedicated management screens or full CRUD handlers.
-   - `sales_reps` and commission calculation structures are completely absent.
-6. **ImageKit Configuration (`.env`, lines 5-6):**
-   - `VITE_IMAGEKIT_URL_ENDPOINT=https://ik.imagekit.io/c8zctprqq`
-   - `VITE_IMAGEKIT_PUBLIC_KEY=public_xKb4EU48gwQEN3k+IkcmynMLljE=`
-   - No components currently import or call ImageKit. Avatar upload in `AX_UserProfileModal.jsx` reads local base64 via `FileReader`.
-7. **Color Theme Tokens (`tailwind.config.js`, lines 15-26):**
-   - `primary.DEFAULT: '#0284c7'`, `primary.container: '#0c4a6e'`, `secondary.DEFAULT: '#0891b2'`.
-   - Hardcoded references to `#0284c7` exist in `index.html`, `vite.config.js`, `public/manifest.json`, `index.css`, `AppUpdateNotifier.jsx`, `AX_InstallPwaBanner.jsx`, `AX_SalesFlowChart.jsx`, and `AX_StockDistributionChart.jsx`.
+1. **Current Van UI & Legacy Loading**:
+   - `src/components/distribution/AX_VanDistribution.jsx` currently contains 495 lines.
+   - Lines 40-44 & 280-344 implement a legacy cargo loading modal (`showLoadModal`) with a single item `<AX_SearchableSelect>`, a single source warehouse select, and an integer quantity input:
+     ```javascript
+     const [loadForm, setLoadForm] = useState({
+       fromWarehouseId: warehouses.find((w) => w.type !== 'van')?.id || warehouses[0]?.id || '',
+       itemId: items[0]?.id || '',
+       quantity: 10,
+     })
+     ```
+   - Lines 68-99 implement a rudimentary remittance (`handleRemitCash`) sending a single `pendingCashTransfer` to one destination treasury account.
+   - Missing entirely: Vehicle creation UI, driver user account linkage, card-based loading with category filters on top, fractional packaging breakdown entry, split payment remittance (cash + bank transfer), remaining inventory return/retain workflow, and multi-line itemized driver operational expenses (fuel).
+
+2. **Warehouse Foundation & Native Van Type**:
+   - In `src/services/AX_OperationsService.js:175` & `src/services/AX_OperationsService.js:200`:
+     ```javascript
+     const VALID_WH_TYPES = ['cold_store', 'raw_materials', 'processing', 'finished_goods', 'van']
+     ```
+   - In `src/components/warehouses/AX_AddWarehouseModal.jsx:13`:
+     ```javascript
+     { value: 'van', label: 'سيارة توزيع / نقل' }
+     ```
+   - In `src/store/transferAuditHelpers.js:107-171` & `src/store/transferHelpers.js:15-125`:
+     - `executeImmediateTransfer` and `calculateTransferStockMovement` decrement source warehouse stock and increment destination warehouse stock in `ax_inventory_stock` and in-memory `inventoryStock`.
+     - When `fromWarehouseId` or `toWarehouseId` is a warehouse of `type: 'van'`, inventory stock is tracked natively on that vehicle without modifying database foreign keys.
+
+3. **Packaging Breakdown & Unit Conversion**:
+   - In `src/services/AX_DatabaseSync.js:69-75`:
+     - Items in `ax_items` have `unitType`, `subUnitType` (`'قطعة'`, `'كيس'`, `'طبق'`), `piecesPerCarton`, `weightPerCarton`, `sellPrice`, `buyPrice`, `pieceSellPrice`, `pieceBuyPrice`.
+   - In `src/utils/pricingCalculations.js:110-125`:
+     ```javascript
+     export function getCartonEquivalent(quantity, unit = 'كرتونة', item = {}) {
+       const qty = Number(quantity) || 0
+       if (qty <= 0) return 0
+       const u = String(unit || item?.unitType || item?.unit_type || 'كرتونة').trim()
+       const pieces = Number(item?.piecesPerCarton ?? item?.pieces_per_carton ?? 0)
+       const isSub = u === 'قطعة' || u === 'كيس' || u === 'طبق' || (item?.subUnitType && u === item.subUnitType)
+       if (isSub && pieces > 0) {
+         return Number((qty / pieces).toFixed(4))
+       }
+       return qty
+     }
+     ```
+   - In `tests/sales-subunit-piece-carton-conversion.test.js:42-50`, conversions for pieces, bags, and cartons pass with exact carton equivalent precision (e.g. 20 pieces = 1 carton, 10 pieces = 0.5 cartons, 6 bags = 0.5 cartons).
+
+4. **Driver Linkage & Sales Auto-Deduction**:
+   - In `src/components/auth/AX_LoginScreen.jsx:120`:
+     ```javascript
+     branchId: userRow.branch_id
+     ```
+   - In `src/store/storeCacheHelper.js:69-85` (`processInvoiceStoreState`):
+     - Every sale invoice deducts carton equivalent from `inventoryStock` where `warehouseId === inv.warehouseId`.
+   - In `src/components/invoices/AX_CreateInvoiceModal.jsx:84`:
+     - Currently hardcodes `const initialWarehouseId = warehouses[0]?.id || ''`.
+     - If updated to check `profile?.branchId`, sales created by logged-in drivers automatically deduct stock from their assigned vehicle warehouse.
+
+5. **Settlement, Treasury Splitting & Itemized Expenses**:
+   - In `src/store/initialData.js:42-48`:
+     - Treasury accounts include central cash (`c0000000-0000-0000-0000-000000000001`), bank account (`c0000000-0000-0000-0000-000000000002`), instapay (`c0000000-0000-0000-0000-000000000004`), and van cash (`c0000000-0000-0000-0000-000000000005`).
+   - In `src/store/expenseCategoryHelpers.js:21-25`:
+     - Secondary expense categories include: `exp-sec-trn-fuel` ("وقود وسولار سيارات التوزيع"), `exp-sec-trn-porter` ("مشالات وعتالة نقل وتنزيل"), `exp-sec-trn-tolls` ("رسوم طرق وكارتات ومواقف"), and `exp-sec-mnt-vans` ("صيانة ميكانيكا سيارات التبريد").
+   - In `src/store/useAXStore.js:426-461`:
+     - `addCashTransaction` records expenses and decrements treasury account balances.
+     - `confirmCashTransfer` atomically transfers funds between any two treasuries.
+
+6. **File Constraints & Test Status**:
+   - `vitest run`: All 71 test files and 988 tests pass cleanly.
+   - `tests/file-invariants.test.js`: Strictly enforces `<= 500 lines` per file.
+   - `src/components/distribution/AX_VanDistribution.jsx` is at 495 lines.
+   - `src/store/useAXStore.js` is at 498 lines.
 
 ---
 
 ## 2. Logic Chain
 
-1. **Routing Expansion:**
-   - From Observation 4, `App.jsx` checks `hasModuleAccess(profile, activeTab)` and renders components based on `activeTab`.
-   - Therefore, introducing `customers`, `suppliers`, and `sales_reps` requires:
-     a) Registering permissions in `src/utils/permissionsConfig.js`.
-     b) Adding tab navigation items to `AX_Sidebar.jsx` and `AX_MobileNavbar.jsx`.
-     c) Mounting `<AX_CustomersManager />`, `<AX_SuppliersManager />`, and `<AX_SalesRepsManager />` conditionally in `App.jsx`.
-2. **Data Model Extensions:**
-   - From Observation 5, `ax_clients` and `ax_suppliers` only hold minimal fields (`id, name, phone, address, balance`).
-   - Requirement R1 demands opening balance (debit/credit), hierarchical categories (primary and sub-category), geographic fields (governorate, city, district), and ImageKit attachments.
-   - Requirement R2 demands supplier company name, supply type, category, and opening balance (payables/receivables).
-   - Requirement R3 requires an entirely new entity structure for sales representatives, commission formulas, and rep transaction ledgers.
-   - Therefore, the store, initial data, and Supabase sync logic must be updated to support these properties without breaking existing invoice and treasury balance calculations.
-3. **ImageKit Client Architecture:**
-   - From Observation 6, ImageKit credentials exist in `.env`, but no client integration exists.
-   - Therefore, creating `src/services/imageKitService.js` to handle direct client uploads (with base64 fallback) and URL transformations (`/tr:w-...,h-.../`) is required to support customer image and document attachments.
-4. **Dashboard Pinned Inventory & Financial Metrics:**
-   - From Observation 5, `inventoryStock` contains `{ warehouseId, itemId, quantity, unit }` and `warehouses` contains all storage locations.
-   - Therefore, a pinned inventory widget can be created by storing selected item IDs in `localStorage`, calculating aggregate stock, and providing a drilldown modal showing quantities in each warehouse individually.
-   - Aggregate financial metrics for customer receivables, supplier payables, rep balances, and sales targets can be computed directly from `clients`, `suppliers`, `reps`, and `invoices` within `AX_DashboardMetricsCards.jsx`.
-5. **Brand Theme Migration:**
-   - From Observation 7, theme colors are configured in `tailwind.config.js` with semantic classes (`bg-primary`, `text-primary`, `bg-secondary`, `bg-primary/10`).
-   - Updating `primary` to `#991b1b` / `#7f1d1d` and `secondary` to `#b91c1c` / `#fef2f2`, along with updating `index.html`, `vite.config.js`, `manifest.json`, `AppUpdateNotifier.jsx`, `AX_InstallPwaBanner.jsx`, and SVG charts will cleanly achieve the meat red/burgundy brand alignment without visual defects.
-6. **Architectural Safety & Invariants:**
-   - From Observation 3, any file exceeding 500 lines or violating hook call order causes test failure.
-   - Therefore, all new components must be split into focused subcomponents (e.g. separate managers, modals, category selectors, and tables) ensuring every file remains well under 500 lines.
+1. **Premise 1**: Vehicles require dedicated management (adding, plate numbers, driver linking) and real-time inventory tracking.
+   - **Step 1a**: Since `ax_warehouses` already has `type: 'van'` in `VALID_WH_TYPES`, storing vehicles as warehouses with `type: 'van'` enables immediate reuse of `ax_inventory_stock`, `ax_transfers`, and `ax_invoices` without changing database relationships or breaking existing table constraints.
+   - **Step 1b**: A dedicated creation modal `AX_AddVehicleModal.jsx` allows capturing vehicle metadata (name, plate number, model, assigned driver from `employees`/`usersProfiles`, driver phone, and custody treasury).
+
+2. **Premise 2**: Legacy cargo loading is inflexible and lacks category filtering and packaging breakdown support.
+   - **Step 2a**: Replacing `showLoadModal` with `AX_VanStockLoadingModal.jsx` provides:
+     - Top category filter pills (`initialCategories`).
+     - Live search by item name/code.
+     - Interactive item cards displaying source warehouse available stock and packaging breakdown badges (`piecesPerCarton`, `subUnitType`, `weightPerCarton`).
+     - Support for fractional quantities (e.g., `0.5`, `1.25`, `2.5` cartons) and sub-unit toggles ('كرتونة' vs 'قطعة' / 'كيس' / 'طبق').
+   - **Step 2b**: Converting sub-units to carton equivalents using `getCartonEquivalent` ensures consistency with the invoice and inventory deduction engine.
+   - **Step 2c**: Calling `executeImmediateTransfer` atomically updates both source warehouse and vehicle custody inventory.
+
+3. **Premise 3**: Sales by drivers must automatically deduct stock from their vehicle custody inventory.
+   - **Step 3a**: User profiles already have `branchId` (`ax_users_profiles.branch_id`).
+   - **Step 3b**: When a driver is assigned to a vehicle, their user `branch_id` is linked to `vehicle.id`.
+   - **Step 3c**: In `AX_CreateInvoiceModal.jsx`, defaulting `invForm.warehouseId` to `profile?.branchId` when linked to a van guarantees that every sale invoice created by the driver sets `inv.warehouseId = vehicle.id`.
+   - **Step 3d**: In `processInvoiceStoreState`, stock is decremented from `inventoryStock` for `warehouseId === inv.warehouseId`, achieving automatic vehicle inventory deduction.
+
+4. **Premise 4**: End-of-day settlement requires financial revenue remittance with split payments, itemized operational expenses, and remaining stock settlement.
+   - **Step 4a**: Itemized expense rows (e.g. fuel `exp-sec-trn-fuel`, tolls `exp-sec-trn-tolls`) are recorded via `addCashTransaction` with `type: 'expense'`, immediately deducting from the vehicle's custody cash balance.
+   - **Step 4b**: Net collected cash after expenses is remitted across multiple receiving channels (e.g. part to central cash safe, part to bank account / instapay) via `confirmCashTransfer`.
+   - **Step 4c**: Remaining custody stock on the vehicle can be retained on the vehicle (no transfer) or returned to a selected warehouse via `executeImmediateTransfer`.
+   - **Step 4d**: A structured settlement summary record is generated and rendered in a paper-style receipt modal (`AX_VanSettlementReceiptModal.jsx`).
+
+5. **Premise 5**: Architectural and line-count invariants.
+   - **Step 5a**: `AX_VanDistribution.jsx` is at 495 lines; adding code directly to it would violate `file-invariants.test.js`.
+   - **Step 5b**: Extracting `AX_AddVehicleModal.jsx`, `AX_VanStockLoadingModal.jsx`, `AX_VanSettlementModal.jsx`, `AX_VanCustodySummaryCard.jsx`, `AX_VanSettlementReceiptModal.jsx`, and `vanDistributionHelpers.js` ensures every file remains well below 350 lines.
 
 ---
 
 ## 3. Caveats
 
-1. **Network vs Offline Execution:**
-   - In offline mode or when Supabase credentials cannot connect, mutations fall back to IndexedDB `offline_queue`. All mock and offline fallbacks must remain functional.
-2. **Vitest vs Node Native Test Runner:**
-   - The user request mentions Vitest (`using Vitest`), but the existing codebase uses Node's native test runner (`node:test` in `tests/*.test.js`). Both approaches can be supported (Vitest can run the existing and new test suites, or new tests can run with `node --test`).
-3. **ImageKit Direct Upload Authentication:**
-   - Without a backend private key on the client (per Rule 16), direct ImageKit upload must use public key client upload or mock upload with local preview fallback if network is restricted.
+1. **Database Schema Additions**:
+   - If Supabase `ax_warehouses` table does not have explicit columns for `plate_number` or `driver_id`, those fields are preserved in local cache and local storage (`ax_cached_db_payload.warehouses`) with full offline availability, and the standard fields `name`, `type: 'van'`, `manager: driverName`, and `phone: driverPhone` are saved to Supabase without database errors.
+2. **Multi-Driver Vehicle Sharing**:
+   - The design assumes a primary driver is assigned to a vehicle at any given time. If multiple drivers share the same vehicle concurrently, they will both be associated with the vehicle warehouse ID.
+3. **No Direct Code Modifications in Survey Phase**:
+   - As an explorer subagent, no project code has been altered during this turn. All proposals are documented for the implementer agent.
 
 ---
 
 ## 4. Conclusion
 
-The existing architecture of AX_PROTEIN_FOOD is exceptionally well-structured, fast (tests run in 259ms), and strictly governed by AXONID design standards and file invariants. The requirements from `ORIGINAL_REQUEST.md` (Customers, Suppliers, Sales Reps & Commissions, Dashboard Drilldown & Financial Metrics, Meat Red Brand Theme, and Automated Tests) can be implemented in a clean 6-milestone sequence with zero disruption to existing warehouse, manufacturing, distribution, and treasury modules.
-
-A complete technical analysis report has been written to:
-`d:\AXONID_PROJECTS\AX_FROZEN_FOODS\.agents\teamwork\explorer_survey_1\analysis.md`
+Requirements R1 and R2 can be fully realized by:
+1. Treating distribution vehicles as specialized warehouses (`type: 'van'`) in `ax_warehouses` with extended metadata (`plateNumber`, `driverId`, `model`, `treasuryId`).
+2. Creating `AX_AddVehicleModal.jsx` for vehicle management.
+3. Replacing the legacy cargo loading UI with `AX_VanStockLoadingModal.jsx` featuring category filter pills on top, responsive item cards, fractional quantity entry, packaging breakdown badges, and instant transfer execution.
+4. Linking driver profiles (`branch_id`) and defaulting `warehouseId` in `AX_CreateInvoiceModal.jsx` to achieve automatic vehicle stock deduction.
+5. Implementing `AX_VanSettlementModal.jsx` supporting:
+   - Split payment remittance (cash + bank transfer / instapay).
+   - Multi-line itemized driver operational expenses (fuel, tolls, porterage, maintenance) with automatic custody cash deduction.
+   - Remaining inventory settlement with retain-on-vehicle or return-to-warehouse options.
+   - Printable settlement receipt modal (`AX_VanSettlementReceiptModal.jsx`).
+6. Decomposing `AX_VanDistribution.jsx` into modular components to strictly respect the `<= 500 lines` rule and AXONID UI/UX design standards.
 
 ---
 
 ## 5. Verification Method
 
-To independently verify all findings:
-1. **Run Test Suite:**
+1. **Automated Test Suite**:
+   Run the full project test suite:
    ```powershell
-   npm test
+   npx vitest run
    ```
-   *Expected:* 9 test suites pass, 198 tests pass, 0 failures.
-2. **Inspect File Lengths:**
-   Check `tests/file-invariants.test.js` to verify all files in `src/` are audited for $\le 500$ lines.
-3. **Verify Local Port:**
-   Inspect `vite.config.js` lines 84-88 to verify `port: 8182` and `strictPort: true`.
-4. **Verify Theme Tokens:**
-   Inspect `tailwind.config.js` lines 14-26 to inspect the current blue color definitions.
-5. **Review Analysis Report:**
-   Read `d:\AXONID_PROJECTS\AX_FROZEN_FOODS\.agents\teamwork\explorer_survey_1\analysis.md` for full architectural blueprints, schemas, and milestone breakdown.
+   All 71 test files (and new tests) must pass with zero failures.
+
+2. **File Invariants Verification**:
+   ```powershell
+   npx vitest run tests/file-invariants.test.js
+   ```
+   Confirms every `.js` and `.jsx` file across `src/` does not exceed 500 lines.
+
+3. **Hooks Integrity Verification**:
+   ```powershell
+   npx vitest run tests/hooks-integrity.test.js
+   ```
+   Confirms proper hook order and imports in all new JSX files.
+
+4. **Dedicated Van Distribution & Settlement Test Suite**:
+   Write and run `tests/van-distribution-settlement.test.js` validating:
+   - Adding and managing distribution vehicles.
+   - Stock loading with category filters and fractional packaging calculations.
+   - Vehicle custody inventory tracking and automated sales deduction when driver records an invoice.
+   - End-of-day settlement: multi-line itemized expenses deduction from cash custody, split payment remittance to multiple treasuries, and stock return/retain execution.
+
+5. **Invalidation Conditions**:
+   - Any file exceeding 500 lines invalidates acceptance.
+   - Any comments left inside production code invalidates acceptance.
+   - Any regression in existing warehouse transfers, cash transfers, or invoices invalidates acceptance.

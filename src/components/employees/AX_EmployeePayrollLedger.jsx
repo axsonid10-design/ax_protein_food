@@ -12,28 +12,50 @@ import {
   Printer,
   ChevronLeft,
 } from 'lucide-react'
-import { computeMonthlyPayrollStats } from '../../store/employeeHelpers'
+import {
+  computeMonthlyPayrollStats,
+  executeEmployeePeriodSettlement,
+  getStoredEmployeeDeductions,
+  getStoredPayrollSettlements,
+} from '../../store/employeeHelpers'
 import { axToast } from '../common/AX_Toast'
 import { useAXStore } from '../../store/useAXStore'
+import { AX_EmployeeSettlementModal } from './AX_EmployeeSettlementModal'
 
 export function AX_EmployeePayrollLedger({
   employees = [],
   employeeAttendance = [],
   cashTransactions = [],
+  treasuryAccounts: passedTreasuryAccounts,
+  directDeductions: passedDirectDeductions,
+  payrollSettlements: passedPayrollSettlements,
   onPaySalary,
+  onConfirmSettlement,
 }) {
   const now = new Date()
   const defaultMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
   const [selectedMonth, setSelectedMonth] = useState(defaultMonth)
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedDept, setSelectedDept] = useState('ALL')
-  const [selectedEmployeeForPayout, setSelectedEmployeeForPayout] = useState(null)
-  const [payoutAmount, setPayoutAmount] = useState('')
-  const [payoutTreasuryId, setPayoutTreasuryId] = useState('')
-  const [payoutNotes, setPayoutNotes] = useState('')
-  const [isPaying, setIsPaying] = useState(false)
+  const [selectedEmployeeForSettlement, setSelectedEmployeeForSettlement] = useState(null)
+  const [refreshVersion, setRefreshVersion] = useState(0)
 
-  const treasuryAccounts = useAXStore((s) => s.treasuryAccounts || [])
+  const storeTreasuryAccounts = useAXStore((s) => s.treasuryAccounts || [])
+  const treasuryAccounts = (passedTreasuryAccounts && passedTreasuryAccounts.length > 0)
+    ? passedTreasuryAccounts
+    : storeTreasuryAccounts
+
+  const directDeductions = useMemo(() => {
+    return Array.isArray(passedDirectDeductions) && passedDirectDeductions.length > 0
+      ? passedDirectDeductions
+      : getStoredEmployeeDeductions()
+  }, [passedDirectDeductions, refreshVersion])
+
+  const payrollSettlements = useMemo(() => {
+    return Array.isArray(passedPayrollSettlements) && passedPayrollSettlements.length > 0
+      ? passedPayrollSettlements
+      : getStoredPayrollSettlements()
+  }, [passedPayrollSettlements, refreshVersion])
 
   const departments = useMemo(() => {
     const set = new Set(employees.map((e) => e.department).filter(Boolean))
@@ -44,13 +66,20 @@ export function AX_EmployeePayrollLedger({
     return employees
       .filter((e) => e.status !== 'inactive')
       .map((emp) => {
-        const stats = computeMonthlyPayrollStats(emp, employeeAttendance, cashTransactions, selectedMonth)
+        const stats = computeMonthlyPayrollStats(
+          emp,
+          employeeAttendance,
+          cashTransactions,
+          selectedMonth,
+          directDeductions,
+          payrollSettlements
+        )
         return {
           employee: emp,
           stats,
         }
       })
-  }, [employees, employeeAttendance, cashTransactions, selectedMonth])
+  }, [employees, employeeAttendance, cashTransactions, selectedMonth, directDeductions, payrollSettlements, refreshVersion])
 
   const filteredRows = useMemo(() => {
     const q = searchQuery.trim().toLowerCase()
@@ -87,44 +116,18 @@ export function AX_EmployeePayrollLedger({
     }
   }, [payrollRows])
 
-  const handleOpenPayout = (row) => {
-    setSelectedEmployeeForPayout(row)
-    setPayoutAmount(Math.max(0, row.stats.netPayable))
-    setPayoutTreasuryId(treasuryAccounts[0]?.id || '')
-    setPayoutNotes(`صرف راتب شهر ${selectedMonth}`)
+  const handleOpenSettlement = (employee) => {
+    setSelectedEmployeeForSettlement(employee)
   }
 
-  const handleConfirmPayout = async (e) => {
-    e.preventDefault()
-    if (!selectedEmployeeForPayout || !payoutAmount || Number(payoutAmount) <= 0) {
-      axToast.error('يرجى إدخال مبلغ صحيح للصرف')
-      return
+  const handleSettlementSuccess = async (settlementRecord, payoutTx) => {
+    if (onConfirmSettlement) {
+      await onConfirmSettlement(settlementRecord, payoutTx)
+    } else if (payoutTx && onPaySalary) {
+      await onPaySalary(payoutTx)
     }
-
-    try {
-      setIsPaying(true)
-      const emp = selectedEmployeeForPayout.employee
-      const tx = {
-        type: 'payroll',
-        partyType: 'employee',
-        partyId: emp.id,
-        partyName: emp.name,
-        amount: Number(payoutAmount),
-        treasuryId: payoutTreasuryId || treasuryAccounts[0]?.id || null,
-        date: new Date().toISOString().split('T')[0],
-        notes: payoutNotes || `صرف أجور شهر ${selectedMonth} للموظف ${emp.name}`,
-      }
-
-      if (onPaySalary) {
-        await onPaySalary(tx)
-        axToast.success(`تم صرف مبلغ ${Number(payoutAmount).toLocaleString('en-US')} ج.م للموظف ${emp.name} بنجاح`)
-        setSelectedEmployeeForPayout(null)
-      }
-    } catch {
-      axToast.error('تعذر تسجيل عملية صرف الراتب')
-    } finally {
-      setIsPaying(false)
-    }
+    setRefreshVersion((v) => v + 1)
+    setSelectedEmployeeForSettlement(null)
   }
 
   return (
@@ -272,10 +275,14 @@ export function AX_EmployeePayrollLedger({
                   <td className="px-3 text-center">
                     <button
                       type="button"
-                      onClick={() => handleOpenPayout({ employee, stats })}
-                      className="px-3 py-1 rounded-full bg-primary/10 hover:bg-primary text-primary hover:text-white font-black text-[11px] transition-all cursor-pointer"
+                      onClick={() => handleOpenSettlement(employee)}
+                      className={`px-3 py-1 rounded-full font-black text-[11px] transition-all cursor-pointer ${
+                        stats.isSettled
+                          ? 'bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-800 border border-emerald-500/20'
+                          : 'bg-primary/10 hover:bg-primary text-primary hover:text-white'
+                      }`}
                     >
-                      صرف
+                      {stats.isSettled ? 'تمت التسوية' : 'تسوية / صرف'}
                     </button>
                   </td>
                 </tr>
@@ -320,92 +327,32 @@ export function AX_EmployeePayrollLedger({
 
             <button
               type="button"
-              onClick={() => handleOpenPayout({ employee, stats })}
-              className="w-full py-1.5 rounded-full bg-primary text-white font-black text-xs cursor-pointer"
+              onClick={() => handleOpenSettlement(employee)}
+              className={`w-full py-1.5 rounded-full font-black text-xs cursor-pointer ${
+                stats.isSettled
+                  ? 'bg-emerald-500/10 text-emerald-800 border border-emerald-500/20'
+                  : 'bg-primary text-white'
+              }`}
             >
-              صرف الراتب أو سلفة
+              {stats.isSettled ? 'تمت تسوية الفترة' : 'تسوية وصرف الراتب'}
             </button>
           </div>
         ))}
       </div>
 
-      {selectedEmployeeForPayout && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-150">
-          <div className="bg-surface-lowest border border-outline-variant/30 rounded-3xl max-w-sm w-full p-5 shadow-2xl space-y-4">
-            <div className="flex items-center justify-between pb-2 border-b border-surface-container">
-              <div>
-                <h4 className="text-sm font-black text-on-surface">صرف أجور / سلفة</h4>
-                <span className="text-[11px] font-bold text-on-surface-variant block">
-                  {selectedEmployeeForPayout.employee.name}
-                </span>
-              </div>
-              <button
-                type="button"
-                onClick={() => setSelectedEmployeeForPayout(null)}
-                className="w-7 h-7 rounded-full bg-surface-low hover:bg-surface-container flex items-center justify-center text-on-surface-variant cursor-pointer"
-              >
-                ✕
-              </button>
-            </div>
-
-            <form onSubmit={handleConfirmPayout} className="space-y-3">
-              <div>
-                <label className="block text-xs font-black text-on-surface mb-1">المبلغ المطلوب صرفه (ج.م) *</label>
-                <input
-                  type="number"
-                  min="1"
-                  step="any"
-                  required
-                  value={payoutAmount}
-                  onChange={(e) => setPayoutAmount(e.target.value)}
-                  className="w-full h-10 px-3.5 rounded-2xl bg-surface-lowest border border-outline-variant/50 focus:border-primary outline-none text-sm font-mono font-black text-on-surface"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-black text-on-surface mb-1">الخزينة المنصرف منها *</label>
-                <select
-                  value={payoutTreasuryId}
-                  onChange={(e) => setPayoutTreasuryId(e.target.value)}
-                  className="w-full h-10 px-3 rounded-2xl bg-surface-lowest border border-outline-variant/50 focus:border-primary outline-none text-xs font-bold text-on-surface cursor-pointer"
-                >
-                  {treasuryAccounts.map((t) => (
-                    <option key={t.id} value={t.id}>
-                      {t.name} (الرصيد: {Number(t.balance || 0).toLocaleString('en-US')} ج.م)
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-xs font-black text-on-surface mb-1">بيان الصرف والملاحظات</label>
-                <input
-                  type="text"
-                  value={payoutNotes}
-                  onChange={(e) => setPayoutNotes(e.target.value)}
-                  className="w-full h-9 px-3 rounded-xl bg-surface-lowest border border-outline-variant/50 focus:border-primary outline-none text-xs font-bold text-on-surface"
-                />
-              </div>
-
-              <div className="pt-2 flex items-center justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={() => setSelectedEmployeeForPayout(null)}
-                  className="px-4 py-2 rounded-full bg-surface-low text-xs font-bold cursor-pointer"
-                >
-                  إلغاء
-                </button>
-                <button
-                  type="submit"
-                  disabled={isPaying}
-                  className="px-5 py-2 rounded-full bg-primary hover:bg-primary-dark text-white text-xs font-black cursor-pointer disabled:opacity-50"
-                >
-                  {isPaying ? 'جاري الصرف...' : 'تأكيد وصرف المبلغ'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
+      {selectedEmployeeForSettlement && (
+        <AX_EmployeeSettlementModal
+          isOpen={Boolean(selectedEmployeeForSettlement)}
+          onClose={() => setSelectedEmployeeForSettlement(null)}
+          employee={selectedEmployeeForSettlement}
+          selectedMonth={selectedMonth}
+          attendanceRecords={employeeAttendance}
+          cashTransactions={cashTransactions}
+          treasuryAccounts={treasuryAccounts}
+          directDeductions={directDeductions}
+          payrollSettlements={payrollSettlements}
+          onConfirmSettlement={handleSettlementSuccess}
+        />
       )}
     </div>
   )

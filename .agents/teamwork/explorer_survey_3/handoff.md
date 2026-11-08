@@ -1,119 +1,83 @@
-# Handoff Report: Dashboard Theme & Testing Survey (R4, R5, R6)
-**Agent:** Explorer 3 (Dashboard Theme & Testing Explorer)  
-**Parent Agent:** `dc5da5ed-817b-4784-a7e6-1365172c95ec`  
-**Date:** 2026-10-31  
-**Status:** Hard Handoff (Investigation Complete)
-
----
+# Handoff Report: Technical Investigation of R4, R5, and R6
 
 ## 1. Observation
+Direct, verified findings with line numbers and file paths across the codebase:
 
-1. **Dashboard Composition:**
-   - In `src/components/dashboard/AX_Dashboard.jsx` (lines 15–33, 123–193), the dashboard renders `AX_PeriodFilterBar`, `AX_DashboardMetricsCards`, `AX_QuickActionsBar`, 6 charts/cards (`AX_SalesFlowChart`, `AX_StockDistributionChart`, `AX_TopSellingItemsChart`, `AX_ColdStorageCapacityCard`, `AX_CashCreditSplitChart`, `AX_ManufacturingYieldCard`), and `AX_OperationalAlerts`.
-   - In `src/components/dashboard/AX_DashboardMetricsCards.jsx` (lines 21–63), currently only 4 cards exist: `إجمالي المبيعات`, `قيمة المخزون`, `رصيد المخزون`, and `السيولة والخزن`. Customer debts, supplier liabilities, sales rep balances, and sales targets are not yet displayed on the dashboard.
-   - Pinned item monitoring and warehouse drilldowns are currently absent from the dashboard.
-
-2. **Inventory & Warehouse Representation:**
-   - In `src/store/useAXStore.js` (lines 57–60), inventory state consists of `items`, `warehouses`, and `inventoryStock`.
-   - In `src/components/warehouses/AX_AddWarehouseModal.jsx` (lines 7–14), warehouse types include `'cold_store'`, `'raw_materials'`, `'processing'`, `'finished_goods'`, `'van'`, and `'branch'` (فرع مبيعات).
-   - In `src/store/initialData.js` (lines 109–120), `inventoryStock` maps `warehouseId` and `itemId` to `quantity` and `unit`.
-
-3. **Existing Color System:**
-   - In `tailwind.config.js` (lines 15–26):
-     ```javascript
-     colors: {
-       primary: {
-         DEFAULT: '#0284c7',
-         container: '#0c4a6e',
-         'on-container': '#bae6fd',
-         dark: '#0369a1',
-       },
-       secondary: {
-         DEFAULT: '#0891b2',
-         container: '#cffafe',
-         'on-container': '#155e75',
-         hover: '#0e7490',
-       },
-     }
-     ```
-   - In `index.html` (line 11): `<meta name="theme-color" content="#0284c7" />`.
-   - In `public/manifest.json` (line 5): `"theme_color": "#0284c7"`.
-   - In `vite.config.js` (line 39): `theme_color: '#0284c7'`.
-   - In `src/index.css` (line 40): `::-webkit-scrollbar-thumb:hover { background: #0284c7; }`.
-   - In `src/components/common/AppUpdateNotifier.jsx` (line 121): `bg-gradient-to-r from-[#0284c7] via-[#0c4a6e] to-[#0284c7]`.
-   - In `src/components/common/AX_InstallPwaBanner.jsx` (lines 81, 95): `bg-[#0c4a6e] border-[#0284c7]/40` and `bg-[#0284c7] hover:bg-[#0369a1]`.
-   - In `src/components/common/AX_WelcomeOverlay.jsx` (lines 41, 45, 65): `radial-gradient(circle at 50% 45%, #0c4a6e 0%, #032b43 55%, #02121e 100%)`, `bg-cyan-500/15`, and text gradient `from-sky-100 via-cyan-400 to-sky-200 drop-shadow-[0_8px_20px_rgba(2,132,199,0.45)]`.
-   - In `src/components/dashboard/AX_SalesFlowChart.jsx` (lines 227–228, 263, 276, 284): SVG stop color, stroke, and fill `#0284c7`.
-
-4. **Testing Infrastructure:**
-   - In `package.json` (lines 10, 22–31), `"test": "node --test tests/*.test.js"`. `vitest` is not currently in `devDependencies`.
-   - Running `npm test` executed 198 tests in 9 suites with 100% pass rate in 398ms.
-   - Sibling AXONID projects (`AX_Alqwmya`, `AX_CORNY_MENU`, `akdal`) use Vitest with `"test": "vitest run"` and standard `defineConfig` configuration.
+1. **HR Navigation Clipping & Fluff (R4)**:
+   - `src/components/employees/AX_EmployeesManager.jsx`:
+     - Line 77: `<div className="inline-flex items-center p-1 rounded-full bg-surface-low border border-outline-variant/30 gap-1 self-start sm:self-auto overflow-x-auto">` is contained in a parent with `flex-col sm:flex-row items-stretch sm:items-center justify-between` (line 64). On mobile viewports (<= 640px), `self-start` without `w-full` causes the 3 tab pills to clip or push outside the viewport boundary.
+     - Lines 71-73: `<span className="text-[11px] font-bold text-on-surface-variant block">إدارة كادر العمل، تسجيل الحضور والانصراف، احتساب اليوميات ومسير الرواتب</span>` is descriptive filler text violating Project Rule 4 ("حظر حشو الكلام والتسويق والزوائد التفسيرية").
+2. **"Add Employee" Button Obscured (R4)**:
+   - `src/components/employees/AX_EmployeesManager.jsx`:
+     - Lines 148-158: The FAB `<button ... title="إضافة موظف جديد">` is conditionally rendered **only** when `activeTab === 'directory'`. On the default landing tab (`activeTab === 'attendance'`) and on `activeTab === 'payroll'`, the button does not exist in the DOM.
+     - Line 152: `className="fixed bottom-20 lg:bottom-6 left-6 z-30 ..."` directly collides with the mobile navbar (`AX_MobileNavbar` at `fixed bottom-0` with height ~64px), obstructing touch interactions on mobile.
+3. **Mobile Layout Overlaps in Attendance Sheet (R4)**:
+   - `src/components/employees/AX_EmployeeAttendanceSheet.jsx`:
+     - Line 204: `<div className="w-48 mt-0.5"><AX_CompanyDatePicker ... /></div>` restricts date picker to 192px width, but the date picker popup inside `src/components/common/AX_CompanyDatePicker.jsx` (line 87) is hardcoded to `w-80` (320px) with `absolute right-0`. On 360px-390px screens, this causes overflow and clips off-screen.
+     - Lines 326-345: The 5 attendance status buttons with verbose Arabic text ("حاضر (كامل)", "نصف يوم", "غياب بعذر", "غياب بدون عذر", "إجازة / راحة") wrap into 3-4 awkward lines per employee row on mobile, overlapping the notes input (line 348).
+4. **Employee Deletion Mechanism (R5)**:
+   - `src/components/employees/AX_EmployeesDirectory.jsx`:
+     - Lines 192-200 and lines 234-241: Clicking the delete button simply calls `setEmployeeToDelete(emp)` and triggers `AX_ConfirmModal` (lines 257-268). There is currently **no hold-to-delete confirmation or animated countdown timer**.
+5. **Wage Calculation Flaws (R5)**:
+   - `src/store/employeeHelpers.js`:
+     - Lines 61-63:
+       ```javascript
+       const workedUnits = presentDays + (halfDays * 0.5) + excusedDays + holidays
+       earnedSalary = Math.round(workedUnits * dailyRate * 100) / 100
+       deductionAmount = Math.round(totalDeductionDays * dailyRate * 100) / 100
+       ```
+       For daily workers, `workedUnits` incorrectly adds `excusedDays + holidays`. A worker with 2 present days, 5 excused days, and 4 holidays is credited with 11 days of wage instead of 2.
+     - `src/components/employees/AX_EmployeeAttendanceSheet.jsx`:
+       Lines 81-90: Setting status to `absent_excused` or `holiday` sets `dailyEarned: r.dailyRate` even when the employee is on daily rate (`salaryType === 'daily'`).
+     - There is no direct financial penalty / deduction tracking for disciplinary actions.
+6. **Advances & Expense Categories (R6)**:
+   - `src/store/expenseCategoryHelpers.js`:
+     - Lines 3-55: `initialExpenseCategories` has 4 main categories (`exp-main-ops`, `exp-main-adm`, `exp-main-fin`, `exp-main-mkt`). There is **no dedicated main category for employee loans and advances ("سلف")**.
+   - `src/components/treasury/AX_TreasuryTransactionModal.jsx`:
+     - Lines 291-323: Selecting `txType === 'payroll'` presents a basic input field `employeeName` without displaying current net dues, accrued balance, or calculating negative balances when an advance exceeds balance.
+7. **Settlement Architecture Flaw (R6)**:
+   - `src/store/employeeHelpers.js`:
+     - Lines 66-72: `advancesPaid` filters transactions via `txDate.startsWith(yearMonth)`. This fails to carry forward unsettled balances or loans from past months into active periods, and misattributes delayed salary payouts to the wrong month.
+     - There is no `payrollSettlements` tracking to mark settled periods as cleared.
 
 ---
 
 ## 2. Logic Chain
-
-1. **Dashboard Inventory Drilldown (R4):**
-   - Observation 1.1 & 1.2 show that inventory stock is keyed by `(warehouseId, itemId)`.
-   - Therefore, aggregating stock for any item across warehouses is a deterministic filter and reduce over `inventoryStock`, joined with `warehouses` metadata.
-   - Because `warehouses` includes `type: 'branch'`, the drilldown modal can explicitly separate or highlight sales branch availability versus central storage / distribution vans.
-   - Persisting user pins via `localStorage` under `'ax_dashboard_pinned_items'` adheres to offline-first PWA standards without requiring schema mutations.
-
-2. **Dashboard Financial Metrics (R4):**
-   - Observation 1.1 & 1.2 show that `clients` and `suppliers` exist in store, while `salesReps` will be introduced by R3.
-   - Summing positive client balances gives Total Customer Receivables (مديونيات العملاء).
-   - Summing positive supplier balances gives Total Supplier Payables (التزامات الموردين).
-   - Summing representative net balances from ledger gives Sales Rep Liabilities.
-   - Comparing period sales total (`salesTotal`) to assigned representative targets gives Sales Target Attainment percentage.
-   - Placing these in a secondary 4-card row maintains visual balance and respects the 500-line limit per file.
-
-3. **Brand Theme Migration (R5):**
-   - Observation 1.3 documents that the application uses semantic Tailwind tokens (`bg-primary`, `text-primary`, `border-primary`) throughout 90% of buttons, navigation items, and cards.
-   - Replacing the blue tokens in `tailwind.config.js` with `#991b1b` (Primary DEFAULT), `#450a0a` (Primary container), `#b91c1c` (Secondary DEFAULT), and `#fee2e2` (Secondary container) automatically realigns the entire UI to the brand identity.
-   - Updating the 8 identified specific locations (meta tags, PWA manifest, scrollbar CSS, SVG chart paths, welcome overlay, update notifier) completely eliminates all obsolete sky/cyan blue traces.
-
-4. **Vitest Test Infrastructure (R6):**
-   - Observation 1.4 confirms existing tests use Node's native runner.
-   - Adding `vitest` to `devDependencies` and configuring it in `vite.config.js` satisfies R6.
-   - Because Vitest natively executes `describe`, `it`, and `node:assert`, the existing 198 tests will continue running without syntax rewrites.
-   - A dedicated 37-test inventory across 5 files directly validates R1 through R5 acceptance criteria.
+1. *From Observation 1*: The tab bar clips because `self-start` prevents it from taking full container width on mobile, and descriptive subtitles waste vertical canvas space. Therefore, removing the subtitle and giving the tab wrapper `w-full sm:w-auto overflow-x-auto` eliminates clipping.
+2. *From Observation 2*: The "Add Employee" button is undiscoverable on attendance and payroll tabs because it is conditionally mounted only on the directory tab. Moving a primary "Add Employee" button to the top header card makes it universally visible across all tabs. Raising the mobile FAB to `bottom-24` prevents touch overlap with `AX_MobileNavbar`.
+3. *From Observation 3*: Mobile attendance overlaps occur because the date picker popup has fixed `w-80` and the 5 status buttons have verbose text. Constraining the popup to `w-[calc(100vw-2rem)]` and using a compact 5-column segmented grid on mobile eliminates wrapping and overlaps.
+4. *From Observation 4*: Deletions can happen accidentally via single-click dialog. A dedicated `AX_HoldToDeleteButton` with `pointerdown`/`pointerup` listeners and an animated 2.5s SVG countdown ensures intentional deletion without modals.
+5. *From Observation 5*: Daily workers are currently paid for excused absences and holidays due to line 61 of `employeeHelpers.js`. Correcting `workedUnits = presentDays + (halfDays * 0.5)` for daily workers resolves the calculation bug. Adding a direct deduction modal (`AX_EmployeeDeductionModal`) provides the required penalty workflow.
+6. *From Observation 6*: Recording advances without category tracking prevents proper accounting. Adding `exp-main-adv` ("سلف وقروض العاملين") with sub and secondary tiers creates proper 3-tier cost accounting. Providing an advance modal that compares requested amount with current net dues and permits negative balance satisfies R6.
+7. *From Observation 7*: Month-only date string filtering (`txDate.startsWith(yearMonth)`) causes past unpaid wages and loans to disappear in future months. Introducing a persistent `payrollSettlements` collection enables locking settled periods so they are never double-counted, while accumulating unpaid or overdrawn balances into active unsettled periods.
 
 ---
 
 ## 3. Caveats
-
-1. **Vitest Package Installation:**
-   - As an explorer running in read-only mode, `npm install -D vitest` was NOT executed. Vitest must be installed during the implementation phase by the builder agent.
-2. **Sales Representatives State Dependency:**
-   - Dashboard financial metrics for sales rep balances and targets depend on state fields defined in R3. If no representatives exist, the metrics gracefully display `0 ج.م` and `0%`.
-3. **No Direct Code Changes:**
-   - In accordance with explorer integrity constraints, no source files were modified.
+- No caveats regarding code access; all relevant HR, Treasury, Expense, and Attendance files have been inspected.
+- Note on file length: `src/store/useAXStore.js` is currently 498 lines. All new logic should be encapsulated in helper files (`employeeHelpers.js`, etc.) to keep `useAXStore.js` and component files strictly under the 500 lines limit.
 
 ---
 
 ## 4. Conclusion
+The codebase contains well-structured foundations for employees and attendance, but suffers from:
+1. UI clipping and discoverability issues in navigation (R4).
+2. Calculation discrepancies for daily workers and absent confirmation mechanisms for deletion (R5).
+3. Missing 3-tier expense advance hierarchy and a period settlement mechanism that preserves active balances without double-counting (R6).
 
-The codebase is fully primed for implementation of R4, R5, and R6:
-1. **R4:** Can be implemented via two clean modular components: `AX_PinnedStockWidget.jsx` (~140 lines) and `AX_StockDrilldownModal.jsx` (~170 lines), plus 4 new metric cards in `AX_DashboardMetricsCards.jsx`.
-2. **R5:** Is a clean, deterministic substitution starting at `tailwind.config.js` and 8 exact identified files.
-3. **R6:** Has a complete 37-case test inventory ready to be implemented in Vitest.
+All recommended modifications are modular, cleanly architected with 4 dedicated new component files (`AX_HoldToDeleteButton.jsx`, `AX_EmployeeDeductionModal.jsx`, `AX_EmployeeAdvanceModal.jsx`, `AX_EmployeeSettlementModal.jsx`), and preserve all project invariants.
 
 ---
 
 ## 5. Verification Method
-
-1. **Verify Existing Tests:**
-   ```bash
-   npm test
-   ```
-   *Expected:* 198 tests passing across 9 suites in ~400ms.
-
-2. **Verify Theme Tokens Inspection:**
-   - Inspect `tailwind.config.js` lines 15–26 to verify current vs proposed color values.
-   - Inspect `index.html` line 11 and `public/manifest.json` line 5 for `theme_color`.
-
-3. **Verify Documentation Artifacts:**
-   - Detailed analysis: `d:\AXONID_PROJECTS\AX_FROZEN_FOODS\.agents\teamwork\explorer_survey_3\analysis.md`
-   - Progress tracker: `d:\AXONID_PROJECTS\AX_FROZEN_FOODS\.agents\teamwork\explorer_survey_3\progress.md`
-   - Dispatch record: `d:\AXONID_PROJECTS\AX_FROZEN_FOODS\.agents\teamwork\explorer_survey_3\DISPATCH.md`
+1. **Existing Test Suite Baseline**:
+   - Run `npm test` to verify all 1000 existing tests pass.
+2. **Formula & Calculation Verification**:
+   - Inspect `src/store/employeeHelpers.js`:
+     * Daily worker formula: `workedUnits = presentDays + (halfDays * 0.5)`.
+     * Monthly worker formula: `earnedSalary = Math.max(0, baseSalary - deductionAmount)`.
+     * Direct deduction integration into `totalDeductionAmount`.
+3. **Layout & Invariant Verification**:
+   - Verify all modified and new files obey `<= 500 lines`:
+     `powershell -Command "Get-ChildItem -Path src/components/employees, src/store/employeeHelpers.js | Select-Object Name, @{Name='Lines';Expression={(Get-Content $_.FullName | Measure-Object -Line).Lines}}"`
+   - Verify no console or lint errors.

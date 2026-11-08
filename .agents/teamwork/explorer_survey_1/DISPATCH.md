@@ -1,37 +1,21 @@
-# Dispatch for Explorer Survey 1
+## 2026-11-08T21:49:30Z
+You are explorer_survey_1. Your working directory is d:\AXONID_PROJECTS\AX_FROZEN_FOODS\.agents\teamwork\explorer_survey_1.
 
-You are Explorer 1 for the initial project survey.
-Your working directory is: d:\AXONID_PROJECTS\AX_FROZEN_FOODS\.agents\teamwork\explorer_survey_1\
-Please inspect the codebase structure, state management, routes, navigation, database integration, and brand styling.
+Read d:\AXONID_PROJECTS\AX_FROZEN_FOODS\.agents\teamwork\ORIGINAL_REQUEST.md before doing anything else.
 
+Your scope is to investigate Requirements R1 and R2:
+### R1. Distribution Vans Management & Stock Loading
+Support adding distribution vehicles to the system. Provide inventory transfer/loading into vehicles utilizing a card-based selection layout with category filters on top, replacing the legacy cargo shipping UI. Support packaging breakdowns and fractional quantity entry based on packaging types (cartons containing pieces, bags, trays, or plain cartons). Track real-time vehicle custody inventory. Link driver user accounts to their assigned vehicle so that sales transactions recorded by the driver automatically deduct from the vehicle's custody inventory.
 
-## 2026-10-31T21:46:26Z
-You are Explorer 1 (Codebase & Architecture Explorer) for Project Survey.
-Your working directory is: d:\AXONID_PROJECTS\AX_FROZEN_FOODS\.agents\teamwork\explorer_survey_1\
+### R2. Van Daily Settlement (Financial, Stock & Expenses)
+Provide an end-of-day settlement workflow for distribution vehicles. Settle collected revenue with support for split payment methods (part cash, part bank transfer). Settle remaining inventory with options to retain stock on the vehicle or return items back to warehouse inventory. Allow recording and deducting operational expenses incurred by the driver (e.g., fuel) directly during the settlement by adding multiple itemized expense lines.
 
-MANDATORY FIRST STEP:
-Read the verbatim user request at:
-d:\AXONID_PROJECTS\AX_FROZEN_FOODS\.agents\teamwork\ORIGINAL_REQUEST.md
+Investigate the authoritative codebase in d:\AXONID_PROJECTS\AX_FROZEN_FOODS:
+1. Search and inspect all files related to vehicles, drivers, distribution, cargo shipping, warehouses, transfers, stock loading, custody inventory, and sales transactions.
+2. Trace how sales transactions currently deduct inventory and whether drivers are currently associated with vehicles or warehouses.
+3. Trace how items and packaging units (cartons, pieces, bags, trays) are currently structured in catalog and inventory.
+4. Trace existing daily settlements, payment splitting patterns, and expense deductions in the app.
+5. Identify the exact files that need to be created or modified, any DB schema / table structures required, state management hooks in useAXStore.js / offlineDB.js, and components adhering to AXONID rules (<= 500 lines per file, zero comments, pill buttons, full canvas).
 
-Your Objective:
-Conduct a thorough, read-only architectural investigation of the existing codebase to map:
-1. Overall project architecture, build configuration (vite.config.js, package.json), dependencies.
-2. Routing architecture (App.jsx, router, page layout), navigation components (AX_Sidebar, AX_MobileNavbar, Header, etc.).
-3. State management & persistence (Zustand stores, IndexedDB schema/helpers, Supabase client integration).
-4. ImageKit integration utilities and patterns currently present in the codebase.
-5. Existing database schema, tables, mock datasets, or types.
-6. Adherence to AXONID standards (Cairo/Tajawal, RTL, pill buttons, full canvas, no spinners).
-
-Scope Boundaries:
-- READ-ONLY investigation. You MUST NOT modify or create any source code, test, or data files.
-- Write your metadata and report files ONLY within your working directory.
-
-Outputs:
-1. Write your detailed technical findings to:
-   d:\AXONID_PROJECTS\AX_FROZEN_FOODS\.agents\teamwork\explorer_survey_1\analysis.md
-2. Write your structured handoff to:
-   d:\AXONID_PROJECTS\AX_FROZEN_FOODS\.agents\teamwork\explorer_survey_1\handoff.md
-3. Send a brief message to parent via send_message with your handoff reference.
-
-Completion Criteria:
-- analysis.md and handoff.md are written with concrete file paths, code snippets, architectural diagrams/tables, and recommendations for milestone decomposition.
+Document your findings and recommendations in d:\AXONID_PROJECTS\AX_FROZEN_FOODS\.agents\teamwork\explorer_survey_1\analysis.md and d:\AXONID_PROJECTS\AX_FROZEN_FOODS\.agents\teamwork\explorer_survey_1\handoff.md. Update progress.md as you work.
+When done, send a message to your caller with a summary of findings and the path to your handoff.md.

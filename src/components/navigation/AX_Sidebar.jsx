@@ -21,6 +21,7 @@ import {
   Trash2,
   TrendingUp,
   ShoppingBag,
+  Receipt,
 } from 'lucide-react'
 import { useAXStore } from '../../store/useAXStore'
 import { hasModuleAccess } from '../../utils/permissionsConfig'
@@ -76,6 +77,7 @@ export function AX_Sidebar({ activeTab, onSelectTab, onOpenMasterControl }) {
       title: 'المالية والحسابات',
       items: [
         { id: 'treasury', label: 'الخزينة', icon: Wallet, badge: pendingCashCount },
+        { id: 'expenses', label: 'المصروفات', icon: Receipt },
         { id: 'reports', label: 'التقارير والمحاسبة', icon: BarChart3 },
       ],
     },

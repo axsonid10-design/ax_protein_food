@@ -1,53 +1,41 @@
-# BRIEFING — 2026-10-31T21:55:10Z
+# BRIEFING — 2026-11-08T22:00:00Z
 
 ## Mission
-Architectural & codebase investigation of AX_FROZEN_FOODS (Protein Food) covering build configs, routing/navigation, state management, IndexedDB, Supabase, ImageKit, database schemas/mock data, and AXONID standards compliance.
+Investigate Requirements R1 (Distribution Vans Management & Stock Loading) and R2 (Van Daily Settlement) in AX_FROZEN_FOODS and formulate technical architecture and implementation roadmap.
 
 ## 🔒 My Identity
-- Archetype: Explorer
-- Roles: Codebase & Architecture Explorer
+- Archetype: explorer
+- Roles: investigation, synthesis
 - Working directory: d:\AXONID_PROJECTS\AX_FROZEN_FOODS\.agents\teamwork\explorer_survey_1
-- Original parent: dc5da5ed-817b-4784-a7e6-1365172c95ec
-- Milestone: Project Survey & Architecture Mapping
+- Original parent: 15528934-40cd-4161-acc6-b11a7e24990d
+- Milestone: survey & requirements R1/R2 investigation
 
 ## 🔒 Key Constraints
-- Read-only investigation — do NOT implement
-- Scope limited to read-only investigation of existing codebase
-- Write only to working directory d:\AXONID_PROJECTS\AX_FROZEN_FOODS\.agents\teamwork\explorer_survey_1
+- Read-only investigation — do NOT implement or modify source code directly
+- Adhere to AXONID V6.0 rules (<= 500 lines per file, zero comments in code, pill buttons, full canvas, zero marketing fluff)
+- Output findings in analysis.md and 5-component handoff.md
 
 ## Current Parent
-- Conversation ID: dc5da5ed-817b-4784-a7e6-1365172c95ec
-- Updated: 2026-10-31T21:55:10Z
+- Conversation ID: 15528934-40cd-4161-acc6-b11a7e24990d
+- Updated: 2026-11-08T22:00:00Z
 
 ## Investigation State
-- **Explored paths**:
-  - `package.json`, `vite.config.js`, `tailwind.config.js`, `.env`, `.env.example`, `index.html`
-  - `src/App.jsx`, `src/components/navigation/` (`AX_Sidebar.jsx`, `AX_MobileNavbar.jsx`, `AX_Header.jsx`)
-  - `src/utils/permissionsConfig.js`, `src/utils/reportCalculations.js`, `src/utils/categoryColors.js`
-  - `src/store/useAXStore.js`, `src/store/initialData.js`, `src/store/categoryHelpers.js`
-  - `src/services/` (`offlineDB.js`, `offlineSync.js`, `AX_DatabaseSync.js`, `AX_OperationsService.js`, `supabaseClient.js`)
-  - `src/components/dashboard/` (`AX_Dashboard.jsx`, `AX_DashboardMetricsCards.jsx`, charts)
-  - `src/components/items/` (`AX_ItemsCatalog.jsx`, `AX_AddItemModal.jsx`, `AX_CategorySelect.jsx`)
-  - `src/components/reports/` (`AX_ReportsManager.jsx`, `AX_Ledger360Report.jsx`, `AX_AgingDebtsReport.jsx`)
-  - `tests/` (all 9 test suites, 198 tests passing in 259ms)
+- **Explored paths**: `src/components/distribution/AX_VanDistribution.jsx`, `src/services/AX_OperationsService.js`, `src/services/AX_DatabaseSync.js`, `src/store/useAXStore.js`, `src/store/storeCacheHelper.js`, `src/store/transferHelpers.js`, `src/utils/pricingCalculations.js`, `src/components/warehouses/*`, `src/components/invoices/AX_CreateInvoiceModal.jsx`, `src/components/auth/AX_LoginScreen.jsx`, `tests/*`.
 - **Key findings**:
-  1. Routing is tab-based in Zustand (`activeTab`), protected by `hasModuleAccess`. Customers, Suppliers, and Sales Reps will need dedicated tabs, sidebar entries, and permission mappings.
-  2. Data sync uses a dual mechanism: Supabase Realtime + IndexedDB `offline_queue` for offline resilience.
-  3. ImageKit credentials exist in `.env`, but no client utility is currently implemented; needs `imageKitService.js` supporting direct uploads and thumbnail transformations.
-  4. Current `ax_clients` and `ax_suppliers` only have basic fields `{id, name, phone, address, balance}`. Need full schema extensions for opening balance debit/credit, hierarchical categories, geographic classifications, and supply types.
-  5. Sales Reps & Commissions have zero presence currently. Requires new entities, multi-model commission calculation engine, and a 360° representative ledger.
-  6. Theme color migration from blue (`#0284c7`) to meat red/burgundy (`#991b1b` / `#b91c1c`) requires updates in `tailwind.config.js`, `vite.config.js`, `index.html`, `index.css`, `public/manifest.json`, and SVG charts.
-  7. Strict file limit invariant: max 500 lines per file (strictly enforced by existing tests). All new files must stay below 500 lines.
-- **Unexplored areas**: None within the survey scope; all target architectural areas have been completely investigated.
+  1. Warehouses table natively supports `type: 'van'` (`VALID_WH_TYPES` in `AX_OperationsService.js:175`), enabling vehicles to inherit full inventory tracking without breaking schema.
+  2. `getCartonEquivalent` in `pricingCalculations.js:110` and `processInvoiceStoreState` in `storeCacheHelper.js:69` already provide sub-unit to carton conversion (pieces, bags, trays).
+  3. Drivers are user accounts with `branch_id`; defaulting invoice warehouse to `profile.branchId` ensures sales automatically deduct from vehicle custody.
+  4. End-of-day settlement can integrate split payments (`confirmCashTransfer` across treasuries), multi-line itemized expenses (`addCashTransaction` with fuel category), and remaining inventory returns via `executeImmediateTransfer`.
+  5. Strict 500-line limit requires decomposing `AX_VanDistribution.jsx` (currently 495 lines) into modular sub-components.
+- **Unexplored areas**: None for R1 and R2 scope.
 
 ## Key Decisions Made
-- Structure comprehensive `analysis.md` with full architectural blueprints, data flow diagrams, schema models, and concrete file paths.
-- Prepare structured `handoff.md` following the 5-component protocol (Observation, Logic Chain, Caveats, Conclusion, Verification Method).
-- Send message to parent orchestrator with explicit recommendations for subsequent implementation milestones.
+- Architecture strategy: Model vehicles as specialized warehouses (`type: 'van'`) with extended metadata.
+- Modular component strategy: Split into `AX_AddVehicleModal.jsx`, `AX_VanStockLoadingModal.jsx`, `AX_VanSettlementModal.jsx`, `AX_VanCustodySummaryCard.jsx`, `AX_VanSettlementReceiptModal.jsx`, and `vanDistributionHelpers.js`.
 
 ## Artifact Index
-- DISPATCH.md — Received dispatch records
-- BRIEFING.md — Persistent context & situational awareness
-- progress.md — Liveness & step progress tracking
-- analysis.md — Detailed technical architectural survey findings
-- handoff.md — 5-component handoff report for parent agent
+- DISPATCH.md — dispatch message record
+- BRIEFING.md — persistent state and identity
+- progress.md — liveness heartbeat
+- analysis.md — deep technical analysis report (6 detailed sections)
+- handoff.md — self-contained 5-component handoff report

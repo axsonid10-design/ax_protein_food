@@ -1,391 +1,308 @@
-# Comprehensive Codebase & Architecture Investigation Report
-
-**Project:** AX_PROTEIN_FOOD (بروتين فود - لتجهيز وحفظ اللحوم المجمدة)  
-**Date:** 2026-10-31  
-**Investigator:** Explorer 1 (Codebase & Architecture Explorer)  
-**Integrity Mode:** Development (Read-Only Investigation)  
+# Deep Technical Analysis: Requirements R1 & R2
+**System**: AX_PROTEIN_FOOD (بروتين فود - لتجهيز وحفظ اللحوم المجمدة)  
+**Author**: `explorer_survey_1`  
+**Date**: 2026-11-08  
+**Scope**: 
+- **R1. Distribution Vans Management & Stock Loading**
+- **R2. Van Daily Settlement (Financial, Stock & Expenses)**
 
 ---
 
 ## 1. Executive Summary
 
-This investigation provides a comprehensive architectural survey of the **AX_PROTEIN_FOOD** codebase located at `d:\AXONID_PROJECTS\AX_FROZEN_FOODS`. The system is a hybrid standalone PWA (React 18 + Vite 6 + Tailwind CSS + IndexedDB + Supabase) governing cold storage warehouses, frozen goods ingestion, meat disassembly/manufacturing, and field van sales.
+Requirements R1 and R2 transform the distribution module (`src/components/distribution/AX_VanDistribution.jsx`) from a rudimentary single-item cargo loading mockup into an enterprise-grade cold-chain van distribution and daily settlement subsystem.
 
-The objective of this survey is to establish the complete architectural roadmap for implementing:
-1. **Customers Management Module** (Hierarchical categories, geographic classification, debit/credit opening balances, ImageKit attachments).
-2. **Suppliers Management Module** (Supply types, categories, contact details, payables/receivables opening balances).
-3. **Sales Representatives & Commissions Module** (Representative profiles, sales targets, multi-model commission calculation engine, 360° representative ledger).
-4. **Dashboard Enhancements** (User-configurable pinned inventory widget with branch/warehouse stock drilldown, real-time financial liability & debt metrics).
-5. **Brand Theme Color Alignment** (Complete transition from arctic blue `#0284c7` to meat red/burgundy `#991b1b` / `#b91c1c`).
-6. **Automated Testing Suite** (Verification of CRUD, commission math, balance aggregations, and architectural invariants).
+Key findings:
+1. **Warehouse Foundation Ready**: In `src/services/AX_OperationsService.js:175`, `VALID_WH_TYPES` already includes `'van'`. Using `'van'` warehouses for distribution vehicles allows vehicles to seamlessly inherit full native inventory tracking in `ax_inventory_stock`, instant multi-item transfers in `ax_transfers`, and audit logging without any breaking schema migrations.
+2. **Sub-Unit & Fractional Packaging Engine Exists**: In `src/utils/pricingCalculations.js:110-125`, `getCartonEquivalent(qty, unit, item)` already supports carton, piece, bag ('كيس'), and tray ('طبق') conversions. Invoices already deduct carton equivalents (`src/store/storeCacheHelper.js:69-76`). This exact mathematical engine can be leveraged for fractional and packaging-breakdown van loading.
+3. **Driver Linkage via `branch_id`**: In `ax_users_profiles`, users have `branch_id` (synced to `profile.branchId` in `AX_LoginScreen.jsx:120`). Linking a driver to their vehicle warehouse enables sales recorded by that driver to automatically deduct stock from the vehicle custody inventory.
+4. **File Line Limit Constraint**: `useAXStore.js` is at 498 lines (limit 500), and `AX_VanDistribution.jsx` is at 495 lines (limit 500). Implementing R1 and R2 requires clean modular decomposition into sub-components (`AX_AddVehicleModal.jsx`, `AX_VanStockLoadingModal.jsx`, `AX_VanSettlementModal.jsx`, `AX_VanCustodySummaryCard.jsx`, `vanDistributionHelpers.js`).
 
 ---
 
-## 2. Build Configuration & Development Environment
+## 2. Existing Codebase Analysis
 
-### 2.1 Dependencies & Versions (`package.json`)
-- **React & DOM:** `^18.3.1`
-- **Build Tool:** `vite@^6.0.11` with `@vitejs/plugin-react@^4.3.4`
-- **PWA Plugin:** `vite-plugin-pwa@^1.3.0`
-- **Styling:** `tailwindcss@^3.4.17`, `postcss@^8.5.1`, `autoprefixer@^10.4.20`, `clsx@^2.1.1`, `tailwind-merge@^2.6.0`
-- **Icons:** `lucide-react@^1.16.0`
-- **State Management:** `zustand@^5.0.3`
-- **Database Client:** `@supabase/supabase-js@^2.117.2`
-- **Utilities:** `canvas-confetti@^1.9.4`
-- **Current Test Script:** `"node --test tests/*.test.js"`
+### 2.1 Distribution Module Current State
+- **File**: `src/components/distribution/AX_VanDistribution.jsx` (495 lines)
+- **Current Behavior**:
+  - Lines 23-27: Attempts to find vans via `distributors.map(...)` or `warehouses.filter(w => w.type === 'van')`, with a fallback hardcoded van `'b0000000-0000-0000-0000-000000000010'`.
+  - Lines 40-44 & 280-344 (`showLoadModal`): Legacy single-item cargo loading. Users pick one warehouse, one item from a dropdown, and an integer quantity. There is no category filtering, no card-based selection, and no fractional packaging breakdown.
+  - Lines 68-99 (`handleRemitCash`): A simple remittance form that creates a `pendingCashTransfer` from the van cash account (`c0000000-0000-0000-0000-000000000005`) to one selected treasury.
+  - Missing: Vehicle creation/editing, driver account association, card-based stock loading, fractional packaging breakdowns, split payment remittances, itemized driver operational expenses (fuel), and remaining inventory returns.
 
-### 2.2 Local Server Configuration (`vite.config.js`)
-- **Port:** `8182` with `strictPort: true` and `host: true` (complying strictly with Rule 18 of AXONID Master Invariants to prevent local port collisions with other AXONID apps such as H&A Import on `8181`).
-- **PWA Workbox Strategy:**
-  - `registerType: 'autoUpdate'`
-  - Precache buster: `globIgnores: ['**/version.json']` and `runtimeCaching` rule for `version.json` set to `NetworkOnly` (Quad-Lock PWA specification).
-  - Background push worker: `sw-push-handler.js` imported via `importScripts`.
+### 2.2 Warehouse & Inventory Stock Tracking
+- **Warehouses**: Handled in `AX_OperationsService.js:175-237` and `useAXStore.js:275-321`.
+  - Valid types: `'cold_store'`, `'raw_materials'`, `'processing'`, `'finished_goods'`, `'van'`.
+  - Stored in `ax_warehouses` table (`id`, `name`, `type`, `manager`, `phone`).
+- **Inventory Stock**: Handled in `ax_inventory_stock` (`warehouse_id`, `item_id`, `quantity`, `unit`, `opening_balance`).
+  - Read into `useAXStore.inventoryStock` as `{ warehouseId, itemId, quantity, unit, openingBalance }`.
+  - Any warehouse with `type === 'van'` can hold stock rows in `inventoryStock` keyed by `warehouseId: van.id`.
+- **Transfers**:
+  - `src/store/transferHelpers.js:15-125` (`executeImmediateTransfer`):
+    - Atomically decrements source warehouse and increments destination warehouse in `updatedStock` and Supabase.
+    - Handles audit discrepancy checks (`checkTransferAuditDiscrepancy`).
+    - Works with multiple items per transfer.
 
-### 2.3 Existing Test Suite & Architectural Invariants
-Executing `npm test` runs 9 test suites with **198 automated tests** passing in ~260ms via Node's native test runner (`node:test` + `node:assert/strict`).
-Crucial architectural rules enforced by existing tests:
-1. **Constitution File Invariants (`tests/file-invariants.test.js`):** Every `.js` and `.jsx` file inside `src/` is audited to never exceed **500 lines**. Exceeding 500 lines causes immediate test suite failure.
-2. **React Hooks Integrity Scanner (`tests/hooks-integrity.test.js`):** Verifies that no component executes early returns (`if (!isOpen) return null`) before declaring React hooks (`useState`, `useEffect`, `useMemo`, `useCallback`, `useRef`, `useAXStore`, `useBodyScrollLock`).
-3. **Modal Deletion Invariants (`tests/items-operations.test.js`):** Forbids direct unconfirmed deletion; enforces mandatory use of `AX_ConfirmModal`.
-4. **PWA Version Invariant (`tests/pwa-version.test.js`):** Enforces identical semver strings between `package.json` (`1.5.9`) and `public/version.json`.
+### 2.3 Packaging Breakdown & Catalog Structure
+- **Items Catalog Schema**:
+  - Handled in `src/services/AX_DatabaseSync.js:61-86` and `ax_items` table:
+    - `unitType` / `unit_type`: Main unit, standard `'كرتونة'` or `'كيلو'`.
+    - `subUnitType` / `sub_unit_type`: Sub-unit type (`'قطعة'`, `'كيس'`, `'طبق'`).
+    - `piecesPerCarton` / `pieces_per_carton`: Number of sub-units in one carton.
+    - `weightPerCarton` / `weight_per_carton`: Gross weight in kg per carton.
+    - `sellPrice`, `buyPrice`, `pieceSellPrice`, `pieceBuyPrice`.
+- **Conversion Functions** (`src/utils/pricingCalculations.js`):
+  - `getCartonEquivalent(quantity, unit, item)`:
+    - If `unit` is `'قطعة'`, `'كيس'`, or `'طبق'`, returns `Number((quantity / piecesPerCarton).toFixed(4))`.
+    - If `unit === 'كرتونة'`, returns `quantity`.
+  - Verified by `tests/sales-subunit-piece-carton-conversion.test.js`:
+    - 20 pieces of kofta (piecesPerCarton = 20) = 1.0 carton.
+    - 10 pieces = 0.5 cartons.
+    - 6 bags of burger (piecesPerCarton = 12) = 0.5 cartons.
 
-*Vitest Note:* The user request mentions automated testing with Vitest. Because the project is currently configured with `node:test` (198 passing tests), the automated tests for the new features can be added in `tests/*.test.js` running natively with zero extra network overhead, or Vitest can be installed alongside if requested.
+### 2.4 Driver User Linkage & Sales Inventory Deduction
+- **User Accounts & Staff**:
+  - Handled in `ax_users_profiles`, `src/services/AX_StaffOperationsService.js:40-79`.
+  - Column `branch_id`: Represents the assigned warehouse/branch for that employee.
+  - On login (`src/components/auth/AX_LoginScreen.jsx:120`), `branchId` is placed in `profile.branchId`.
+- **Sales Inventory Deduction**:
+  - When an invoice is saved (`addInvoice`), `src/store/storeCacheHelper.js:14-140` executes `processInvoiceStoreState`:
+    ```javascript
+    const sIdx = updatedStock.findIndex((s) => s.warehouseId === inv.warehouseId && s.itemId === itId)
+    const delta = isSaleReturn ? cartonQty : (isPurchaseReturn ? -cartonQty : (inv.type === 'sale' ? -cartonQty : cartonQty))
+    if (sIdx >= 0) {
+      updatedStock[sIdx] = { ...updatedStock[sIdx], quantity: (updatedStock[sIdx].quantity || 0) + delta }
+    } else {
+      updatedStock.push({ warehouseId: inv.warehouseId, itemId: itId, quantity: delta, unit: itemMeta?.unitType || 'كرتونة' })
+    }
+    ```
+  - **Critical Finding**: As long as `inv.warehouseId` equals the vehicle's `id`, stock is deducted directly from that vehicle!
+  - **Current Gap**: In `src/components/invoices/AX_CreateInvoiceModal.jsx:84`, `warehouseId` unconditionally defaults to `warehouses[0]?.id || ''`. It ignores `profile.branchId`. Modifying `AX_CreateInvoiceModal.jsx` to default to `profile.branchId` when the user is linked to a van enables automatic van stock deduction when drivers create sales invoices.
 
----
-
-## 3. Routing & Navigation Architecture
-
-### 3.1 Routing Model (`src/App.jsx`)
-The application operates as a Single-Page Application (SPA) driven by client-side tab state managed within Zustand (`activeTab`).
-- **Tab State Synchronization:**
-  - Tab state is read on boot from URL query parameters (`window.location.search?tab=...`), falling back to `localStorage.getItem('ax_active_tab') || 'dashboard'`.
-  - When switching tabs, `setActiveTab` updates Zustand, writes to `localStorage`, and updates the browser URL without reload (`window.history.replaceState({}, '', url.toString())`).
-- **Role-Based Access Control (RBAC):**
-  - Tab access is guarded by `hasModuleAccess(profile, activeTab)` (`src/utils/permissionsConfig.js`).
-  - If a user lacks permission for the active tab, `App.jsx` automatically redirects to `getFirstAccessibleTab(profile)`.
-- **Canvas Geometry:**
-  - Enforces Rule 1 (Zero Empty Side Gutters): `<main className="flex-1 w-full px-3 sm:px-6 lg:px-8 py-4 pb-24 lg:pb-6 flex gap-5 items-start">`.
-  - Content stretches from edge to edge with zero restrictive `max-w-7xl mx-auto` containers.
-
-### 3.2 Navigation Components
-- **Desktop Sidebar (`src/components/navigation/AX_Sidebar.jsx`):**
-  - Docked to right side (RTL), sticky at `top-20`, dynamic width `w-64` (expanded/pinned) and `w-[72px]` (collapsed/hover).
-  - Modules grouped into logical sections: نظرة عامة, الأصناف والمخازن, التوزيع الميداني, المالية والحسابات, الإدارة وفريق العمل.
-  - Interactive search input for filtering menu items.
-  - Badge counters for pending actions (pending transfers, pending cash transfers).
-- **Mobile Bottom Navigation (`src/components/navigation/AX_MobileNavbar.jsx`):**
-  - Floating pill bar at screen bottom (`fixed bottom-3 inset-x-0 z-40 flex justify-center`).
-  - Styled with `backdrop-blur-xl`, rounded pills, horizontal swipe, and automatic `scrollIntoView` for active tab.
-- **Header (`src/components/navigation/AX_Header.jsx`):**
-  - Displays dynamic tab title, online/offline status pill with animated wifi icon, pending sync queue trigger, notification center bell with unread badge, avatar with user profile modal trigger, and logout confirmation.
-
-### 3.3 Required Navigation Extensions
-To integrate the new modules, the following updates are required:
-1. `src/utils/permissionsConfig.js`: Add definitions for `customers`, `suppliers`, and `sales_reps` in `MODULE_PERMISSIONS_CONFIG` and assign default permissions across role presets (`cashier`, `warehouse`, `accountant`, `admin`, `van_driver`).
-2. `src/components/navigation/AX_Sidebar.jsx`:
-   - Add `{ id: 'customers', label: 'إدارة العملاء', icon: UserCheck }` under المالية والحسابات or dedicated partners section.
-   - Add `{ id: 'suppliers', label: 'إدارة الموردين', icon: Building2 }` under الأصناف والمخازن or partners section.
-   - Add `{ id: 'sales_reps', label: 'المناديب والعمولات', icon: BadgePercent }` under التوزيع الميداني or المالية.
-3. `src/components/navigation/AX_MobileNavbar.jsx`: Add tabs to `allTabs` array with permission guards.
-4. `src/App.jsx`: Add lazy/modular imports and conditional render blocks for `<AX_CustomersManager />`, `<AX_SuppliersManager />`, and `<AX_SalesRepsManager />`.
-
----
-
-## 4. State Management & Data Persistence
-
-### 4.1 Zustand Store Architecture (`src/store/useAXStore.js`)
-The application state is centralized in `useAXStore`. Existing store slices include:
-- `profile`: Authenticated user profile with permissions matrix.
-- `items`: Frozen food items catalog with composite names, units, and carton packaging.
-- `inventoryStock`: Warehouse stock quantities array: `{ warehouseId, itemId, quantity, unit }`.
-- `warehouses`: Physical and mobile storage facilities: `{ id, name, type, manager }`.
-- `transfers`: Stock transfer orders between warehouses.
-- `treasuryAccounts`: Cash drawers and bank accounts: `{ id, name, type, balance }`.
-- `cashTransactions`: Ledger of deposits and disbursements: `{ id, code, type, partyName, amount, treasuryId, date, notes }`.
-- `invoices`: Sales and purchase invoices: `{ id, code, type, partyName, total, paidAmount, remainingAmount, items, status }`.
-- `clients`: Existing simple array: `{ id, name, phone, address, balance }`.
-- `suppliers`: Existing simple array: `{ id, name, phone, address, balance }`.
-- `distributors`: Van operators: `{ id, name, vanNumber }`.
-- `manufacturingOrders`: Cutting and disassembly processing batches.
-- `stockAudits`: Physical inventory audit records.
-- `notifications`: In-app system alerts.
-- `employees` & `staffInvites`: Team members and onboarding tokens.
-
-### 4.2 Offline Storage & Sync Engine
-1. **IndexedDB (`src/services/offlineDB.js`):**
-   - Database name: `ax_frozen_foods_db` (Version 1).
-   - Object Store 1: `offline_queue` (KeyPath `id`, autoIncrement) stores pending mutations `{ table, action, payload, createdAt, retries }`.
-   - Object Store 2: `cache_store` (KeyPath `key`) stores cached datasets for offline availability.
-2. **Offline Synchronizer (`src/services/offlineSync.js`):**
-   - Automatically processes queued operations sequentially when network connectivity is restored (`window.addEventListener('online', ...)`).
-   - Handles `insert`, `update`, and `delete` operations with fallback queuing if an operation fails.
-3. **Database Hydration (`src/services/AX_DatabaseSync.js`):**
-   - On application startup, executes a single parallel `Promise.all` fetching all active tables from Supabase.
-   - Maps PostgreSQL snake_case columns to frontend camelCase properties and hydrates Zustand.
-   - Registers real-time PostgreSQL replication channels for live synchronization across connected clients.
+### 2.5 Treasury, Remittance & Expense Structures
+- **Treasuries**:
+  - `initialTreasuryAccounts` (`src/store/initialData.js:42-48`):
+    - `c0000000-0000-0000-0000-000000000001`: الخزينة الرئيسية (الكاش المركزي) (`type: 'cash'`)
+    - `c0000000-0000-0000-0000-000000000002`: الحساب البنكي (الأهلي المصري) (`type: 'bank'`)
+    - `c0000000-0000-0000-0000-000000000003`: فودافون كاش الشركات (`type: 'wallet'`)
+    - `c0000000-0000-0000-0000-000000000004`: إنستا باي التجاري (`type: 'instapay'`)
+    - `c0000000-0000-0000-0000-000000000005`: عهدة سيارة التوزيع (الكاش الميداني) (`type: 'van_cash'`)
+- **Cash Transfers**:
+  - `confirmCashTransfer(id)` in `src/store/useAXStore.js:442-461`:
+    - Atomically decrements `fromTreasuryId` and increments `toTreasuryId`.
+    - Synced with Supabase `ax_cash_transfers`.
+- **Itemized Expenses**:
+  - `addCashTransaction(tx)` in `src/store/useAXStore.js:426-440`:
+    - For `type: 'expense'`, decrements the selected `treasuryId` by `tx.amount`.
+    - Supports `expenseMainCategoryId`, `expenseSubCategoryId`, `expenseSecondaryCategoryId`.
+  - In `src/store/expenseCategoryHelpers.js:21-25`, relevant operational vehicle expense categories already exist:
+    - `exp-sec-trn-fuel`: وقود وسولار سيارات التوزيع
+    - `exp-sec-trn-porter`: مشالات وعتالة نقل وتنزيل
+    - `exp-sec-trn-tolls`: رسوم طرق وكارتات ومواقف
+    - `exp-sec-mnt-vans`: صيانة ميكانيكا سيارات التبريد
 
 ---
 
-## 5. ImageKit Integration Analysis
+## 3. Technical Architecture for R1 (Vans & Stock Loading)
 
-### 5.1 Current Status
-- Credentials exist in `.env`:
-  ```env
-  VITE_IMAGEKIT_URL_ENDPOINT=https://ik.imagekit.io/c8zctprqq
-  VITE_IMAGEKIT_PUBLIC_KEY=public_xKb4EU48gwQEN3k+IkcmynMLljE=
+### 3.1 Data Model for Distribution Vehicles
+Vehicles are modeled as `ax_warehouses` with `type: 'van'` and extended properties:
+```typescript
+interface DistributionVehicle {
+  id: string; // UUID
+  name: string; // e.g., "سيارة شيفروليه جامبو 1"
+  type: 'van';
+  plateNumber?: string; // رقم اللوحة, e.g. "أ ب ج 1234"
+  model?: string; // طراز السيارة, e.g. "شيفروليه جامبو 2024"
+  manager: string; // اسم المندوب / السائق المسؤول
+  phone: string; // هاتف المندوب
+  driverId?: string; // UUID of linked user in ax_users_profiles
+  driverName?: string;
+  treasuryId?: string; // Linked treasury custody (defaults to van_cash)
+  status: 'active' | 'maintenance' | 'inactive';
+}
+```
+
+Storage mechanism:
+- Persisted to `ax_warehouses` table via `AX_OperationsService.addWarehouseInDB` and `editWarehouseInDB`.
+- Additional fields (`plateNumber`, `driverId`, `model`, `treasuryId`) are serialized in local cache and local storage (`ax_cached_db_payload.warehouses`) with backward compatibility.
+- Dedicated UI modal: `AX_AddVehicleModal.jsx` allowing quick vehicle creation with driver selection.
+
+### 3.2 Linking Driver Accounts & Automatic Sales Deduction
+1. **Driver Assignment**:
+   - In `AX_AddVehicleModal.jsx` or vehicle settings, the admin selects the driver from `employees` / `usersProfiles`.
+   - The driver's `branch_id` in `ax_users_profiles` is updated to match `vehicle.id`.
+2. **Sales Invoice Defaulting**:
+   - In `src/components/invoices/AX_CreateInvoiceModal.jsx`:
+     ```javascript
+     const userBranchId = profile?.branchId
+     const isDriver = warehouses.find((w) => w.id === userBranchId)?.type === 'van'
+     const initialWarehouseId = (userBranchId && warehouses.some((w) => w.id === userBranchId))
+       ? userBranchId
+       : warehouses[0]?.id || ''
+     ```
+   - When the logged-in driver creates a sale, `warehouseId` is preset to their assigned vehicle.
+   - When the invoice is submitted, `processInvoiceStoreState` executes:
+     `inv.warehouseId === vehicle.id` -> stock is decremented from `inventoryStock` for `vehicle.id`.
+3. **Van Direct Sale**:
+   - The sales button inside `AX_VanDistribution.jsx` records sales with `warehouseId: currentVan.id` and `treasuryId: currentVanCash.id`.
+
+### 3.3 Card-Based Stock Loading UI (Replacing Legacy Cargo UI)
+Component: `src/components/distribution/AX_VanStockLoadingModal.jsx`
+Features:
+- **Source Warehouse Selector**: Select from central/cold stores (filtering out vans).
+- **Top Category Filter Bar**: Horizontal pill buttons for categories ('الكل', 'الكبده', 'لحوم', 'مصنعات', 'مجزءات', 'أسماك', 'خضروات', etc.).
+- **Live Search**: Filter items by name or code.
+- **Card-Based Grid (Bento Cards)**:
+  - Each item card shows:
+    - Item name & category badge.
+    - Available stock at source warehouse in cartons & sub-units.
+    - Packaging breakdown badge (e.g. `كرتونة = 20 قطعة` or `كرتونة سادة`).
+    - Quantity controls: `-`, numeric input, `+`.
+    - Unit toggle pills: `'كرتونة'` vs sub-unit (`'قطعة'`, `'كيس'`, `'طبق'`).
+- **Fractional Entry & Packaging Breakdown**:
+  - Supports decimal fractions (e.g. `0.5`, `1.5`, `2.25` cartons).
+  - When entering sub-units (e.g. 10 pieces for a 20-piece carton), automatically displays carton equivalent (`0.5 كرتونة`).
+- **Load Execution**:
+  - Summary footer showing total items and total cartons loaded.
+  - One-click confirmation invokes `executeImmediateTransfer` (`fromWarehouseId: sourceId, toWarehouseId: van.id, items: validItems`), updating both warehouses atomically.
+
+---
+
+## 4. Technical Architecture for R2 (Van Daily Settlement)
+
+### 4.1 Settlement Workflow Structure
+Component: `src/components/distribution/AX_VanSettlementModal.jsx`
+
+The workflow contains three synchronized settlement pillars:
+1. **Financial Settlement (Split Payment Channels)**
+2. **Itemized Driver Operational Expenses**
+3. **Remaining Stock Settlement (Retain vs Return)**
+
+### 4.2 Multi-Line Itemized Driver Expenses
+During their daily route, drivers incur operational expenses (fuel, tolls, porterage, mechanical repairs).
+- In the settlement modal:
+  - Dynamic expense item rows:
+    - Expense Category (from `initialExpenseCategories`: fuel, tolls, porterage, maintenance, hospitality).
+    - Amount (EGP).
+    - Notes (e.g., "تفويل بنزين محطة شل طنطا").
+    - Action to add multiple lines or remove rows.
+  - Total operational expenses: `totalExpenses = sum(line.amount)`.
+  - When confirmed, each line creates a cash transaction:
+    ```javascript
+    {
+      id: generateUUID(),
+      code: `EXP-${Date.now().toString().slice(-4)}`,
+      type: 'expense',
+      partyType: 'expense',
+      partyName: `مصاريف سيارة: ${line.categoryName}`,
+      amount: Number(line.amount),
+      treasuryId: vanTreasuryId,
+      date: settlementDate,
+      notes: `تسوية يومية - ${currentVan.name}: ${line.notes}`,
+      expenseSecondaryCategoryId: line.categoryId,
+      expenseSecondaryCategoryName: line.categoryName
+    }
+    ```
+  - This automatically deducts the expenses from the van's cash custody.
+
+### 4.3 Split Payment Method Remittance
+After deducting operational expenses from gross collected cash:
+`netRemitAmount = Math.max(0, grossCustodyCash - totalExpenses)`
+
+The driver/cashier remits this net amount into company channels:
+- Multi-channel allocation:
+  - Channel 1: `treasuryId` (e.g., "الخزينة الرئيسية - كاش"), `amount`
+  - Channel 2: `treasuryId` (e.g., "الحساب البنكي - الأهلي المصري" or "إنستا باي"), `amount`
+- Live validation:
+  - Displays `allocatedTotal = sum(channel.amount)`.
+  - Displays remaining unallocated or float retained in van.
+- On confirmation, creates and confirms remittance transfers:
+  ```javascript
+  {
+    id: generateUUID(),
+    code: `REMIT-${Date.now().toString().slice(-4)}`,
+    fromTreasuryId: vanTreasuryId,
+    toTreasuryId: channel.treasuryId,
+    amount: Number(channel.amount),
+    status: 'confirmed',
+    date: settlementDate,
+    senderName: currentVan.manager,
+    notes: `تصفية يومية وتوريد (${channel.treasuryName}) - ${currentVan.name}`
+  }
   ```
-- **Finding:** No components currently connect to ImageKit. For example, `AX_UserProfileModal.jsx` reads images locally using `FileReader.readAsDataURL()` and saves the base64 string directly to localStorage.
+  Updating treasury accounts in real time.
 
-### 5.2 Required Implementation Architecture (`src/services/imageKitService.js`)
-To fulfill Requirement R1 (Customer images and documents upload):
-1. **Client-Side Upload Method:**
-   ImageKit allows client-side direct uploads via `https://upload.imagekit.io/api/v1/files/upload`.
-   - Payload: FormData containing `file`, `fileName`, `publicKey` (`VITE_IMAGEKIT_PUBLIC_KEY`), `tags`, and `folder` (e.g. `/protein_food/customers/`).
-   - For signed uploads without exposing private keys (complying with Rule 16 "Zero Secrets in Vite"): Route authentication token generation through a Supabase Edge Function (`imagekit-auth`) or provide unsigned client upload preset / direct client upload handler with base64/blob storage fallback.
-2. **URL Transformation Helper:**
-   Utility function `getImageKitUrl(filePathOrUrl, { width, height, quality = 80, crop = 'maintain_ratio' })`:
-   Generates optimized CDN URLs:
-   `${VITE_IMAGEKIT_URL_ENDPOINT}/tr:w-${width},h-${height},q-${quality}/${cleanPath}`
-3. **Document Attachment Model:**
-   For each customer record:
-   ```json
-   {
-     "imageUrl": "https://ik.imagekit.io/c8zctprqq/customers/cust-1.jpg",
-     "documents": [
-       {
-         "id": "doc-uuid-1",
-         "name": "السجل التجاري.pdf",
-         "url": "https://ik.imagekit.io/c8zctprqq/customers/docs/cr_123.pdf",
-         "type": "application/pdf",
-         "size": 1048576,
-         "uploadedAt": "2026-10-31"
-       }
-     ]
-   }
-   ```
+### 4.4 Remaining Stock Settlement (Retain vs Return)
+Displays all items currently remaining on the vehicle custody inventory (`inventoryStock.filter(s => s.warehouseId === currentVan.id)`).
+- **Option A: Retain on Vehicle ("إبقاء الرصيد بالسيارة")**:
+  - Stock stays as custody on `van.id` for the next day's route.
+- **Option B: Return to Warehouse ("إرجاع الرصيد للمخزن")**:
+  - User chooses destination warehouse (e.g., central cold store).
+  - Can return all or partial quantities.
+  - Invokes `executeImmediateTransfer` with `fromWarehouseId: currentVan.id` and `toWarehouseId: targetWarehouseId`.
+  - Van custody inventory is decremented to 0 (or remaining balance), and central warehouse inventory is replenished.
 
----
-
-## 6. Database Schema & Data Models
-
-### 6.1 Existing Tables Catalog
-The Supabase database instance (`gwxumpjezcwxhpuicwfi.supabase.co`) hosts the following operational tables:
-1. `ax_items`
-2. `ax_warehouses`
-3. `ax_inventory_stock`
-4. `ax_stock_audits`
-5. `ax_transfers`
-6. `ax_treasuries`
-7. `ax_cash_transactions`
-8. `ax_cash_transfers`
-9. `ax_invoices`
-10. `ax_clients` (Currently simple schema: `id`, `name`, `phone`, `address`, `balance`)
-11. `ax_suppliers` (Currently simple schema: `id`, `name`, `phone`, `address`, `balance`)
-12. `ax_distributors`
-13. `ax_notifications`
-14. `ax_categories`
-15. `ax_manufacturing_orders`
-16. `ax_users_profiles`
-17. `ax_staff_invites`
-18. `ax_activity_logs`
-
-### 6.2 Proposed Schema Upgrades
-
-#### A. Customers Table (`ax_clients`) Extensions
-To fulfill Requirement R1:
-```sql
-ALTER TABLE ax_clients
-  ADD COLUMN IF NOT EXISTS opening_balance NUMERIC DEFAULT 0,
-  ADD COLUMN IF NOT EXISTS balance_type VARCHAR(10) DEFAULT 'debit', -- 'debit' (مدين - عليه) or 'credit' (دائن - له)
-  ADD COLUMN IF NOT EXISTS primary_category VARCHAR(100),
-  ADD COLUMN IF NOT EXISTS sub_category VARCHAR(100),
-  ADD COLUMN IF NOT EXISTS governorate VARCHAR(100),
-  ADD COLUMN IF NOT EXISTS city VARCHAR(100),
-  ADD COLUMN IF NOT EXISTS district VARCHAR(100),
-  ADD COLUMN IF NOT EXISTS image_url TEXT,
-  ADD COLUMN IF NOT EXISTS documents JSONB DEFAULT '[]'::jsonb,
-  ADD COLUMN IF NOT EXISTS credit_limit NUMERIC DEFAULT 0,
-  ADD COLUMN IF NOT EXISTS tax_number VARCHAR(50),
-  ADD COLUMN IF NOT EXISTS notes TEXT;
-```
-
-#### B. Suppliers Table (`ax_suppliers`) Extensions
-To fulfill Requirement R2:
-```sql
-ALTER TABLE ax_suppliers
-  ADD COLUMN IF NOT EXISTS company_name VARCHAR(150),
-  ADD COLUMN IF NOT EXISTS supply_type VARCHAR(100), -- نوع التوريد (لحوم مستوردة، دواجن، مصنعات، أسماك)
-  ADD COLUMN IF NOT EXISTS category VARCHAR(100),
-  ADD COLUMN IF NOT EXISTS opening_balance NUMERIC DEFAULT 0,
-  ADD COLUMN IF NOT EXISTS balance_type VARCHAR(10) DEFAULT 'credit', -- 'credit' (دائن - مستحق له) or 'debit' (مدين - دفعة مقدمة)
-  ADD COLUMN IF NOT EXISTS contact_person VARCHAR(100),
-  ADD COLUMN IF NOT EXISTS tax_number VARCHAR(50),
-  ADD COLUMN IF NOT EXISTS commercial_register VARCHAR(50),
-  ADD COLUMN IF NOT EXISTS notes TEXT;
-```
-
-#### C. Sales Representatives Table (`ax_sales_reps`) (New Entity)
-To fulfill Requirement R3:
-```sql
-CREATE TABLE IF NOT EXISTS ax_sales_reps (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  code VARCHAR(50) UNIQUE NOT NULL,
-  name VARCHAR(150) NOT NULL,
-  phone VARCHAR(50),
-  email VARCHAR(100),
-  national_id VARCHAR(50),
-  assigned_area VARCHAR(100),
-  opening_balance NUMERIC DEFAULT 0,
-  current_balance NUMERIC DEFAULT 0,
-  sales_target NUMERIC DEFAULT 0,
-  commission_model VARCHAR(50) NOT NULL DEFAULT 'percentage_tiered',
-  -- Commission Configuration (Flexible Multi-Model):
-  -- Model 1: rate_per_thousand (amount per 1,000 EGP of sales)
-  rate_per_thousand NUMERIC DEFAULT 0,
-  -- Model 2: category_rates: { "أسماك": 2.5, "لحوم": 3.0, "مصنعات": 4.0 }
-  category_rates JSONB DEFAULT '{}'::jsonb,
-  -- Model 3: tier_rates: [ { "min": 0, "max": 50000, "rate": 2 }, { "min": 50001, "max": 100000, "rate": 3.5 } ]
-  tier_rates JSONB DEFAULT '[]'::jsonb,
-  target_bonus_rate NUMERIC DEFAULT 0,
-  status VARCHAR(20) DEFAULT 'active',
-  notes TEXT,
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  updated_at TIMESTAMPTZ DEFAULT NOW()
-);
-```
-
-#### D. Sales Rep Commission Ledger Table (`ax_rep_transactions`) (New Entity)
-```sql
-CREATE TABLE IF NOT EXISTS ax_rep_transactions (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  rep_id UUID REFERENCES ax_sales_reps(id) ON DELETE CASCADE,
-  type VARCHAR(50) NOT NULL, -- 'commission_accrual', 'disbursement_payment', 'bonus', 'adjustment'
-  amount NUMERIC NOT NULL,
-  invoice_id UUID REFERENCES ax_invoices(id),
-  treasury_id UUID REFERENCES ax_treasuries(id),
-  date DATE NOT NULL,
-  notes TEXT,
-  created_at TIMESTAMPTZ DEFAULT NOW()
-);
-```
+### 4.5 Settlement Receipt & Audit Log
+- Creates a structured settlement summary record:
+  ```javascript
+  interface VanSettlementRecord {
+    id: string;
+    code: string; // e.g. "SETTLE-VAN-12345"
+    vanId: string;
+    vanName: string;
+    driverName: string;
+    date: string;
+    grossCash: number;
+    expenses: Array<{ categoryName: string; amount: number; notes: string }>;
+    totalExpenses: number;
+    netRemitted: number;
+    splitPayments: Array<{ treasuryId: string; treasuryName: string; amount: number }>;
+    stockAction: 'retained' | 'returned';
+    returnedItemsCount?: number;
+    createdAt: string;
+  }
+  ```
+- Stored in `ax_van_settlements` (with fallback to local storage / `useAXStore`).
+- Displays a clean paper-style summary receipt modal (`AX_VanSettlementReceiptModal.jsx`) with print capability.
 
 ---
 
-## 7. Commission Engine & Sales Reps Architecture
+## 5. Invariants & Risk Mitigation
 
-### 7.1 Commission Calculation Engine (`src/utils/commissionEngine.js`)
-The multi-model commission engine must support three calculation formulas:
-1. **Fixed Amount per Sales Volume (Rate per 1,000 EGP):**
-   $$\text{Commission} = \left(\frac{\text{Sales Total}}{1000}\right) \times \text{Rate Per Thousand}$$
-2. **Category-Specific Percentage Model:**
-   $$\text{Commission} = \sum_{\text{items}} \left(\text{Item Sales Total} \times \frac{\text{Category Rate \%}}{100}\right)$$
-3. **Tiered Target Achievement Model:**
-   - Evaluates total sales against defined volume tiers (`min` to `max`).
-   - If sales exceed target, an optional target attainment bonus (`target_bonus_rate`) is applied on surplus or total volume.
-
-### 7.2 Representative 360° Statement of Account (Ledger)
-Derived directly from `AX_Ledger360Report.jsx` patterns:
-- Tracks chronologically:
-  - Opening balance
-  - Accrued commissions from validated sales invoices
-  - Payments disbursed to the rep via cash transactions (`PAY-xxx`)
-  - Running net balance (`Opening + Accrued Commissions - Payments Disbursed`)
-- Includes filter by date range, printable A4 ledger sheet, and CSV export.
+| Invariant | Risk | Mitigation |
+|---|---|---|
+| **Max 500 lines per file** | `AX_VanDistribution.jsx` is at 495 lines; adding R1/R2 in one file breaks `tests/file-invariants.test.js`. | Decompose into sub-components under 350 lines each: `AX_AddVehicleModal.jsx`, `AX_VanStockLoadingModal.jsx`, `AX_VanSettlementModal.jsx`, `AX_VanCustodySummaryCard.jsx`, `vanDistributionHelpers.js`. |
+| **Store Line Limit** | `useAXStore.js` is at 498 lines; adding new actions in `useAXStore.js` directly will exceed 500 lines. | Delegate operations to helper functions (`vanStoreHelpers.js`) and reuse existing generic store methods (`addWarehouse`, `addCashTransaction`, `confirmCashTransfer`, `addInvoice`, `executeImmediateTransfer`). |
+| **No comments in code** | Constitution bans comments in production code. | Zero comments in any code files. All documentation belongs in reports and analysis. |
+| **React Hook Order** | Violating hook rules triggers failures in `tests/hooks-integrity.test.js`. | Ensure all hooks (`useState`, `useEffect`, `useMemo`, `useBodyScrollLock`) are imported from `'react'` and called at the top of components before any conditional early returns. |
+| **Full Canvas & Design Standards** | Violating Rule 0 design invariants (no `max-w-7xl` center container, pill buttons, soft colors, Cairo/Tajawal font). | Containers use `w-full px-3 sm:px-6 lg:px-8`, buttons are `rounded-full font-black`, 1:1 skeleton loaders, custom company date picker. |
+| **Negative Stock & Pricing** | Fractional calculations might introduce floating-point inaccuracies. | Use `Number((val).toFixed(4))` consistently across carton equivalents as established in `tests/sales-subunit-piece-carton-conversion.test.js`. |
 
 ---
 
-## 8. Dashboard Stock Drilldown & Financial Metrics Design
+## 6. Implementation File Plan
 
-### 8.1 Pinned Inventory Widget
-Requirement R4 mandates user-configurable pinned inventory monitoring:
-- **State Storage:** Persisted in `localStorage.getItem('ax_pinned_item_ids')` and Zustand.
-- **Widget Interface:**
-  - Displays a clean horizontal carousel or grid of pinned item cards showing composite item name, code, total system quantity, and primary packaging unit.
-  - "تثبيت أصناف" button opens a lightweight multi-select modal (`AX_PinItemsModal`) with search to check/uncheck monitored items.
-- **Drilldown Modal (`AX_StockDrilldownModal`):**
-  - Clicking any pinned item opens a detailed modal showing:
-    - Total quantity and value.
-    - Table / Bento breakdown per branch/warehouse:
-      - Warehouse Name (`warehouses.name`)
-      - Warehouse Type (`cold_store`, `processing`, `van`, etc.)
-      - Available Stock (`quantity`)
-      - Unit (`unit`)
-      - Estimated Value (`quantity * buyPrice`)
+### 6.1 New Files to Create:
+1. `src/components/distribution/vanDistributionHelpers.js`
+   - Calculation helpers for packaging breakdown display, fractional quantity parsing, settlement totals, and formatting.
+2. `src/components/distribution/AX_AddVehicleModal.jsx`
+   - Modal to add/manage distribution vehicles with plate number, driver linking, model, and custody treasury.
+3. `src/components/distribution/AX_VanStockLoadingModal.jsx`
+   - Card-based selection layout with category filters on top, fractional packaging breakdown inputs, and instant transfer loading.
+4. `src/components/distribution/AX_VanSettlementModal.jsx`
+   - End-of-day settlement modal with financial revenue split payments, itemized driver operational expenses, and stock retain/return options.
+5. `src/components/distribution/AX_VanCustodySummaryCard.jsx`
+   - Custody overview card displaying loaded inventory, packaging breakdowns, current cash custody, and action buttons.
+6. `src/components/distribution/AX_VanSettlementReceiptModal.jsx`
+   - Printable paper-style settlement receipt modal for daily reconciliation.
+7. `tests/van-distribution-settlement.test.js`
+   - Comprehensive unit and integration test suite covering vehicle management, card-based stock loading, fractional packaging breakdowns, driver sales deductions, split payment remittances, and itemized expense deductions.
 
-### 8.2 Real-Time Financial Summary Metrics
-Update `AX_DashboardMetricsCards.jsx` to calculate and present:
-1. **ديون العملاء (Receivables):**
-   $$\sum \text{Client Debts} = \sum_{c \in \text{clients}} (\text{Current Balance} \text{ where } \text{balanceType} = \text{'debit'})$$
-2. **التزامات الموردين (Payables):**
-   $$\sum \text{Supplier Liabilities} = \sum_{s \in \text{suppliers}} (\text{Current Balance} \text{ where } \text{balanceType} = \text{'credit'})$$
-3. **أرصدة المناديب (Rep Balances):**
-   $$\sum \text{Rep Balances} = \sum_{r \in \text{reps}} \text{Current Net Commission Balance}$$
-4. **نسبة تحقيق الأهداف (Target Progress):**
-   $$\text{Attainment \%} = \frac{\sum \text{Sales Revenue}}{\sum \text{Rep Targets}} \times 100$$
-
----
-
-## 9. Brand Theme Color Alignment Plan
-
-### 9.1 Color Token Migration Palette
-Requirement R5 mandates updating the application's primary visual theme from arctic blue to **meat red / burgundy** consistent with the Protein Food logo:
-
-| Token | Old Color (Arctic Blue) | New Color (Meat Red / Burgundy) | Usage |
-|---|---|---|---|
-| `primary.DEFAULT` | `#0284c7` | `#991b1b` (Tailwind Red-800) | Primary buttons, active tabs, highlights |
-| `primary.container` | `#0c4a6e` | `#450a0a` (Tailwind Red-950) | Container headers, banner backgrounds |
-| `primary.on-container` | `#bae6fd` | `#ffe4e6` (Rose-100) | Text on primary containers |
-| `primary.dark` | `#0369a1` | `#7f1d1d` (Tailwind Red-900) | Hover states, active borders |
-| `secondary.DEFAULT` | `#0891b2` | `#b91c1c` (Tailwind Red-700) | Secondary action buttons, chips |
-| `secondary.container` | `#cffafe` | `#fef2f2` (Red-50) | Light alert tags, filter pills |
-| `secondary.on-container`| `#155e75` | `#991b1b` (Red-800) | Text on secondary containers |
-
-### 9.2 File Update Checklist for Theme Alignment
-1. `tailwind.config.js`: Update `theme.extend.colors.primary` and `secondary`.
-2. `index.html`: Update `<meta name="theme-color" content="#991b1b" />`.
-3. `vite.config.js`: Update `manifest.theme_color: '#991b1b'`.
-4. `public/manifest.json`: Update `"theme_color": "#991b1b"`.
-5. `src/index.css`: Update selection and custom scrollbar backgrounds.
-6. `src/components/common/AppUpdateNotifier.jsx`: Update gradient stops from `[#0284c7]` to `[#991b1b]`.
-7. `src/components/common/AX_InstallPwaBanner.jsx`: Update background and button styles.
-8. `src/components/common/AX_WelcomeOverlay.jsx`: Update radial gradient and text clip gradients.
-9. `src/components/dashboard/AX_SalesFlowChart.jsx` & `AX_StockDistributionChart.jsx`: Update SVG gradient stops and palette arrays.
-10. `DESIGN.md` & `GEMINI.md`: Update brand design system tokens to reflect the new red/burgundy palette.
-
----
-
-## 10. Recommended Milestone Decomposition
-
-To ensure seamless execution adhering to the 500-line invariant and zero regressions on the 198 existing tests:
-
-### Milestone 1: Brand Theme Alignment & Core Infrastructure
-- Update `tailwind.config.js`, `vite.config.js`, `index.html`, `public/manifest.json`, and common layout components to meat red/burgundy.
-- Create `src/services/imageKitService.js` and `src/utils/commissionEngine.js`.
-- Update store initial data and hydration helpers for customers, suppliers, and sales reps.
-
-### Milestone 2: Customers Management Module
-- Create `src/components/customers/AX_CustomersManager.jsx`.
-- Create `src/components/customers/AX_CustomerModal.jsx` (with hierarchical categories, governorate/city/district selectors, debit/credit opening balances, and ImageKit image/doc attachments).
-- Create `src/components/customers/AX_CustomerCategorySelect.jsx`.
-- Wire permissions in `permissionsConfig.js` and navigation in `AX_Sidebar.jsx` and `AX_MobileNavbar.jsx`.
-
-### Milestone 3: Suppliers Management Module
-- Create `src/components/suppliers/AX_SuppliersManager.jsx`.
-- Create `src/components/suppliers/AX_SupplierModal.jsx` (with supply types, company name, category, payables/receivables opening balance).
-- Wire permissions in `permissionsConfig.js` and navigation in `AX_Sidebar.jsx` and `AX_MobileNavbar.jsx`.
-
-### Milestone 4: Sales Representatives & Commissions Module
-- Create `src/components/reps/AX_SalesRepsManager.jsx`.
-- Create `src/components/reps/AX_SalesRepModal.jsx` (commission models, target, opening balance).
-- Create `src/components/reps/AX_SalesRepLedgerModal.jsx` (360° statement of account, accrued commissions, payments).
-- Wire permissions and navigation.
-
-### Milestone 5: Dashboard Enhancements
-- Create `src/components/dashboard/AX_PinnedInventoryWidget.jsx` and `AX_StockDrilldownModal.jsx`.
-- Update `AX_DashboardMetricsCards.jsx` with customer receivables, supplier liabilities, rep balances, and target progress.
-- Embed pinned inventory widget into `AX_Dashboard.jsx`.
-
-### Milestone 6: Automated Testing & Verification
-- Add comprehensive automated unit and integration tests in `tests/` verifying customer/supplier balance math, commission formulas, and dashboard aggregations.
-- Verify all files adhere to the 500-line hard limit and React hooks integrity.
-- Run full test suite and confirm 0 failures.
+### 6.2 Existing Files to Update:
+1. `src/components/distribution/AX_VanDistribution.jsx`
+   - Refactor to clean coordinator component (reducing from 495 lines to ~280 lines), incorporating vehicle management tabs/buttons, custody card, stock loading modal, and daily settlement modal.
+2. `src/components/invoices/AX_CreateInvoiceModal.jsx`
+   - Add minimal driver warehouse default logic (2-3 lines): if `profile?.branchId` matches a vehicle warehouse, default `warehouseId` to that vehicle so driver sales automatically deduct from the vehicle custody inventory.
+3. `src/store/initialData.js`
+   - Ensure default van warehouses and custody accounts are initialized cleanly.

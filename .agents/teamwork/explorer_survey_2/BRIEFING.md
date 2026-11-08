@@ -1,43 +1,46 @@
-# BRIEFING — 2026-10-31T21:47:00Z
+# BRIEFING — 2026-11-08T23:57:40Z
 
 ## Mission
-Conduct a thorough, read-only domain logic and entity investigation of the codebase for Requirements R1 (Customers), R2 (Suppliers), and R3 (Sales Reps & Commissions Engine), synthesizing existing patterns, data schemas, mathematical formulations, and ledger architecture.
+Investigate and synthesize architectural blueprint for Requirement R3: Standalone Expenses & Multi-Tier Cost Centers.
 
 ## 🔒 My Identity
 - Archetype: explorer
-- Roles: Domain Logic & Entities Explorer, Synthesis Specialist
+- Roles: investigation, synthesis
 - Working directory: d:\AXONID_PROJECTS\AX_FROZEN_FOODS\.agents\teamwork\explorer_survey_2
-- Original parent: dc5da5ed-817b-4784-a7e6-1365172c95ec
-- Milestone: Project Survey & Architecture Blueprint
+- Original parent: 15528934-40cd-4161-acc6-b11a7e24990d
+- Milestone: survey
 
 ## 🔒 Key Constraints
 - Read-only investigation — do NOT implement
-- Strictly read-only on codebase (no modifications to src, tests, or app data)
-- Write metadata, analysis, and handoff exclusively within .agents/teamwork/explorer_survey_2/
-- Deliver self-contained analysis.md and handoff.md with mathematical commission formulas, ledger schemas, and interface contracts
+- AXONID Rules (<= 500 lines per file, zero comments in code, pill buttons, full canvas, Cairo/Tajawal)
+- Scope: R3 Standalone Expenses & Multi-Tier Cost Centers (page, cost center selector, split payments, deferred/installment scheduling, category modal overhaul)
 
 ## Current Parent
-- Conversation ID: dc5da5ed-817b-4784-a7e6-1365172c95ec
-- Updated: not yet
+- Conversation ID: 15528934-40cd-4161-acc6-b11a7e24990d
+- Updated: 2026-11-08T23:57:40Z
 
 ## Investigation State
-- **Explored paths**: `ORIGINAL_REQUEST.md`, `GEMINI.md`, `package.json`, `src/App.jsx`, `src/store/initialData.js`, `src/store/useAXStore.js`, `src/store/categoryHelpers.js`, `src/services/AX_OperationsService.js`, `src/services/AX_DatabaseSync.js`, `src/services/offlineDB.js`, `src/components/invoices/`, `src/components/reports/`, `src/components/treasury/`, `src/components/profile/`, Supabase tables via MCP (`ax_clients`, `ax_suppliers`, `ax_invoices`, `ax_distributors`)
+- **Explored paths**:
+  - `src/App.jsx`, `src/components/navigation/AX_Sidebar.jsx`, `src/components/navigation/AX_MobileNavbar.jsx`, `src/utils/permissionsConfig.js`
+  - `src/store/useAXStore.js`, `src/store/expenseCategoryHelpers.js`, `src/store/storeCacheHelper.js`
+  - `src/components/treasury/AX_ExpenseCategoriesModal.jsx`, `src/components/treasury/AX_ExpenseCategoryHierarchySelect.jsx`, `src/components/treasury/AX_TreasuryTransactionModal.jsx`, `src/components/treasury/AX_TreasuryLedger.jsx`
+  - `src/services/AX_OperationsService.js`, `src/services/AX_DatabaseSync.js`, `src/services/offlineDB.js`, `src/services/offlineSync.js`
+  - Supabase database schema via MCP `supabase_proteinfood` (`ax_cash_transactions`, `ax_categories`, `ax_warehouses`, `ax_distributors`)
+  - Unit tests: `tests/expense-categories-3tier.test.js`, `tests/invoices-returns-treasury-expenses.test.js`
 - **Key findings**:
-  * Customers and Suppliers exist only as primitive mock objects (`id, name, phone, address, balance`) without opening balance debit/credit types, categories, or geographic hierarchies.
-  * Sales Representatives and Commission Engine are completely absent; distributors only exist as van drivers.
-  * 198 tests are passing in 9 test suites; strict file length limit of 500 lines per file must be respected.
-  * ImageKit endpoint `https://ik.imagekit.io/c8zctprqq` is defined in GEMINI.md but has no client utility in `src`.
-- **Unexplored areas**: None for domain requirements R1, R2, R3; full analysis and handoff generated.
+  - `'expenses'` module is currently absent from navigation, routing, and permissions.
+  - `ax_cash_transactions` models only single immediate debits against one treasury.
+  - Multi-treasury split payments and deferred expenses ("آجل") require a unified `AX_Expense` data structure and installment schedule.
+  - `AX_ExpenseCategoriesModal.jsx` suffers from race conditions in `handleSaveAdd`, a parent ID assignment bug for subcategories (`selectedSubId(parentId)`), cramped inline forms, and nested scrollbars on mobile.
+  - `src/store/useAXStore.js` is at 498 lines; all new expense mutations must be modularized in `src/store/expenseStoreHelpers.js` to avoid violating the 500-line limit.
+- **Unexplored areas**: None within the scope of R3. Complete blueprint generated.
 
 ## Key Decisions Made
-- Formulated exact mathematical equations for commission models A (volume), B (category/item %), C (target tier slabs), and D (hybrid).
-- Established 3-tier geographic classification and dynamic category tree models for customers.
-- Specified formal debit/credit signed opening balances for customers and suppliers to eliminate ad-hoc approximations.
-- Designed component architecture keeping all new files under 400 lines (well within the 500-line invariant).
+- Architecture blueprint completed with file manifest, data models, state synchronization, and test plan documented in `analysis.md` and `handoff.md`.
 
 ## Artifact Index
-- `DISPATCH.md` — Incoming dispatch message
-- `BRIEFING.md` — Agent operational memory
-- `progress.md` — Liveness and step tracking
-- `analysis.md` — Technical domain analysis and specifications
-- `handoff.md` — Final structured handoff report
+- DISPATCH.md — Initial dispatch message
+- BRIEFING.md — Persistent context & memory
+- progress.md — Liveness heartbeat & step tracking
+- analysis.md — In-depth architectural findings for R3
+- handoff.md — 5-component handoff report

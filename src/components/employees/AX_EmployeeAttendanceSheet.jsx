@@ -19,30 +19,35 @@ import { getInitialAttendanceForDate, calculateEmployeeDailyRate } from '../../s
 const STATUS_CONFIG = {
   present: {
     label: 'حاضر (كامل)',
+    shortLabel: 'حاضر',
     color: 'bg-emerald-500/10 text-emerald-800 border-emerald-500/30 hover:bg-emerald-500/20',
     activeColor: 'bg-emerald-700 text-white border-emerald-700 shadow-xs',
     icon: CheckCircle2,
   },
   half_day: {
     label: 'نصف يوم',
+    shortLabel: 'نصف',
     color: 'bg-amber-500/10 text-amber-800 border-amber-500/30 hover:bg-amber-500/20',
     activeColor: 'bg-amber-600 text-white border-amber-600 shadow-xs',
     icon: Clock,
   },
   absent_excused: {
     label: 'غياب بعذر',
+    shortLabel: 'بعذر',
     color: 'bg-blue-500/10 text-blue-800 border-blue-500/30 hover:bg-blue-500/20',
     activeColor: 'bg-blue-700 text-white border-blue-700 shadow-xs',
     icon: AlertTriangle,
   },
   absent_unexcused: {
     label: 'غياب بدون عذر',
+    shortLabel: 'غياب',
     color: 'bg-rose-500/10 text-rose-800 border-rose-500/30 hover:bg-rose-500/20',
     activeColor: 'bg-rose-700 text-white border-rose-700 shadow-xs',
     icon: XCircle,
   },
   holiday: {
     label: 'إجازة / راحة',
+    shortLabel: 'راحة',
     color: 'bg-purple-500/10 text-purple-800 border-purple-500/30 hover:bg-purple-500/20',
     activeColor: 'bg-purple-700 text-white border-purple-700 shadow-xs',
     icon: Coffee,
@@ -69,6 +74,7 @@ export function AX_EmployeeAttendanceSheet({
     setAttendanceSheet((prev) =>
       prev.map((r) => {
         if (r.employeeId !== empId) return r
+        const isDaily = r.salaryType === 'daily' || r.salary_type === 'daily'
         let deductionDays = 0
         let dailyEarned = r.dailyRate
 
@@ -80,13 +86,13 @@ export function AX_EmployeeAttendanceSheet({
           dailyEarned = Math.round(r.dailyRate * 0.5 * 100) / 100
         } else if (newStatus === 'absent_excused') {
           deductionDays = 0
-          dailyEarned = r.dailyRate
+          dailyEarned = isDaily ? 0 : r.dailyRate
         } else if (newStatus === 'absent_unexcused') {
           deductionDays = 1
           dailyEarned = 0
         } else if (newStatus === 'holiday') {
           deductionDays = 0
-          dailyEarned = r.dailyRate
+          dailyEarned = isDaily ? 0 : r.dailyRate
         }
 
         return {
@@ -195,13 +201,13 @@ export function AX_EmployeeAttendanceSheet({
     <div className="space-y-3.5">
       <div className="bg-surface-lowest border border-outline-variant/30 rounded-3xl p-3.5 sm:p-4 shadow-xs space-y-3">
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 w-full sm:w-auto">
             <div className="w-10 h-10 rounded-2xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
               <Calendar className="w-5 h-5" />
             </div>
-            <div>
+            <div className="flex-1 sm:flex-initial">
               <span className="text-xs font-bold text-on-surface-variant block">تاريخ اليومية وسجل الحضور</span>
-              <div className="w-48 mt-0.5">
+              <div className="w-full sm:w-56 mt-0.5 relative">
                 <AX_CompanyDatePicker
                   value={selectedDate}
                   onChange={setSelectedDate}
@@ -323,7 +329,7 @@ export function AX_EmployeeAttendanceSheet({
                   </div>
                 </div>
 
-                <div className="flex items-center gap-1.5 flex-wrap">
+                <div className="grid grid-cols-5 gap-1 w-full lg:w-auto lg:flex lg:items-center lg:gap-1.5">
                   {Object.keys(STATUS_CONFIG).map((stKey) => {
                     const cfg = STATUS_CONFIG[stKey]
                     const Icon = cfg.icon
@@ -333,12 +339,13 @@ export function AX_EmployeeAttendanceSheet({
                         key={stKey}
                         type="button"
                         onClick={() => handleStatusChange(r.employeeId, stKey)}
-                        className={`inline-flex items-center gap-1 px-2.5 py-1.5 rounded-full text-[11px] font-black border transition-all cursor-pointer ${
+                        className={`inline-flex items-center justify-center gap-1 px-1 sm:px-2.5 py-1.5 rounded-full text-[10px] sm:text-[11px] font-black border transition-all cursor-pointer ${
                           isSelected ? cfg.activeColor : cfg.color
                         }`}
                       >
-                        <Icon className="w-3.5 h-3.5" />
-                        <span>{cfg.label}</span>
+                        <Icon className="w-3 h-3 sm:w-3.5 sm:h-3.5 shrink-0" />
+                        <span className="hidden sm:inline">{cfg.label}</span>
+                        <span className="sm:hidden">{cfg.shortLabel}</span>
                       </button>
                     )
                   })}
@@ -361,3 +368,5 @@ export function AX_EmployeeAttendanceSheet({
     </div>
   )
 }
+
+export default AX_EmployeeAttendanceSheet

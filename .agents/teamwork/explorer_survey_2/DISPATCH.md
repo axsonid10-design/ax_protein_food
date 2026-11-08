@@ -1,46 +1,19 @@
-## 2026-10-31T21:46:34Z
-Sender: dc5da5ed-817b-4784-a7e6-1365172c95ec (parent)
-Priority: MESSAGE_PRIORITY_HIGH
+## 2026-11-08T21:49:40Z
+You are explorer_survey_2. Your working directory is d:\AXONID_PROJECTS\AX_FROZEN_FOODS\.agents\teamwork\explorer_survey_2.
 
-You are Explorer 2 (Domain Logic & Entities Explorer) for Project Survey.
-Your working directory is: d:\AXONID_PROJECTS\AX_FROZEN_FOODS\.agents\teamwork\explorer_survey_2\
+Read d:\AXONID_PROJECTS\AX_FROZEN_FOODS\.agents\teamwork\ORIGINAL_REQUEST.md before doing anything else.
 
-MANDATORY FIRST STEP:
-Read the verbatim user request at:
-d:\AXONID_PROJECTS\AX_FROZEN_FOODS\.agents\teamwork\ORIGINAL_REQUEST.md
+Your scope is to investigate Requirement R3:
+### R3. Standalone Expenses & Multi-Tier Cost Centers
+Provide a dedicated standalone Expenses page ("المصروفات"). Implement a multi-tier classification hierarchy where users select a cost center entity before choosing the main expense category: Warehouses (dynamically listing all warehouses), Vehicles (dynamically listing all distribution vans), Factory ("المصنع"), or General. Main expense categories must be shared across entities. Support splitting expense payments across multiple treasuries/accounts (e.g. part cash, part transfer), and support deferred expenses ("آجل") with installment scheduling. Overhaul the Expense Categories Management modal ("إدارة بنود المصروفات") to eliminate overlapping and broken form elements, ensuring smooth category creation and editing.
 
-Your Objective:
-Conduct a thorough, read-only domain logic investigation of the codebase focusing on Requirements R1, R2, and R3:
-1. Requirement R1: Customers Management Module
-   - Customer profile data structures, opening balance tracking (debit/credit - receivables vs payables).
-   - Dynamic multi-level hierarchical categories (primary category and sub-category).
-   - Independent geographic classification (governorate, city/center, district).
-   - ImageKit document and photo attachment uploading and rendering patterns.
-2. Requirement R2: Suppliers Management Module
-   - Supplier profile data structures, contact details, company name.
-   - Supply type (نوع التوريد) and departmental/category classification.
-   - Supplier opening balance tracking (payables vs receivables).
-   - Full supplier management operations (CRUD, filtering, search).
-3. Requirement R3: Sales Representatives & Commissions Module
-   - Sales representative profiles, contact info, assigned sales targets, opening/running balances.
-   - Flexible multi-model commission engine:
-     a) Volume-based rates (e.g. per fixed sales volume like every 1,000 EGP).
-     b) Item/category-specific commission percentages.
-     c) Target tier alignments (attainment percentage bonuses/slabs).
-   - Dedicated statement of account (ledger) data model and generation logic:
-     accrued commissions, disbursed payments, running net balance.
-4. Existing entities, stores, mock data, or database tables related to customers, suppliers, sales reps, sales, or invoices in the project.
+Investigate the authoritative codebase in d:\AXONID_PROJECTS\AX_FROZEN_FOODS:
+1. Search and inspect all existing files related to expenses, expense categories, treasuries, payments, accounting, and modals (e.g., in src/components/, src/store/, src/services/).
+2. Identify how expenses are currently modeled in the database schema (`ax_expenses`, categories, etc.) and in `useAXStore.js`.
+3. Check navigation routing (`App.jsx`, `AX_Sidebar.jsx`, `AX_MobileNavbar.jsx`) to see how "المصروفات" is or should be added as a standalone page.
+4. Inspect the existing Expense Categories Management modal ("إدارة بنود المصروفات") to understand the layout issues, overlapping/broken form elements, and state bindings.
+5. Trace payment methods and treasuries (cash, bank transfer) to see how split payments and deferred expenses ("آجل") with installment scheduling should be integrated.
+6. Identify the exact files that need to be created or modified, any DB schema additions needed, and component architectures complying with AXONID standards (<= 500 lines per file, zero comments, pill buttons, full canvas).
 
-Scope Boundaries:
-- READ-ONLY investigation. You MUST NOT modify or create any source code, test, or data files.
-- Write your metadata and report files ONLY within your working directory.
-
-Outputs:
-1. Write your detailed technical findings to:
-   d:\AXONID_PROJECTS\AX_FROZEN_FOODS\.agents\teamwork\explorer_survey_2\analysis.md
-2. Write your structured handoff to:
-   d:\AXONID_PROJECTS\AX_FROZEN_FOODS\.agents\teamwork\explorer_survey_2\handoff.md
-3. Send a brief message to parent via send_message with your handoff reference.
-
-Completion Criteria:
-- analysis.md and handoff.md are written with clear data schemas, mathematical formulations for the commission engine, ledger transaction models, and interface contracts.
+Document your findings and recommendations in d:\AXONID_PROJECTS\AX_FROZEN_FOODS\.agents\teamwork\explorer_survey_2\analysis.md and d:\AXONID_PROJECTS\AX_FROZEN_FOODS\.agents\teamwork\explorer_survey_2\handoff.md. Update progress.md as you work.
+When done, send a message to your caller with a summary of findings and the path to your handoff.md.
