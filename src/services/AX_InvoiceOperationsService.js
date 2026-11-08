@@ -2,6 +2,7 @@ import { supabase } from './supabaseClient.js'
 import { generateUUID } from '../utils/AX_UUID.js'
 import { AX_RecycleBinService } from './AX_RecycleBinService.js'
 import { offlineDB } from './offlineDB.js'
+import { getCartonEquivalent } from '../utils/pricingCalculations.js'
 
 export const AX_InvoiceOperationsService = {
   addInvoiceInDB: async (inv, userProfile = null) => {
@@ -42,13 +43,15 @@ export const AX_InvoiceOperationsService = {
           const itemId = item.itemId || item.id
           const qty = Number(item.quantity || 0)
           if (!itemId || qty <= 0) continue
+          const { data: itemMeta } = await supabase.from('ax_items').select('unit_type, sub_unit_type, pieces_per_carton, weight_per_carton').eq('id', itemId).maybeSingle()
+          const cartonQty = getCartonEquivalent(qty, item.unit, itemMeta || item)
           const { data: stockRow } = await supabase.from('ax_inventory_stock').select('*').eq('warehouse_id', invoiceRow.warehouse_id).eq('item_id', itemId).maybeSingle()
-          const delta = isSaleReturn ? qty : (isPurchaseReturn ? -qty : (dbType === 'sale' ? -qty : qty))
+          const delta = isSaleReturn ? cartonQty : (isPurchaseReturn ? -cartonQty : (dbType === 'sale' ? -cartonQty : cartonQty))
           if (stockRow) {
             const newQty = Number(stockRow.quantity || 0) + delta
             await supabase.from('ax_inventory_stock').update({ quantity: newQty, updated_at: new Date().toISOString() }).eq('id', stockRow.id)
           } else {
-            await supabase.from('ax_inventory_stock').insert({ id: generateUUID(), warehouse_id: invoiceRow.warehouse_id, item_id: itemId, quantity: delta, unit: item.unit || 'كرتونة' })
+            await supabase.from('ax_inventory_stock').insert({ id: generateUUID(), warehouse_id: invoiceRow.warehouse_id, item_id: itemId, quantity: delta, unit: stockRow?.unit || itemMeta?.unit_type || 'كرتونة' })
           }
         }
       }
@@ -125,13 +128,15 @@ export const AX_InvoiceOperationsService = {
           const itemId = item.itemId || item.id
           const qty = Number(item.quantity || 0)
           if (!itemId || qty <= 0) continue
+          const { data: itemMeta } = await supabase.from('ax_items').select('unit_type, sub_unit_type, pieces_per_carton, weight_per_carton').eq('id', itemId).maybeSingle()
+          const cartonQty = getCartonEquivalent(qty, item.unit, itemMeta || item)
           const { data: stockRow } = await supabase.from('ax_inventory_stock').select('*').eq('warehouse_id', whId).eq('item_id', itemId).maybeSingle()
-          const reverseDelta = isSaleReturn ? -qty : (isPurchaseReturn ? qty : (dbType === 'sale' ? qty : -qty))
+          const reverseDelta = isSaleReturn ? -cartonQty : (isPurchaseReturn ? cartonQty : (dbType === 'sale' ? cartonQty : -cartonQty))
           if (stockRow) {
             const newQty = Number(stockRow.quantity || 0) + reverseDelta
             await supabase.from('ax_inventory_stock').update({ quantity: newQty, updated_at: new Date().toISOString() }).eq('id', stockRow.id)
           } else {
-            await supabase.from('ax_inventory_stock').insert({ id: generateUUID(), warehouse_id: whId, item_id: itemId, quantity: reverseDelta, unit: item.unit || 'كرتونة' })
+            await supabase.from('ax_inventory_stock').insert({ id: generateUUID(), warehouse_id: whId, item_id: itemId, quantity: reverseDelta, unit: stockRow?.unit || itemMeta?.unit_type || 'كرتونة' })
           }
         }
       }

@@ -49,10 +49,12 @@ export function AX_InvoiceItemsEditor({
       onAddItem(newItem)
     } else {
       if (onDraftItemChange) {
-        onDraftItemChange('itemId', newItem.itemId)
-        onDraftItemChange('quantity', newItem.quantity)
-        onDraftItemChange('price', newItem.price)
-        if (newItem.unit) onDraftItemChange('unit', newItem.unit)
+        onDraftItemChange({
+          itemId: newItem.itemId,
+          quantity: newItem.quantity,
+          price: newItem.price,
+          unit: newItem.unit || 'كرتونة',
+        })
       }
       if (onCommitDraftItem) {
         onCommitDraftItem()
@@ -149,17 +151,18 @@ export function AX_InvoiceItemsEditor({
               {draftItem?.itemId && (
                 <div className="flex items-center gap-1">
                   <span className="text-[10px] font-bold text-on-surface-variant">الوحدة:</span>
-                  {['كرتونة', 'كيلو', Number(items.find((i) => i.id === draftItem.itemId)?.piecesPerCarton) > 0 ? 'قطعة' : null].filter(Boolean).map((u) => {
+                  {(() => {
                     const selObj = items.find((i) => i.id === draftItem.itemId)
+                    const subUnit = Number(selObj?.piecesPerCarton || selObj?.pieces_per_carton) > 0 ? (selObj?.subUnitType || selObj?.sub_unit_type || 'قطعة') : null
+                    const unitOptions = Array.from(new Set([selObj?.unitType || 'كرتونة', 'كيلو', subUnit].filter(Boolean)))
                     const activeDraftUnit = draftItem?.unit || selObj?.unitType || 'كرتونة'
-                    return (
+                    return unitOptions.map((u) => (
                       <button
                         key={u}
                         type="button"
                         onClick={() => {
-                          onDraftItemChange('unit', u)
                           const p = resolveInvoiceUnitPrice(selObj, u, invType === 'sale' || invType === 'sale_return')
-                          onDraftItemChange('price', p)
+                          onDraftItemChange({ unit: u, price: p })
                         }}
                         className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold border transition-all cursor-pointer ${
                           activeDraftUnit === u
@@ -169,8 +172,8 @@ export function AX_InvoiceItemsEditor({
                       >
                         {u}
                       </button>
-                    )
-                  })}
+                    ))
+                  })()}
                 </div>
               )}
             </div>
@@ -214,7 +217,8 @@ export function AX_InvoiceItemsEditor({
             const isExpanded = expandedRowIndex === idx
             const rowTotal = (Number(row.quantity) || 0) * (Number(row.price) || 0)
             const currentUnit = row.unit || itObj?.unitType || 'كرتونة'
-            const availableUnits = ['كرتونة', 'كيلو', Number(itObj?.piecesPerCarton) > 0 ? 'قطعة' : null].filter(Boolean)
+            const subUnit = Number(itObj?.piecesPerCarton || itObj?.pieces_per_carton) > 0 ? (itObj?.subUnitType || itObj?.sub_unit_type || 'قطعة') : null
+            const availableUnits = Array.from(new Set([itObj?.unitType || 'كرتونة', 'كيلو', subUnit].filter(Boolean)))
 
             const isNegativeStock = invType === 'sale' && (getStock(row.itemId) <= 0 || getStock(row.itemId) < getCartonEquivalent(row.quantity, currentUnit, itObj))
 

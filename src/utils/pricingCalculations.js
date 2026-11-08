@@ -67,19 +67,20 @@ export function isPriceOverridden(manualPrice, suggestedPrice) {
 
 export function resolveInvoiceUnitPrice(item, selectedUnit = 'كرتونة', isSale = true) {
   if (!item) return 0
-  const unit = String(selectedUnit || item.unitType || 'كرتونة').trim()
-  const cartonPrice = Number(isSale ? (item.sellPrice ?? 0) : (item.buyPrice ?? 0)) || 0
+  const unit = String(selectedUnit || item.unitType || item.unit_type || 'كرتونة').trim()
+  const cartonPrice = Number(isSale ? (item.sellPrice ?? item.sell_price ?? 0) : (item.buyPrice ?? item.buy_price ?? 0)) || 0
 
   if (unit === 'كرتونة') {
     return cartonPrice
   }
 
-  if (unit === 'قطعة') {
-    const piecePrice = Number(isSale ? item.pieceSellPrice : item.pieceBuyPrice)
+  const isSub = unit === 'قطعة' || unit === 'كيس' || unit === 'طبق' || (item.subUnitType && unit === item.subUnitType) || (item.sub_unit_type && unit === item.sub_unit_type)
+  if (isSub) {
+    const piecePrice = Number(isSale ? (item.pieceSellPrice ?? item.piece_sell_price) : (item.pieceBuyPrice ?? item.piece_buy_price))
     if (piecePrice > 0) {
       return piecePrice
     }
-    const numPieces = Number(item.piecesPerCarton) || 0
+    const numPieces = Number(item.piecesPerCarton ?? item.pieces_per_carton) || 0
     if (numPieces > 0 && cartonPrice > 0) {
       return Number((cartonPrice / numPieces).toFixed(2))
     }
@@ -87,14 +88,14 @@ export function resolveInvoiceUnitPrice(item, selectedUnit = 'كرتونة', isS
   }
 
   if (unit === 'كيلو') {
-    const kgPrice = Number(isSale ? item.kgSellPrice : item.kgBuyPrice)
+    const kgPrice = Number(isSale ? (item.kgSellPrice ?? item.kg_sell_price) : (item.kgBuyPrice ?? item.kg_buy_price))
     if (kgPrice > 0) {
       return kgPrice
     }
-    if (item.unitType === 'كيلو') {
+    if (item.unitType === 'كيلو' || item.unit_type === 'كيلو') {
       return cartonPrice
     }
-    const numWeight = Number(item.weightPerCarton) || 0
+    const numWeight = Number(item.weightPerCarton ?? item.weight_per_carton) || 0
     if (numWeight > 0 && cartonPrice > 0) {
       return Number((cartonPrice / numWeight).toFixed(2))
     }
@@ -109,12 +110,15 @@ export const resolveItemUnitPrice = resolveInvoiceUnitPrice
 export function getCartonEquivalent(quantity, unit = 'كرتونة', item = {}) {
   const qty = Number(quantity) || 0
   if (qty <= 0) return 0
-  const u = String(unit || item?.unitType || 'كرتونة').trim()
-  if (u === 'قطعة' && Number(item?.piecesPerCarton) > 0) {
-    return qty / Number(item.piecesPerCarton)
+  const u = String(unit || item?.unitType || item?.unit_type || 'كرتونة').trim()
+  const pieces = Number(item?.piecesPerCarton ?? item?.pieces_per_carton ?? 0)
+  const weight = Number(item?.weightPerCarton ?? item?.weight_per_carton ?? 0)
+  const isSub = u === 'قطعة' || u === 'كيس' || u === 'طبق' || (item?.subUnitType && u === item.subUnitType) || (item?.sub_unit_type && u === item.sub_unit_type)
+  if (isSub && pieces > 0) {
+    return Number((qty / pieces).toFixed(4))
   }
-  if (u === 'كيلو' && Number(item?.weightPerCarton) > 0) {
-    return qty / Number(item.weightPerCarton)
+  if (u === 'كيلو' && weight > 0 && item?.unitType !== 'كيلو' && item?.unit_type !== 'كيلو') {
+    return Number((qty / weight).toFixed(4))
   }
   return qty
 }

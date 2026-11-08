@@ -81,6 +81,7 @@ export function AX_ItemMovementCardModal({
     return calculateItemMovements({
       itemId,
       selectedWhId,
+      items: item ? [item] : [],
       purchases: effectivePurchases,
       sales: effectiveSales,
       transfers,
@@ -89,7 +90,7 @@ export function AX_ItemMovementCardModal({
       warehouses,
       inventoryStock,
     })
-  }, [itemId, selectedWhId, effectivePurchases, effectiveSales, transfers, stockAudits, currentStock, warehouses, inventoryStock])
+  }, [itemId, item, selectedWhId, effectivePurchases, effectiveSales, transfers, stockAudits, currentStock, warehouses, inventoryStock])
 
   if (!isOpen || !item) return null
 
@@ -344,10 +345,24 @@ export function AX_ItemMovementCardModal({
                             )}
                           </td>
                           <td className="px-3 text-center font-mono font-black text-emerald-600">
-                            {m.inQty > 0 ? `+${m.inQty}` : '—'}
+                            {m.inQty > 0 ? (
+                              <span>
+                                +{m.inQty}
+                                {m.unit && m.unit !== 'كرتونة' && (
+                                  <span className="block text-[9px] text-on-surface-variant font-normal">({m.rawQty} {m.unit})</span>
+                                )}
+                              </span>
+                            ) : '—'}
                           </td>
                           <td className="px-3 text-center font-mono font-black text-rose-700">
-                            {m.outQty > 0 ? `-${m.outQty}` : '—'}
+                            {m.outQty > 0 ? (
+                              <span>
+                                -{m.outQty}
+                                {m.unit && m.unit !== 'كرتونة' && (
+                                  <span className="block text-[9px] text-on-surface-variant font-normal">({m.rawQty} {m.unit})</span>
+                                )}
+                              </span>
+                            ) : '—'}
                           </td>
                           <td className={`px-3 text-center font-mono font-black ${
                             m.balanceAfter < 0 ? 'text-error' : 'text-primary'

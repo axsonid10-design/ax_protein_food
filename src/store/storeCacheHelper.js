@@ -1,5 +1,6 @@
 import { generateUUID } from '../utils/AX_UUID.js'
 import { recalculateItemStock } from '../components/warehouses/itemMovementHelpers.js'
+import { getCartonEquivalent } from '../utils/pricingCalculations.js'
 
 export const updateLocalCachePayload = (key, value) => {
   try {
@@ -63,8 +64,11 @@ export const processInvoiceStoreState = (state, inv) => {
 
   let updatedStock = [...(state.inventoryStock || [])]
   inv.items?.forEach((item) => {
-    const sIdx = updatedStock.findIndex((s) => s.warehouseId === inv.warehouseId && s.itemId === (item.itemId || item.id))
-    const delta = isSaleReturn ? item.quantity : (isPurchaseReturn ? -item.quantity : (inv.type === 'sale' ? -item.quantity : item.quantity))
+    const itId = item.itemId || item.id
+    const itemMeta = (state.items || []).find((i) => i.id === itId)
+    const cartonQty = getCartonEquivalent(item.quantity, item.unit, itemMeta || item)
+    const sIdx = updatedStock.findIndex((s) => s.warehouseId === inv.warehouseId && s.itemId === itId)
+    const delta = isSaleReturn ? cartonQty : (isPurchaseReturn ? -cartonQty : (inv.type === 'sale' ? -cartonQty : cartonQty))
     if (sIdx >= 0) {
       updatedStock[sIdx] = {
         ...updatedStock[sIdx],
@@ -73,9 +77,9 @@ export const processInvoiceStoreState = (state, inv) => {
     } else {
       updatedStock.push({
         warehouseId: inv.warehouseId,
-        itemId: item.itemId || item.id,
+        itemId: itId,
         quantity: delta,
-        unit: item.unit || 'كرتونة',
+        unit: itemMeta?.unitType || itemMeta?.unit_type || item.unit || 'كرتونة',
       })
     }
   })
@@ -191,8 +195,11 @@ export const revertInvoiceStoreState = (state, inv) => {
 
   let updatedStock = [...(state.inventoryStock || [])]
   inv.items?.forEach((item) => {
-    const sIdx = updatedStock.findIndex((s) => s.warehouseId === inv.warehouseId && s.itemId === (item.itemId || item.id))
-    const delta = isSaleReturn ? -item.quantity : (isPurchaseReturn ? item.quantity : (inv.type === 'sale' ? item.quantity : -item.quantity))
+    const itId = item.itemId || item.id
+    const itemMeta = (state.items || []).find((i) => i.id === itId)
+    const cartonQty = getCartonEquivalent(item.quantity, item.unit, itemMeta || item)
+    const sIdx = updatedStock.findIndex((s) => s.warehouseId === inv.warehouseId && s.itemId === itId)
+    const delta = isSaleReturn ? -cartonQty : (isPurchaseReturn ? cartonQty : (inv.type === 'sale' ? cartonQty : -cartonQty))
     if (sIdx >= 0) {
       updatedStock[sIdx] = {
         ...updatedStock[sIdx],
@@ -201,9 +208,9 @@ export const revertInvoiceStoreState = (state, inv) => {
     } else {
       updatedStock.push({
         warehouseId: inv.warehouseId,
-        itemId: item.itemId || item.id,
+        itemId: itId,
         quantity: delta,
-        unit: item.unit || 'كرتونة',
+        unit: itemMeta?.unitType || itemMeta?.unit_type || item.unit || 'كرتونة',
       })
     }
   })
@@ -291,6 +298,7 @@ export const saveItemOpeningBalanceState = (state, { itemId, warehouseId, quanti
     itemId,
     warehouseId,
     inventoryStock: updatedInventory,
+    items: state.items || [],
     purchases,
     sales,
     transfers: state.transfers || [],

@@ -84,15 +84,37 @@ export function AX_EditInvoiceModal({
 
   const remainingAmount = Math.max(0, total - paidAmount)
 
-  const handleUpdateItem = (index, field, value) => {
+  const handleUpdateItem = (index, fieldOrUpdates, value) => {
     setInvForm((prev) => {
       const nextItems = [...prev.items]
-      const current = { ...nextItems[index], [field]: value }
-      const qty = Number(field === 'quantity' ? value : current.quantity) || 0
-      const prc = Number(field === 'price' ? value : current.price) || 0
-      current.total = qty * prc
-      nextItems[index] = current
+      const current = nextItems[index]
+      if (!current) return prev
+      const updates = typeof fieldOrUpdates === 'object' && fieldOrUpdates !== null
+        ? fieldOrUpdates
+        : { [fieldOrUpdates]: value }
+      const updatedRow = { ...current, ...updates }
+      const qty = Number(updatedRow.quantity) || 0
+      const prc = Number(updatedRow.price) || 0
+      updatedRow.total = qty * prc
+      nextItems[index] = updatedRow
       return { ...prev, items: nextItems }
+    })
+  }
+
+  const handleDraftItemChange = (fieldOrUpdates, value) => {
+    setDraftItem((prev) => {
+      const updates = typeof fieldOrUpdates === 'object' && fieldOrUpdates !== null
+        ? fieldOrUpdates
+        : { [fieldOrUpdates]: value }
+      const updated = { ...prev, ...updates }
+      if (updates.itemId) {
+        const selected = items.find((i) => i.id === updates.itemId)
+        if (selected) {
+          updated.price = isSaleType ? (selected.sellPrice ?? 0) : (selected.buyPrice ?? 0)
+          updated.unit = selected.unitType || 'كرتونة'
+        }
+      }
+      return updated
     })
   }
 
@@ -112,13 +134,15 @@ export function AX_EditInvoiceModal({
     if (!it) return
     const rowPrice = Number(draftItem.price) || (isSaleType ? Number(it.sellPrice || 0) : Number(it.buyPrice || 0))
     const rowQty = Number(draftItem.quantity) || 1
+    const rowUnit = draftItem.unit || it.unitType || 'كرتونة'
     const newItem = {
       itemId: it.id,
       name: getItemDisplayName(it),
+      compositeName: getItemDisplayName(it),
       quantity: rowQty,
       price: rowPrice,
       total: rowQty * rowPrice,
-      unit: it.unitType || 'كرتونة',
+      unit: rowUnit,
       weightPerCarton: it.weightPerCarton || 0,
       piecesPerCarton: it.piecesPerCarton || 0,
     }
@@ -126,8 +150,23 @@ export function AX_EditInvoiceModal({
       ...prev,
       items: [newItem, ...prev.items],
     }))
-    setDraftItem({ itemId: '', quantity: 1, price: 0 })
+    setDraftItem({ itemId: '', quantity: 1, price: 0, unit: 'كرتونة' })
     setExpandedRowIndex(null)
+  }
+
+  const handleDirectAddItem = (newItem) => {
+    const it = items.find((i) => i.id === newItem.itemId)
+    const enriched = {
+      ...newItem,
+      name: getItemDisplayName(it || newItem),
+      compositeName: getItemDisplayName(it || newItem),
+      unit: newItem.unit || it?.unitType || 'كرتونة',
+      total: (Number(newItem.quantity) || 0) * (Number(newItem.price) || 0),
+    }
+    setInvForm((prev) => ({
+      ...prev,
+      items: [enriched, ...prev.items],
+    }))
   }
 
   const handleFormSubmit = (e) => {
@@ -257,14 +296,18 @@ export function AX_EditInvoiceModal({
             </h4>
 
             <AX_InvoiceItemsEditor
-              items={invForm.items}
-              onUpdateItem={handleUpdateItem}
-              onRemoveItem={handleRemoveItem}
-              draftItem={draftItem}
-              setDraftItem={setDraftItem}
-              onAddDraftItem={handleAddDraftItem}
+              items={items}
               availableItems={availableItems}
-              isSaleType={isSaleType}
+              invoiceItems={invForm.items}
+              invType={invForm.type}
+              warehouseId={invForm.warehouseId}
+              inventoryStock={inventoryStock}
+              draftItem={draftItem}
+              onDraftItemChange={handleDraftItemChange}
+              onCommitDraftItem={handleAddDraftItem}
+              onAddItem={handleDirectAddItem}
+              onRemoveItem={handleRemoveItem}
+              onItemRowChange={handleUpdateItem}
               expandedRowIndex={expandedRowIndex}
               setExpandedRowIndex={setExpandedRowIndex}
             />

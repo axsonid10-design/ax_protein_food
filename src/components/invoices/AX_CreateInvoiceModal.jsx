@@ -109,10 +109,11 @@ export function AX_CreateInvoiceModal({
         setDraftItem({
           itemId: next.id,
           quantity: 1,
+          unit: next.unitType || 'كرتونة',
           price: isSaleType ? (next.sellPrice ?? 0) : (next.buyPrice ?? 0),
         })
       } else {
-        setDraftItem({ itemId: '', quantity: 1, price: 0 })
+        setDraftItem({ itemId: '', quantity: 1, price: 0, unit: 'كرتونة' })
       }
     }
   }, [invForm.items, availableItems, isSaleType])
@@ -136,18 +137,31 @@ export function AX_CreateInvoiceModal({
     }
   }
 
-  const handleDraftItemChange = (field, value) => {
-    const updated = { ...draftItem, [field]: value }
-    if (field === 'itemId') {
-      const selected = items.find((i) => i.id === value)
-      if (selected) updated.price = isSaleType ? (selected.sellPrice ?? 0) : (selected.buyPrice ?? 0)
-    }
-    setDraftItem(updated)
+  const handleDraftItemChange = (fieldOrUpdates, value) => {
+    setDraftItem((prev) => {
+      const updates = typeof fieldOrUpdates === 'object' && fieldOrUpdates !== null
+        ? fieldOrUpdates
+        : { [fieldOrUpdates]: value }
+      const updated = { ...prev, ...updates }
+      if (updates.itemId) {
+        const selected = items.find((i) => i.id === updates.itemId)
+        if (selected) {
+          updated.price = isSaleType ? (selected.sellPrice ?? 0) : (selected.buyPrice ?? 0)
+          updated.unit = selected.unitType || 'كرتونة'
+        }
+      }
+      return updated
+    })
   }
 
   const handleCommitDraftItem = () => {
     if (!draftItem.itemId || Number(draftItem.quantity) <= 0) return
-    const newItems = [draftItem, ...invForm.items]
+    const curObj = items.find((i) => i.id === draftItem.itemId)
+    const committedItem = {
+      ...draftItem,
+      unit: draftItem.unit || curObj?.unitType || 'كرتونة',
+    }
+    const newItems = [committedItem, ...invForm.items]
     setInvForm({ ...invForm, items: newItems })
     const newSelected = new Set(newItems.map((r) => r.itemId))
     const nextAvail = items.filter((it) => !newSelected.has(it.id))
@@ -155,6 +169,7 @@ export function AX_CreateInvoiceModal({
     setDraftItem({
       itemId: next?.id || '',
       quantity: 1,
+      unit: next?.unitType || 'كرتونة',
       price: next ? (isSaleType ? (next.sellPrice ?? 0) : (next.buyPrice ?? 0)) : 0,
     })
   }

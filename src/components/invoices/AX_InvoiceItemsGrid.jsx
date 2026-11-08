@@ -184,7 +184,8 @@ export function AX_InvoiceItemsGrid({
 
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
                 {section.items.map((item) => {
-                  const availableUnits = ['كرتونة', 'كيلو', Number(item.piecesPerCarton) > 0 ? 'قطعة' : null].filter(Boolean)
+                  const subUnit = Number(item.piecesPerCarton || item.pieces_per_carton) > 0 ? (item.subUnitType || item.sub_unit_type || 'قطعة') : null
+                  const availableUnits = Array.from(new Set([item.unitType || 'كرتونة', 'كيلو', subUnit].filter(Boolean)))
                   const activeUnit = selectedUnits[item.id] || item.unitType || 'كرتونة'
                   const price = resolveInvoiceUnitPrice(item, activeUnit, isSale)
                   const matchingRow = invoiceItems.find(

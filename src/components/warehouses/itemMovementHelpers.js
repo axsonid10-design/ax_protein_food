@@ -1,3 +1,5 @@
+import { getCartonEquivalent } from '../../utils/pricingCalculations.js'
+
 export function isStrictlyBefore(opDate, baseDate, opTimestamp = null, baseTimestamp = null) {
   if (!baseDate || !opDate) return false
 
@@ -25,6 +27,7 @@ export function recalculateItemStock({
   itemId,
   warehouseId,
   inventoryStock = [],
+  items = [],
   purchases = [],
   sales = [],
   transfers = [],
@@ -98,7 +101,8 @@ export function recalculateItemStock({
     const isReturn = inv.type === 'purchase_return'
     ;(inv.items || []).forEach((it) => {
       if ((it.itemId || it.item_id || it.id) === itemId) {
-        const qty = Number(it.quantity) || 0
+        const targetItem = (items || []).find((i) => i.id === itemId)
+        const qty = getCartonEquivalent(it.quantity, it.unit, targetItem || it)
         if (isReturn) postOut += qty
         else postIn += qty
       }
@@ -117,7 +121,8 @@ export function recalculateItemStock({
     const isReturn = inv.type === 'sale_return'
     ;(inv.items || []).forEach((it) => {
       if ((it.itemId || it.item_id || it.id) === itemId) {
-        const qty = Number(it.quantity) || 0
+        const targetItem = (items || []).find((i) => i.id === itemId)
+        const qty = getCartonEquivalent(it.quantity, it.unit, targetItem || it)
         if (isReturn) postIn += qty
         else postOut += qty
       }
@@ -178,6 +183,7 @@ export function recalculateItemStock({
 export function calculateItemMovements({
   itemId,
   selectedWhId = 'ALL',
+  items = [],
   purchases = [],
   sales = [],
   transfers = [],
@@ -201,7 +207,9 @@ export function calculateItemMovements({
     ;(inv.items || []).forEach((it) => {
       const itId = it.itemId || it.item_id || it.id
       if (itId === itemId) {
-        const qty = Number(it.quantity) || 0
+        const targetItem = (items || []).find((i) => i.id === itemId)
+        const rawQty = Number(it.quantity) || 0
+        const cartonQty = getCartonEquivalent(rawQty, it.unit, targetItem || it)
         const price = Number(it.price || it.buyPrice || 0)
         raw.push({
           id: `purch-${inv.id}-${itId}`,
@@ -211,10 +219,12 @@ export function calculateItemMovements({
             ? `مردود مشتريات [${inv.code || 'فاتورة'}]`
             : `توريد مشتريات [${inv.code || 'فاتورة'}]`,
           party: inv.partyName || inv.supplierName || 'مورد',
-          inQty: isReturn ? 0 : qty,
-          outQty: isReturn ? qty : 0,
+          unit: it.unit || 'كرتونة',
+          rawQty,
+          inQty: isReturn ? 0 : cartonQty,
+          outQty: isReturn ? cartonQty : 0,
           unitPrice: price,
-          totalCost: qty * price,
+          totalCost: rawQty * price,
         })
       }
     })
@@ -229,7 +239,9 @@ export function calculateItemMovements({
     ;(inv.items || []).forEach((it) => {
       const itId = it.itemId || it.item_id || it.id
       if (itId === itemId) {
-        const qty = Number(it.quantity) || 0
+        const targetItem = (items || []).find((i) => i.id === itemId)
+        const rawQty = Number(it.quantity) || 0
+        const cartonQty = getCartonEquivalent(rawQty, it.unit, targetItem || it)
         const price = Number(it.price || it.sellPrice || 0)
         raw.push({
           id: `sale-${inv.id}-${itId}`,
@@ -239,10 +251,12 @@ export function calculateItemMovements({
             ? `مردود مبيعات [${inv.code || 'فاتورة'}]`
             : `فاتورة مبيعات [${inv.code || 'فاتورة'}]`,
           party: inv.partyName || inv.clientName || inv.customerName || 'عميل',
-          inQty: isReturn ? qty : 0,
-          outQty: isReturn ? 0 : qty,
+          unit: it.unit || 'كرتونة',
+          rawQty,
+          inQty: isReturn ? cartonQty : 0,
+          outQty: isReturn ? 0 : cartonQty,
           unitPrice: price,
-          totalCost: qty * price,
+          totalCost: rawQty * price,
         })
       }
     })
