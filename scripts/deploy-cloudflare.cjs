@@ -40,7 +40,7 @@ async function deploy() {
     })
 
     console.log('[PROTEIN_FOOD] Deploying to Cloudflare Pages (protein-food)...')
-    execSync('npx wrangler pages deploy dist --project-name protein-food --branch main --commit-dirty=true', {
+    execSync('npx wrangler@4.158.0 pages deploy dist --project-name protein-food --branch main --commit-dirty=true', {
       stdio: 'inherit',
       cwd: rootDir,
       env,
