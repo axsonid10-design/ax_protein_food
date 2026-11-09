@@ -173,7 +173,6 @@ export function AX_CreateExpenseModal({ isOpen, onClose, onCreated }) {
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-bold text-on-surface mb-1">بيان / وصف المصروف <span className="text-red-500">*</span></label>
               <AX_ExpenseStatementAutocomplete
                 value={title}
                 onChange={setTitle}
@@ -185,8 +184,8 @@ export function AX_CreateExpenseModal({ isOpen, onClose, onCreated }) {
                 required={true}
               />
             </div>
-            <div>
-              <label className="block text-xs font-bold text-on-surface mb-1">جهة الصرف / المستفيد / المقاول</label>
+            <div className="space-y-1">
+              <label className="block text-xs font-bold text-on-surface">جهة الصرف / المستفيد</label>
               <input type="text" value={payeeName} onChange={(e) => setPayeeName(e.target.value)} placeholder="اسم المستلم أو الشركة..." className="w-full h-10 px-3 bg-surface-lowest border border-outline-variant/40 rounded-xl text-xs font-bold text-on-surface focus:outline-none focus:border-primary" />
             </div>
           </div>

@@ -5,6 +5,7 @@ export function calculateSuggestedUnitPrices(params = {}) {
     buyPrice = 0,
     piecesPerCarton = null,
     weightPerCarton = null,
+    pieceWeight = null,
     unitType = 'كرتونة',
   } = safeParams
 
@@ -12,16 +13,33 @@ export function calculateSuggestedUnitPrices(params = {}) {
   const numBuy = Number(buyPrice) || 0
   const numPieces = Number(piecesPerCarton) || 0
   const numWeight = Number(weightPerCarton) || (unitType === 'كرتونة' ? 10 : 0)
+  const numPieceWeight = parseFloat(pieceWeight) || 0
 
-  const suggestedPieceSell =
-    numPieces > 0 && numSell > 0
-      ? Number((numSell / numPieces).toFixed(2))
-      : null
+  let suggestedPieceSell = null
+  let suggestedPieceBuy = null
 
-  const suggestedPieceBuy =
-    numPieces > 0 && numBuy > 0
-      ? Number((numBuy / numPieces).toFixed(2))
-      : null
+  if (unitType === 'كيلو') {
+    if (numPieceWeight > 0 && numSell > 0) {
+      suggestedPieceSell = Number((numSell * numPieceWeight).toFixed(2))
+    } else if (numPieces > 0 && numSell > 0) {
+      suggestedPieceSell = Number((numSell / numPieces).toFixed(2))
+    }
+    if (numPieceWeight > 0 && numBuy > 0) {
+      suggestedPieceBuy = Number((numBuy * numPieceWeight).toFixed(2))
+    } else if (numPieces > 0 && numBuy > 0) {
+      suggestedPieceBuy = Number((numBuy / numPieces).toFixed(2))
+    }
+  } else {
+    suggestedPieceSell =
+      numPieces > 0 && numSell > 0
+        ? Number((numSell / numPieces).toFixed(2))
+        : null
+
+    suggestedPieceBuy =
+      numPieces > 0 && numBuy > 0
+        ? Number((numBuy / numPieces).toFixed(2))
+        : null
+  }
 
   const suggestedKgSell =
     unitType === 'كيلو' && numSell > 0
