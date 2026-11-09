@@ -149,7 +149,7 @@ export function AX_EmployeePayrollLedger({
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 print:hidden">
             <button
               type="button"
               onClick={() => window.print()}
@@ -192,7 +192,7 @@ export function AX_EmployeePayrollLedger({
         </div>
       </div>
 
-      <div className="flex items-center justify-between gap-2.5 flex-wrap">
+      <div className="flex items-center justify-between gap-2.5 flex-wrap print:hidden">
         <div className="relative flex-1 min-w-[200px]">
           <Search className="w-3.5 h-3.5 text-on-surface-variant absolute right-3.5 top-3 pointer-events-none" />
           <input
@@ -218,7 +218,7 @@ export function AX_EmployeePayrollLedger({
         </select>
       </div>
 
-      <div className="hidden lg:block bg-surface-lowest border border-outline-variant/30 rounded-3xl overflow-hidden shadow-xs">
+      <div className="hidden lg:block print:block bg-surface-lowest border border-outline-variant/30 rounded-3xl overflow-hidden shadow-xs print:border-none print:shadow-none print:rounded-none">
         <table className="w-full text-right text-xs">
           <thead>
             <tr className="bg-surface-low border-b border-surface-container text-on-surface-variant font-black h-11 text-[11px]">
@@ -292,7 +292,7 @@ export function AX_EmployeePayrollLedger({
         </table>
       </div>
 
-      <div className="lg:hidden space-y-2.5">
+      <div className="lg:hidden print:hidden space-y-2.5">
         {filteredRows.map(({ employee, stats }) => (
           <div
             key={employee.id}

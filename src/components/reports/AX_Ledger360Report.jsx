@@ -183,7 +183,7 @@ export function AX_Ledger360Report({
             </span>
           </div>
 
-          <div className="flex items-center gap-2 self-end sm:self-center">
+          <div className="flex items-center gap-2 self-end sm:self-center print:hidden">
             <button
               type="button"
               onClick={handleExport}
@@ -203,7 +203,7 @@ export function AX_Ledger360Report({
           </div>
         </div>
 
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 pt-2 border-t border-surface-container">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 pt-2 border-t border-surface-container print:hidden">
           <div className="flex items-center gap-1 p-1 bg-surface-low rounded-full border border-outline-variant/30 shrink-0">
             <button
               type="button"
@@ -289,8 +289,8 @@ export function AX_Ledger360Report({
         </div>
       </div>
 
-      <div className="bg-surface-lowest border border-outline-variant/30 rounded-2xl overflow-hidden shadow-xs">
-        <div className="hidden lg:block overflow-x-auto">
+      <div className="ax-a4-sheet bg-surface-lowest border border-outline-variant/30 rounded-2xl overflow-hidden shadow-xs print:border-none print:shadow-none print:w-[210mm] print:mx-auto">
+        <div className="hidden lg:block print:block overflow-x-auto">
           <table className="w-full text-right text-xs">
             <thead>
               <tr className="bg-surface-low/80 border-b border-surface-container text-on-surface-variant font-black h-11">
@@ -401,7 +401,7 @@ export function AX_Ledger360Report({
           </table>
         </div>
 
-        <div className="lg:hidden divide-y divide-surface-container/60 p-3 space-y-2.5">
+        <div className="lg:hidden print:hidden divide-y divide-surface-container/60 p-3 space-y-2.5">
           {paginatedTransactions.length === 0 ? (
             <div className="py-6 text-center text-on-surface-variant text-xs font-bold">
               لا توجد حركات مسجلة لهذا الحساب في الفترة المحددة
@@ -434,7 +434,7 @@ export function AX_Ledger360Report({
         </div>
 
         {totalPages > 1 && (
-          <div className="flex items-center justify-between p-3 border-t border-surface-container text-xs font-bold text-on-surface-variant">
+          <div className="flex items-center justify-between p-3 border-t border-surface-container text-xs font-bold text-on-surface-variant print:hidden">
             <span>
               عرض {(currentPage - 1) * pageSize + 1} -{' '}
               {Math.min(currentPage * pageSize, ledgerData.transactions.length)} من {ledgerData.transactions.length} حركة

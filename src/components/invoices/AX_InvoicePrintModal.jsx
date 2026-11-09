@@ -175,7 +175,7 @@ export function AX_InvoicePrintModal({ invoice, isOpen, onClose }) {
               <span className="hidden sm:inline">بيانات المؤسسة</span>
             </button>
 
-            <div className="hidden md:flex items-center gap-1 bg-surface-low rounded-full px-2 py-0.5 border border-outline-variant/30 text-xs font-bold">
+            <div className="flex items-center gap-1 bg-surface-low rounded-full px-2 py-0.5 border border-outline-variant/30 text-xs font-bold">
               <button
                 type="button"
                 onClick={() => setZoomLevel((z) => Math.max(0.4, Number((z - 0.1).toFixed(2))))}
@@ -258,13 +258,15 @@ export function AX_InvoicePrintModal({ invoice, isOpen, onClose }) {
         <div className="ax-print-viewport-container flex-1 overflow-auto p-2 sm:p-6 flex justify-center items-start print:p-0 print:overflow-visible touch-pan-x touch-pan-y">
           <div
             id="ax-invoice-print-sheet"
-            className={`bg-white text-slate-900 shadow-2xl transition-transform origin-top print:shadow-none print:m-0 ${currentFormat.formatClass}`}
+            className={`ax-a4-sheet bg-white text-slate-900 shadow-2xl transition-transform origin-top print:shadow-none print:m-0 ${currentFormat.formatClass}`}
             style={{
               width: currentFormat.width,
+              minWidth: currentFormat.width,
               minHeight: currentFormat.minHeight,
               padding: currentFormat.padding,
               boxSizing: 'border-box',
               transform: `scale(${zoomLevel})`,
+              transformOrigin: 'top center',
             }}
           >
             <div className="border-b-2 border-[#991b1b] pb-3 mb-3">

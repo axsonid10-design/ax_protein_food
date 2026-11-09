@@ -71,8 +71,8 @@ export function AX_SalesRepLedgerModal({ rep, isOpen, onClose }) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-on-surface/50 backdrop-blur-sm animate-fadeIn overflow-y-auto print:p-0 print:bg-white">
-      <div className="bg-surface-lowest border border-outline-variant/30 rounded-3xl p-5 sm:p-6 max-w-4xl w-full shadow-level3 space-y-4 my-auto print:border-none print:shadow-none print:rounded-none">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-on-surface/50 backdrop-blur-sm animate-fadeIn overflow-y-auto print:p-0 print:bg-white print:static print:block">
+      <div className="ax-a4-sheet bg-surface-lowest border border-outline-variant/30 rounded-3xl p-5 sm:p-6 max-w-4xl w-full shadow-level3 space-y-4 my-auto print:border-none print:shadow-none print:rounded-none print:w-[210mm] print:mx-auto">
         <div className="flex items-center justify-between pb-3 border-b border-surface-container">
           <div className="flex items-center gap-2.5">
             <div className="w-10 h-10 rounded-full bg-primary/10 text-primary flex items-center justify-center print:hidden">

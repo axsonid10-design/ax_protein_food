@@ -6,17 +6,33 @@ export async function getInvoiceImageBlob(element) {
 
   const prevTransform = element.style.transform
   const prevTransition = element.style.transition
+  const prevWidth = element.style.width
+  const prevMinWidth = element.style.minWidth
+  const prevMaxWidth = element.style.maxWidth
+
   element.style.transform = 'none'
   element.style.transition = 'none'
+  element.style.width = '794px'
+  element.style.minWidth = '794px'
+  element.style.maxWidth = '794px'
 
   try {
+    const targetWidth = 794
+    const targetHeight = Math.max(1123, element.scrollHeight || 1123)
     const blob = await htmlToImage.toBlob(element, {
       pixelRatio: 2,
       backgroundColor: '#ffffff',
       cacheBust: true,
+      width: targetWidth,
+      height: targetHeight,
+      canvasWidth: targetWidth * 2,
+      canvasHeight: targetHeight * 2,
       style: {
         transform: 'none',
         margin: '0',
+        width: '794px',
+        minWidth: '794px',
+        maxWidth: '794px',
       },
     })
     if (!blob) throw new Error('فشل إنشاء ملف الصورة')
@@ -24,6 +40,9 @@ export async function getInvoiceImageBlob(element) {
   } finally {
     element.style.transform = prevTransform
     element.style.transition = prevTransition
+    element.style.width = prevWidth
+    element.style.minWidth = prevMinWidth
+    element.style.maxWidth = prevMaxWidth
   }
 }
 
@@ -91,7 +110,6 @@ export async function shareInvoiceImageToWhatsApp(invoice, element) {
         await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })])
         axToast.info('تم نسخ صورة الفاتورة للحافظة، يمكنك لصقها الآن في محادثة الواتساب')
       } catch (e) {
-        // clipboard fallback
       }
     }
 

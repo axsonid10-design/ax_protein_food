@@ -4,12 +4,12 @@ import fs from 'node:fs'
 import path from 'node:path'
 
 describe('Expense UI Modernization & Version Rollover', () => {
-  it('enforces version 2.2.6 and single-digit minor and patch rollover (max 9) in package.json and version.json', () => {
+  it('enforces version 2.2.7 and single-digit minor and patch rollover (max 9) in package.json and version.json', () => {
     const pkg = JSON.parse(fs.readFileSync(path.resolve('package.json'), 'utf8'))
     const ver = JSON.parse(fs.readFileSync(path.resolve('public/version.json'), 'utf8'))
 
-    assert.equal(pkg.version, '2.2.6')
-    assert.equal(ver.version, '2.2.6')
+    assert.equal(pkg.version, '2.2.7')
+    assert.equal(ver.version, '2.2.7')
 
     const parts = pkg.version.split('.').map(Number)
     assert.ok(parts[1] >= 0 && parts[1] <= 9, 'Minor version must be single digit <= 9')

@@ -105,7 +105,10 @@ body {
     overflow: visible !important;
   }
 
-  #ax-invoice-print-sheet {
+  #ax-invoice-print-sheet,
+  #ax-transfer-print-sheet,
+  .ax-a4-sheet,
+  .print-sheet-a4 {
     position: static !important;
     transform: none !important;
     margin: 0 auto !important;
@@ -115,21 +118,32 @@ body {
     box-sizing: border-box !important;
     page-break-inside: avoid;
     overflow: visible !important;
+    width: 210mm !important;
+    min-height: 297mm !important;
+    padding: 12mm 10mm !important;
+    background-color: #ffffff !important;
+    color: #0f172a !important;
   }
 
-  #ax-invoice-print-sheet.format-a4-portrait {
+  #ax-invoice-print-sheet.format-a4-portrait,
+  #ax-transfer-print-sheet.format-a4-portrait,
+  .format-a4-portrait {
     width: 210mm !important;
     min-height: 297mm !important;
     padding: 12mm 10mm !important;
   }
 
-  #ax-invoice-print-sheet.format-a4-landscape {
+  #ax-invoice-print-sheet.format-a4-landscape,
+  #ax-transfer-print-sheet.format-a4-landscape,
+  .format-a4-landscape {
     width: 297mm !important;
     min-height: 210mm !important;
     padding: 10mm 12mm !important;
   }
 
-  #ax-invoice-print-sheet.format-a5 {
+  #ax-invoice-print-sheet.format-a5,
+  #ax-transfer-print-sheet.format-a5,
+  .format-a5 {
     width: 148mm !important;
     min-height: 210mm !important;
     padding: 8mm 8mm !important;
@@ -137,6 +151,19 @@ body {
 
   .print-visible {
     display: block !important;
+  }
+
+  .hidden.lg\:block,
+  .hidden.lg\:table,
+  table.hidden.lg\:table,
+  table.hidden.lg\:block {
+    display: table !important;
+  }
+  div.hidden.lg\:block {
+    display: block !important;
+  }
+  .lg\:hidden {
+    display: none !important;
   }
 
   table {

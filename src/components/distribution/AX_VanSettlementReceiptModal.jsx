@@ -30,8 +30,8 @@ export function AX_VanSettlementReceiptModal({ isOpen, onClose, settlement }) {
   } = settlement
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/60 backdrop-blur-sm animate-in fade-in">
-      <div className="bg-surface-lowest border-2 border-primary/20 rounded-3xl shadow-level3 max-w-2xl w-full max-h-[92vh] flex flex-col overflow-hidden">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/60 backdrop-blur-sm animate-in fade-in print:p-0 print:bg-white print:static print:block">
+      <div className="bg-surface-lowest border-2 border-primary/20 rounded-3xl shadow-level3 max-w-2xl w-full max-h-[92vh] flex flex-col overflow-hidden print:border-none print:shadow-none print:max-w-none print:w-[210mm] print:mx-auto print:rounded-none">
         <div className="p-4 sm:p-5 border-b border-surface-container flex items-center justify-between bg-surface-lowest print:hidden">
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 rounded-full bg-secondary-container flex items-center justify-center text-secondary-on-container">
@@ -63,8 +63,8 @@ export function AX_VanSettlementReceiptModal({ isOpen, onClose, settlement }) {
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-5 sm:p-6 space-y-4 print:p-0">
-          <div className="border border-outline-variant/30 rounded-2xl p-4 sm:p-5 bg-surface-low/20 space-y-4 print:border-none">
+        <div className="flex-1 overflow-y-auto p-5 sm:p-6 space-y-4 print:p-0 print:overflow-visible">
+          <div className="ax-a4-sheet border border-outline-variant/30 rounded-2xl p-4 sm:p-5 bg-surface-low/20 space-y-4 print:border-none print:p-0 print:w-[210mm] print:mx-auto">
             <div className="text-center space-y-1 border-b border-outline-variant/30 pb-3">
               <span className="text-xs font-bold text-primary block">بروتين فود لتجهيز وحفظ اللحوم المجمدة</span>
               <h2 className="text-base font-black text-on-surface">إيصال تصفية وتسوية يومية للمندوب</h2>
