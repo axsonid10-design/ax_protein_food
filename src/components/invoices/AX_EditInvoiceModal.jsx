@@ -38,6 +38,8 @@ export function AX_EditInvoiceModal({
   const [partyKind, setPartyKind] = useState('customer')
   const [paymentStatus, setPaymentStatus] = useState('unpaid')
   const [paidInput, setPaidInput] = useState('')
+  const [discountType, setDiscountType] = useState('none')
+  const [discountValue, setDiscountValue] = useState('')
   const [selectedTreasuryId, setSelectedTreasuryId] = useState('')
   const [showPrintModal, setShowPrintModal] = useState(false)
   const [validationError, setValidationError] = useState(null)
@@ -61,6 +63,9 @@ export function AX_EditInvoiceModal({
       const total = Number(invoice.total) || 0
       setPaidInput(paid > 0 ? String(paid) : '')
       setPaymentStatus(paid >= total && total > 0 ? 'paid' : (paid > 0 ? 'partial' : 'unpaid'))
+      setDiscountType(invoice.discountType || invoice.discount_type || 'none')
+      const initVal = invoice.discountValue ?? invoice.discount_value
+      setDiscountValue(initVal !== undefined && initVal !== null && initVal !== 0 ? String(initVal) : '')
       setSelectedTreasuryId(invoice.treasuryId || treasuryAccounts[0]?.id || '')
       setDraftItem({ itemId: '', quantity: 1, price: 0 })
       setExpandedRowIndex(null)
@@ -76,9 +81,16 @@ export function AX_EditInvoiceModal({
   const availableItems = items.filter((it) => !selectedItemIds.has(it.id))
 
   const subtotal = invForm.items.reduce((sum, row) => sum + (Number(row.total) || 0), 0)
+  const computeDiscountAmount = (sub = subtotal) => {
+    const val = Number(discountValue) || 0
+    if (val <= 0 || discountType === 'none') return 0
+    if (discountType === 'percent') return Math.round(((sub * Math.min(100, Math.max(0, val))) / 100) * 100) / 100
+    return Math.min(sub, Math.max(0, val))
+  }
+  const discountAmount = computeDiscountAmount(subtotal)
   const transportVal = Number(invForm.transportCost) || 0
   const loadingVal = Number(invForm.loadingCost) || 0
-  const total = subtotal + transportVal + loadingVal
+  const total = Math.max(0, subtotal - discountAmount) + transportVal + loadingVal
 
   const paidAmount = paymentStatus === 'paid'
     ? total
@@ -193,6 +205,9 @@ export function AX_EditInvoiceModal({
       partyKind,
       partyType: partyKind,
       subtotal,
+      discountType,
+      discountValue: Number(discountValue) || 0,
+      discountAmount,
       transportCost: transportVal,
       loadingCost: loadingVal,
       total,
@@ -350,14 +365,63 @@ export function AX_EditInvoiceModal({
             </div>
           </div>
 
+          <div className="p-2.5 rounded-2xl bg-surface-low/60 border border-outline-variant/20 space-y-2">
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <span className="text-xs font-bold text-on-surface-variant">الخصم التجاري / النقدي:</span>
+              <div className="inline-flex rounded-full bg-surface-lowest p-0.5 border border-outline-variant/30 text-[11px] font-bold">
+                {[
+                  ['none', 'بدون خصم'],
+                  ['fixed', 'خصم مبلغ (ج.م)'],
+                  ['percent', 'خصم نسبة (%)'],
+                ].map(([t, lbl]) => (
+                  <button
+                    key={t}
+                    type="button"
+                    onClick={() => {
+                      setDiscountType(t)
+                      if (t === 'none') setDiscountValue('')
+                    }}
+                    className={`px-3 py-1 rounded-full font-black cursor-pointer transition-all ${
+                      discountType === t ? 'bg-secondary text-white shadow-xs' : 'text-on-surface-variant hover:text-on-surface'
+                    }`}
+                  >
+                    {lbl}
+                  </button>
+                ))}
+              </div>
+            </div>
+            {discountType !== 'none' && (
+              <div className="flex items-center gap-3">
+                <div className="flex-1">
+                  <input
+                    type="number"
+                    min="0"
+                    max={discountType === 'percent' ? 100 : subtotal}
+                    placeholder={discountType === 'percent' ? 'النسبة المئوية (مثال: 5)...' : 'المبلغ بالجنيه...'}
+                    value={discountValue}
+                    onChange={(e) => setDiscountValue(e.target.value)}
+                    className="w-full px-3 py-1.5 rounded-xl bg-surface-lowest border border-outline-variant/30 text-xs font-bold text-on-surface font-mono"
+                  />
+                </div>
+                <div className="text-xs font-bold font-mono text-emerald-700 bg-emerald-500/10 px-3 py-1.5 rounded-xl border border-emerald-500/20 shrink-0">
+                  قيمة الخصم: -{discountAmount.toLocaleString('en-US')} ج.م
+                </div>
+              </div>
+            )}
+          </div>
+
           <AX_InvoicePaymentSection
             paymentStatus={paymentStatus}
             setPaymentStatus={setPaymentStatus}
             paidInput={paidInput}
             setPaidInput={setPaidInput}
-            total={total}
-            paidAmount={paidAmount}
-            remainingAmount={remainingAmount}
+            currentTotal={total}
+            currentPaid={paidAmount}
+            currentRemaining={remainingAmount}
+            subtotal={subtotal}
+            discountAmount={discountAmount}
+            discountType={discountType}
+            discountValue={Number(discountValue) || 0}
             selectedTreasuryId={selectedTreasuryId}
             setSelectedTreasuryId={setSelectedTreasuryId}
             treasuryAccounts={treasuryAccounts}
@@ -389,7 +453,7 @@ export function AX_EditInvoiceModal({
       </div>
 
       <AX_InvoicePrintModal
-        invoice={{ ...invoice, ...invForm, partyKind, total, paidAmount, remainingAmount }}
+        invoice={{ ...invoice, ...invForm, partyKind, subtotal, discountType, discountValue: Number(discountValue) || 0, discountAmount, total, paidAmount, remainingAmount }}
         isOpen={showPrintModal}
         onClose={() => setShowPrintModal(false)}
       />

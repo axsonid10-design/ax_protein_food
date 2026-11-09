@@ -32,19 +32,14 @@ export function AX_CreateInvoiceModal({
     warehouseId: defaultWarehouseId, date: getLocalTodayStr(), transportCost: '', loadingCost: '', items: [],
   })
 
-  const [paymentStatus, setPaymentStatus] = useState('unpaid')
-  const [paidInput, setPaidInput] = useState('')
+  const [paymentStatus, setPaymentStatus] = useState('unpaid'), [paidInput, setPaidInput] = useState('')
+  const [discountType, setDiscountType] = useState('none'), [discountValue, setDiscountValue] = useState('')
   const [partyKind, setPartyKind] = useState(() => (defaultType === 'purchase' || defaultType === 'purchase_return' ? 'supplier' : 'customer'))
   const [selectedTreasuryId, setSelectedTreasuryId] = useState(treasuryAccounts[0]?.id || '')
-  const [showCustomerModal, setShowCustomerModal] = useState(false)
-  const [showSupplierModal, setShowSupplierModal] = useState(false)
-  const [previewInvoice, setPreviewInvoice] = useState(null)
-  const [isPostSavePrint, setIsPostSavePrint] = useState(false)
-  const [isSaving, setIsSaving] = useState(false)
-  const [validationError, setValidationError] = useState(null)
-
-  const [draftItem, setDraftItem] = useState({ itemId: '', quantity: 1, price: 0 })
-  const [expandedRowIndex, setExpandedRowIndex] = useState(null)
+  const [showCustomerModal, setShowCustomerModal] = useState(false), [showSupplierModal, setShowSupplierModal] = useState(false)
+  const [previewInvoice, setPreviewInvoice] = useState(null), [isPostSavePrint, setIsPostSavePrint] = useState(false)
+  const [isSaving, setIsSaving] = useState(false), [validationError, setValidationError] = useState(null)
+  const [draftItem, setDraftItem] = useState({ itemId: '', quantity: 1, price: 0 }), [expandedRowIndex, setExpandedRowIndex] = useState(null)
 
   const isSaleType = invForm.type === 'sale' || invForm.type === 'sale_return'
   const partyList = partyKind === 'customer' ? clients : suppliers
@@ -52,12 +47,8 @@ export function AX_CreateInvoiceModal({
   const availableItems = items.filter((it) => !selectedItemIds.has(it.id))
 
   const typeButtons = useMemo(() => {
-    if (lockGroup === 'sales') {
-      return [['sale', 'فاتورة مبيعات', 'bg-primary text-white shadow-xs'], ['sale_return', 'مردود مبيعات', 'bg-purple-700 text-white shadow-xs']]
-    }
-    if (lockGroup === 'purchases') {
-      return [['purchase', 'فاتورة مشتريات', 'bg-secondary text-white shadow-xs'], ['purchase_return', 'مردود مشتريات', 'bg-amber-600 text-white shadow-xs']]
-    }
+    if (lockGroup === 'sales') return [['sale', 'فاتورة مبيعات', 'bg-primary text-white shadow-xs'], ['sale_return', 'مردود مبيعات', 'bg-purple-700 text-white shadow-xs']]
+    if (lockGroup === 'purchases') return [['purchase', 'فاتورة مشتريات', 'bg-secondary text-white shadow-xs'], ['purchase_return', 'مردود مشتريات', 'bg-amber-600 text-white shadow-xs']]
     return [
       ['sale', 'فاتورة مبيعات', 'bg-primary text-white shadow-xs'],
       ['purchase', 'فاتورة مشتريات', 'bg-secondary text-white shadow-xs'],
@@ -80,19 +71,11 @@ export function AX_CreateInvoiceModal({
       const initPartyName = initPartyKind === 'customer' ? (clients[0]?.name || '') : (suppliers[0]?.companyName || suppliers[0]?.name || '')
       setInvForm({
         type: resType, partyName: initPartyName, isCustomParty: false,
-        warehouseId: initialWarehouseId, date: getLocalTodayStr(),
-        transportCost: '', loadingCost: '', items: [],
+        warehouseId: initialWarehouseId, date: getLocalTodayStr(), transportCost: '', loadingCost: '', items: [],
       })
-      setPartyKind(initPartyKind)
-      setPaymentStatus('unpaid')
-      setPaidInput('')
-      setSelectedTreasuryId(treasuryAccounts[0]?.id || '')
-      setExpandedRowIndex(null)
-      setShowCustomerModal(false)
-      setShowSupplierModal(false)
-      setPreviewInvoice(null)
-      setIsPostSavePrint(false)
-      setValidationError(null)
+      setPartyKind(initPartyKind); setPaymentStatus('unpaid'); setPaidInput(''); setDiscountType('none'); setDiscountValue('')
+      setSelectedTreasuryId(treasuryAccounts[0]?.id || ''); setExpandedRowIndex(null)
+      setShowCustomerModal(false); setShowSupplierModal(false); setPreviewInvoice(null); setIsPostSavePrint(false); setValidationError(null)
     }
   }, [isOpen, defaultType, defaultWarehouseId])
 
@@ -188,60 +171,48 @@ export function AX_CreateInvoiceModal({
     setValidationError(null)
   }
 
-  const computeSubtotal = () => {
-    return invForm.items.reduce((sum, item) => sum + (Number(item.quantity) || 0) * (Number(item.price) || 0), 0)
+  const computeSubtotal = () => invForm.items.reduce((sum, item) => sum + (Number(item.quantity) || 0) * (Number(item.price) || 0), 0)
+
+  const computeDiscountAmount = (sub = computeSubtotal()) => {
+    const val = Number(discountValue) || 0
+    if (val <= 0 || discountType === 'none') return 0
+    if (discountType === 'percent') return Math.round(((sub * Math.min(100, Math.max(0, val))) / 100) * 100) / 100
+    return Math.min(sub, Math.max(0, val))
   }
 
   const computeTotal = () => {
-    return computeSubtotal() + (Number(invForm.transportCost) || 0) + (Number(invForm.loadingCost) || 0)
+    const sub = computeSubtotal()
+    return Math.max(0, sub - computeDiscountAmount(sub)) + (Number(invForm.transportCost) || 0) + (Number(invForm.loadingCost) || 0)
   }
 
   const buildInvoicePayload = (isDraft = false) => {
-    const sub = computeSubtotal()
-    const tot = computeTotal()
+    const sub = computeSubtotal(), discAmt = computeDiscountAmount(sub), tot = computeTotal()
     const partyName = invForm.partyName.trim()
-
-    let paidAmt = 0
-    if (paymentStatus === 'paid') paidAmt = tot
-    else if (paymentStatus === 'partial') paidAmt = Math.min(tot, Math.max(0, Number(paidInput) || 0))
+    let paidAmt = paymentStatus === 'paid' ? tot : paymentStatus === 'partial' ? Math.min(tot, Math.max(0, Number(paidInput) || 0)) : 0
     const remAmt = Math.max(0, tot - paidAmt)
-
     let paymentTerms = paymentStatus === 'paid' ? 'مدفوع كلي' : paymentStatus === 'partial' ? 'مدفوع جزئي' : 'غير مدفوع'
     if (invForm.type === 'sale_return') paymentTerms = 'مردود مبيعات'
     if (invForm.type === 'purchase_return') paymentTerms = 'مردود مشتريات'
 
     const codePrefix = { sale_return: 'RET-SALE', purchase_return: 'RET-PUR', purchase: 'PUR' }[invForm.type] || 'INV'
     const matchedParty = partyList.find((p) => (p.name || '').trim() === partyName || (p.companyName || '').trim() === partyName)
-    const partyId = matchedParty?.id || null
 
     return {
       id: generateUUID(),
       code: isDraft ? `DRAFT-${Date.now().toString().slice(-4)}` : `${codePrefix}-${Date.now().toString().slice(-6)}-${Math.floor(100 + Math.random() * 900)}`,
-      type: invForm.type,
-      partyType: partyKind,
-      partyKind,
-      partyId,
-      partyName: partyName || 'مسودة غير محددة',
-      isIncompleteData: !isPartyInList(partyName),
-      date: invForm.date,
-      operationalDate: invForm.date,
-      transactionDate: invForm.date,
-      createdAt: new Date().toISOString(),
-      created_at: new Date().toISOString(),
+      type: invForm.type, partyType: partyKind, partyKind, partyId: matchedParty?.id || null,
+      partyName: partyName || 'مسودة غير محددة', isIncompleteData: !isPartyInList(partyName),
+      date: invForm.date, operationalDate: invForm.date, transactionDate: invForm.date,
+      createdAt: new Date().toISOString(), created_at: new Date().toISOString(),
       warehouseId: invForm.warehouseId,
       items: invForm.items.map((it) => {
         const itemObj = items.find((i) => i.id === it.itemId)
         const q = Number(it.quantity) || 0, p = Number(it.price) || 0
         return { itemId: it.itemId, compositeName: getItemDisplayName(itemObj || it), quantity: q, unit: it.unit || itemObj?.unitType || 'كرتونة', price: p, total: q * p }
       }),
-      transportCost: Number(invForm.transportCost) || 0,
-      loadingCost: Number(invForm.loadingCost) || 0,
-      subtotal: sub,
-      total: tot,
-      paidAmount: paidAmt,
-      remainingAmount: remAmt,
-      status: paymentStatus,
-      paymentTerms,
+      transportCost: Number(invForm.transportCost) || 0, loadingCost: Number(invForm.loadingCost) || 0,
+      subtotal: sub, discountType, discountValue: Number(discountValue) || 0, discountAmount: discAmt,
+      total: tot, paidAmount: paidAmt, remainingAmount: remAmt, status: paymentStatus, paymentTerms,
       treasuryId: selectedTreasuryId || treasuryAccounts[0]?.id || null,
     }
   }
@@ -403,12 +374,61 @@ export function AX_CreateInvoiceModal({
           </div>
         </div>
 
+        <div className="p-2.5 rounded-2xl bg-surface-low/60 border border-outline-variant/20 space-y-2">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <span className="text-xs font-bold text-on-surface-variant">الخصم التجاري / النقدي:</span>
+            <div className="inline-flex rounded-full bg-surface-lowest p-0.5 border border-outline-variant/30 text-[11px] font-bold">
+              {[
+                ['none', 'بدون خصم'],
+                ['fixed', 'خصم مبلغ (ج.م)'],
+                ['percent', 'خصم نسبة (%)'],
+              ].map(([t, lbl]) => (
+                <button
+                  key={t}
+                  type="button"
+                  onClick={() => {
+                    setDiscountType(t)
+                    if (t === 'none') setDiscountValue('')
+                  }}
+                  className={`px-3 py-1 rounded-full font-black cursor-pointer transition-all ${
+                    discountType === t ? 'bg-primary text-white shadow-xs' : 'text-on-surface-variant hover:text-on-surface'
+                  }`}
+                >
+                  {lbl}
+                </button>
+              ))}
+            </div>
+          </div>
+          {discountType !== 'none' && (
+            <div className="flex items-center gap-3">
+              <div className="flex-1">
+                <input
+                  type="number"
+                  min="0"
+                  max={discountType === 'percent' ? 100 : computeSubtotal()}
+                  placeholder={discountType === 'percent' ? 'النسبة المئوية (مثال: 5)...' : 'المبلغ بالجنيه...'}
+                  value={discountValue}
+                  onChange={(e) => setDiscountValue(e.target.value)}
+                  className="w-full px-3 py-1.5 rounded-xl bg-surface-lowest border border-outline-variant/30 text-xs font-bold text-on-surface font-mono"
+                />
+              </div>
+              <div className="text-xs font-bold font-mono text-emerald-700 bg-emerald-500/10 px-3 py-1.5 rounded-xl border border-emerald-500/20 shrink-0">
+                قيمة الخصم: -{computeDiscountAmount().toLocaleString('en-US')} ج.م
+              </div>
+            </div>
+          )}
+        </div>
+
         <AX_InvoicePaymentSection
           paymentStatus={paymentStatus} setPaymentStatus={setPaymentStatus}
           paidInput={paidInput} setPaidInput={setPaidInput}
           selectedTreasuryId={selectedTreasuryId} setSelectedTreasuryId={setSelectedTreasuryId}
           treasuryAccounts={treasuryAccounts} currentTotal={currentTotal}
           currentPaid={currentPaid} currentRemaining={currentRemaining}
+          subtotal={computeSubtotal()}
+          discountAmount={computeDiscountAmount()}
+          discountType={discountType}
+          discountValue={Number(discountValue) || 0}
         />
 
         {validationError && (

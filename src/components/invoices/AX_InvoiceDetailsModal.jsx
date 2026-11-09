@@ -190,6 +190,16 @@ export function AX_InvoiceDetailsModal({
             <span className="text-on-surface-variant">قيمة البضاعة:</span>
             <span className="font-mono font-bold">{subtotal.toLocaleString('en-US')} ج.م</span>
           </div>
+          {Number(invoice.discountAmount || invoice.discount_amount || 0) > 0 && (
+            <div className="flex justify-between text-emerald-700 font-bold">
+              <span>
+                قيمة الخصم {(invoice.discountType || invoice.discount_type) === 'percent' ? `(${invoice.discountValue || invoice.discount_value}%)` : ''}:
+              </span>
+              <span className="font-mono">
+                -{Number(invoice.discountAmount || invoice.discount_amount).toLocaleString('en-US')} ج.م
+              </span>
+            </div>
+          )}
           <div className="flex justify-between">
             <span className="text-on-surface-variant">مصاريف نقل وشحن:</span>
             <span className="font-mono font-bold">{transportCost.toLocaleString('en-US')} ج.م</span>

@@ -12,6 +12,10 @@ export function AX_InvoicePaymentSection({
   currentTotal = 0,
   currentPaid = 0,
   currentRemaining = 0,
+  subtotal = 0,
+  discountAmount = 0,
+  discountType = 'none',
+  discountValue = 0,
 }) {
   return (
     <div className="space-y-2 pt-2 border-t border-surface-container">
@@ -70,25 +74,45 @@ export function AX_InvoicePaymentSection({
         </div>
       )}
 
-      <div className="flex items-center gap-4 pt-1">
+      <div className="flex items-center gap-4 pt-1 flex-wrap font-mono">
+        {discountAmount > 0 && (
+          <div>
+            <span className="text-[11px] text-on-surface-variant block font-bold font-sans">قبل الخصم:</span>
+            <span className="text-xs font-bold text-slate-400 line-through">
+              {Number(subtotal).toLocaleString('en-US')} ج.م
+            </span>
+          </div>
+        )}
+        {discountAmount > 0 && (
+          <div>
+            <span className="text-[11px] text-emerald-700 block font-bold font-sans">
+              قيمة الخصم {discountType === 'percent' ? `(${discountValue}%)` : ''}:
+            </span>
+            <span className="text-xs font-black text-emerald-600">
+              -{Number(discountAmount).toLocaleString('en-US')} ج.م
+            </span>
+          </div>
+        )}
         <div>
-          <span className="text-[11px] text-on-surface-variant block font-bold">الإجمالي:</span>
-          <span className="text-sm font-black font-mono text-primary">
+          <span className="text-[11px] text-on-surface-variant block font-bold font-sans">
+            {discountAmount > 0 ? 'الصافي النهائي:' : 'الإجمالي:'}
+          </span>
+          <span className="text-sm font-black text-primary">
             {currentTotal.toLocaleString('en-US')} ج.م
           </span>
         </div>
         {paymentStatus !== 'unpaid' && (
           <div>
-            <span className="text-[11px] text-on-surface-variant block font-bold">المسدد:</span>
-            <span className="text-sm font-black font-mono text-emerald-600">
+            <span className="text-[11px] text-on-surface-variant block font-bold font-sans">المسدد:</span>
+            <span className="text-sm font-black text-emerald-600">
               {currentPaid.toLocaleString('en-US')} ج.م
             </span>
           </div>
         )}
         {paymentStatus === 'partial' && (
           <div>
-            <span className="text-[11px] text-on-surface-variant block font-bold">المتبقي:</span>
-            <span className="text-sm font-black font-mono text-error">
+            <span className="text-[11px] text-on-surface-variant block font-bold font-sans">المتبقي:</span>
+            <span className="text-sm font-black text-error">
               {currentRemaining.toLocaleString('en-US')} ج.م
             </span>
           </div>

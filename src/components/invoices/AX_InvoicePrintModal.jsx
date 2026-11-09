@@ -65,6 +65,9 @@ export function AX_InvoicePrintModal({ invoice, isOpen, onClose }) {
 
   const items = invoice.items || []
   const subtotal = Number(invoice.subtotal) || 0
+  const discountAmount = Number(invoice.discountAmount || invoice.discount_amount || 0)
+  const discountType = invoice.discountType || invoice.discount_type || 'none'
+  const discountValue = Number(invoice.discountValue || invoice.discount_value || 0)
   const transportCost = Number(invoice.transportCost) || 0
   const loadingCost = Number(invoice.loadingCost) || 0
   const total = Number(invoice.total) || 0
@@ -409,7 +412,7 @@ export function AX_InvoicePrintModal({ invoice, isOpen, onClose }) {
                   <p className="text-[11px] font-mono text-slate-500">الخزينة المقيدة: {invoice.treasuryId}</p>
                 )}
                 <p className="text-[10px] text-slate-400 mt-1">
-                  * البضاعة الموضحة أعلاه مستلمة بحالة جيدة ومطابقة للمواصفات والأوزان المذكورة.
+                  • البضاعة الموضحة أعلاه مستلمة بحالة جيدة ومطابقة للمواصفات والأوزان المذكورة.
                 </p>
               </div>
 
@@ -418,6 +421,12 @@ export function AX_InvoicePrintModal({ invoice, isOpen, onClose }) {
                   <span>قيمة البضاعة:</span>
                   <span className="font-bold">{subtotal.toLocaleString('en-US')} ج.م</span>
                 </div>
+                {discountAmount > 0 && (
+                  <div className="flex justify-between text-emerald-700 font-bold">
+                    <span>قيمة الخصم {discountType === 'percent' ? `(${discountValue}%)` : ''}:</span>
+                    <span>-{discountAmount.toLocaleString('en-US')} ج.م</span>
+                  </div>
+                )}
                 {transportCost > 0 && (
                   <div className="flex justify-between text-slate-600">
                     <span>مصاريف نقل وشحن:</span>

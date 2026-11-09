@@ -144,7 +144,7 @@ export const AX_OperationsService = {
     if (!supabase || typeof supabase.from !== 'function' || !account?.id) return { success: false }
     const VALID_TYPES = ['cash', 'bank', 'wallet', 'instapay', 'van_cash']
     const accType = VALID_TYPES.includes(account.type) ? account.type : 'cash'
-    const row = { name: account.name?.trim(), type: accType, balance: Number(account.balance || 0), updated_at: new Date().toISOString() }
+    const row = { name: account.name?.trim(), type: accType, balance: Number(account.balance || 0) }
     try {
       const { error } = await supabase.from('ax_treasuries').update(row).eq('id', account.id)
       if (error) throw error
