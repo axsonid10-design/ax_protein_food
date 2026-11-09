@@ -37,6 +37,10 @@ export const offlineSync = {
           if (action === 'insert') {
             const { error } = await supabase.from(table).insert(payload)
             if (error) throw error
+          } else if (action === 'upsert') {
+            const onConflict = item.onConflict || (table === 'ax_inventory_stock' ? 'warehouse_id,item_id' : undefined)
+            const { error } = await supabase.from(table).upsert(payload, onConflict ? { onConflict } : undefined)
+            if (error) throw error
           } else if (action === 'update') {
             const { id, ...updates } = payload
             const { error } = await supabase.from(table).update(updates).eq('id', id)
@@ -76,6 +80,11 @@ export const offlineSync = {
       let result = null
       if (action === 'insert') {
         const { data, error } = await supabase.from(table).insert(payload).select()
+        if (error) throw error
+        result = data
+      } else if (action === 'upsert') {
+        const onConflict = payload?.onConflict || (table === 'ax_inventory_stock' ? 'warehouse_id,item_id' : undefined)
+        const { data, error } = await supabase.from(table).upsert(payload, onConflict ? { onConflict } : undefined).select()
         if (error) throw error
         result = data
       } else if (action === 'update') {

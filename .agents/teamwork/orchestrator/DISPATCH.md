@@ -53,3 +53,18 @@ Integrity mode: development
 - R4. HR Navigation & Mobile Responsive Layout
 - R5. Hold-to-Delete Confirmation, Wage Calculations & Deductions
 - R6. Employee Advances & Wage Settlements
+
+## 2026-11-09T02:01:38Z
+Sender: 5503c1f7-0527-4104-ac42-f82e3118dc62
+Priority: MESSAGE_PRIORITY_HIGH
+
+Use the full team. Implement a 3-stage confirmation workflow for modifying the opening stock balance ("رصيد أول المدة") of items per warehouse in AX_PROTEIN_FOOD, with interactive browser verification and multi-engineer calculation audits.
+
+Working directory: d:\AXONID_PROJECTS\AX_FROZEN_FOODS
+Integrity mode: development
+
+## Requirements
+- R1. Multi-Stage Opening Stock Modification Workflow
+- R2. Inventory Recalculation & Data Integrity
+- R3. Interactive Browser Verification & Clean State Restoration
+- R4. Multi-Engineer Calculation & Architectural Review

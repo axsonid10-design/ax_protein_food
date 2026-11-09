@@ -1,4 +1,5 @@
 import { supabase } from './supabaseClient.js'
+import { offlineDB } from './offlineDB.js'
 import { generateUUID } from '../utils/AX_UUID.js'
 import { AX_RecycleBinService } from './AX_RecycleBinService.js'
 
@@ -247,17 +248,24 @@ export const AX_ItemOperationsService = {
   },
 
   saveOpeningBalanceInDB: async ({ itemId, warehouseId, quantity, date, unit, newStock }, userProfile = null) => {
-    if (!supabase || typeof supabase.from !== 'function' || !itemId || !warehouseId) return { success: false }
+    if (!itemId || !warehouseId) return { success: false }
+    const parsedQty = !isNaN(Number(quantity)) && quantity !== '' && quantity !== null ? Number(quantity) : 0
+    const stockRow = {
+      warehouse_id: warehouseId,
+      item_id: itemId,
+      opening_balance: parsedQty,
+      opening_date: date || null,
+      quantity: Number(newStock !== undefined ? newStock : parsedQty) || 0,
+      unit: unit || 'كرتونة',
+      updated_at: new Date().toISOString(),
+    }
+    if (!supabase || typeof supabase.from !== 'function') {
+      try {
+        await offlineDB.enqueue('ax_inventory_stock', 'upsert', stockRow)
+      } catch {}
+      return { success: true, offline: true }
+    }
     try {
-      const stockRow = {
-        warehouse_id: warehouseId,
-        item_id: itemId,
-        opening_balance: Number(quantity) || 0,
-        opening_date: date || null,
-        quantity: Number(newStock !== undefined ? newStock : quantity) || 0,
-        unit: unit || 'كرتونة',
-        updated_at: new Date().toISOString(),
-      }
       const { error } = await supabase.from('ax_inventory_stock').upsert(stockRow, {
         onConflict: 'warehouse_id,item_id',
       })
@@ -274,7 +282,9 @@ export const AX_ItemOperationsService = {
       } catch {}
       return { success: true }
     } catch (err) {
-      console.error('saveOpeningBalanceInDB error:', err)
+      try {
+        await offlineDB.enqueue('ax_inventory_stock', 'upsert', stockRow)
+      } catch {}
       return { success: false, error: err.message }
     }
   },

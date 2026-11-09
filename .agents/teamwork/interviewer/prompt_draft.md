@@ -1,66 +1,46 @@
-Implement distribution van management and daily settlement workflows, standalone multi-tier expense and cost-center accounting, and employee HR navigation, calculations, hold-to-delete confirmation, and expense advance tracking in the Protein Food ERP production system.
+Use the full team. Implement a 3-stage confirmation workflow for modifying the opening stock balance ("رصيد أول المدة") of items per warehouse in AX_PROTEIN_FOOD, with interactive browser verification and multi-engineer calculation audits.
 
 Working directory: d:\AXONID_PROJECTS\AX_FROZEN_FOODS
 Integrity mode: development
 
 ## Requirements
 
-### R1. Distribution Vans Management & Stock Loading
-Support adding distribution vehicles to the system. Provide inventory transfer/loading into vehicles utilizing a card-based selection layout with category filters on top, replacing the legacy cargo shipping UI. Support packaging breakdowns and fractional quantity entry based on packaging types (cartons containing pieces, bags, trays, or plain cartons). Track real-time vehicle custody inventory. Link driver user accounts to their assigned vehicle so that sales transactions recorded by the driver automatically deduct from the vehicle's custody inventory.
+### R1. Multi-Stage Opening Stock Modification Workflow
+Provide a feature to change the opening stock balance ("رصيد أول المدة") of any item across warehouses, accessible from the item card/details modal in the items directory (`src/components/items/`). The workflow must enforce a strict 3-stage confirmation sequence:
+1. Clicking "تغيير رصيد أول المدة" triggers a first confirmation modal asking "هل أنت متأكد؟".
+2. Confirming displays a warehouse view allowing selection of the target warehouse and entry of the new opening quantity (and unit).
+3. Submitting the new quantity triggers a second confirmation modal asking "هل أنت متأكد؟".
+4. A final confirmation action ("تأكيد أخير") applies the modification.
+All confirmation modals and actions must conform to project invariants (`AX_ConfirmModal` and pill-shaped action buttons `rounded-full`).
 
-### R2. Van Daily Settlement (Financial, Stock & Expenses)
-Provide an end-of-day settlement workflow for distribution vehicles. Settle collected revenue with support for split payment methods (part cash, part bank transfer). Settle remaining inventory with options to retain stock on the vehicle or return items back to warehouse inventory. Allow recording and deducting operational expenses incurred by the driver (e.g., fuel) directly during the settlement by adding multiple itemized expense lines.
+### R2. Inventory Recalculation & Data Integrity
+Updating the opening stock balance must update `ax_inventory_stock` for the specified `item_id` and `warehouse_id` and invoke `recalculateItemStock` (in `src/components/warehouses/itemMovementHelpers.js`). The update must recompute running balances accurately without creating duplicate movement records, corrupting historical transactions, or introducing accounting discrepancies.
 
-### R3. Standalone Expenses & Multi-Tier Cost Centers
-Provide a dedicated standalone Expenses page ("المصروفات"). Implement a multi-tier classification hierarchy where users select a cost center entity before choosing the main expense category: Warehouses (dynamically listing all warehouses), Vehicles (dynamically listing all distribution vans), Factory ("المصنع"), or General. Main expense categories must be shared across entities. Support splitting expense payments across multiple treasuries/accounts (e.g. part cash, part transfer), and support deferred expenses ("آجل") with installment scheduling. Overhaul the Expense Categories Management modal ("إدارة بنود المصروفات") to eliminate overlapping and broken form elements, ensuring smooth category creation and editing.
+### R3. Interactive Browser Verification & Clean State Restoration
+Verify the complete workflow interactively using mouse actions in the browser via Chrome DevTools MCP on the local running server (http://localhost:8182). Select an existing item and warehouse, execute the multi-step opening balance modification, refresh the page in the browser to verify data persistence and balance calculations, and then cleanly restore the item's original opening stock balance so that no test data or modified balances remain in the system.
 
-### R4. HR Navigation & Mobile Responsive Layout
-Fix the employee management navigation bar so that top tabs ("سجل الحضور واليومية", "دليل الموظفين") do not clip or hide subsequent controls. Fix mobile layout overlaps between attendance logs, daily dates, and date pickers. Ensure the "Add Employee" button is clearly positioned and easily discoverable.
-
-### R5. Hold-to-Delete Confirmation, Wage Calculations & Deductions
-Implement a hold-to-delete button with an animated countdown timer before executing deletions on employee records. Audit and correct wage and attendance calculation formulas to guarantee accuracy. Provide a deduction action on employee records to apply wage penalties or deductions directly.
-
-### R6. Employee Advances & Wage Settlements
-Provide a dedicated main expense category for employee loans and advances ("سلف"). When recording an advance against an employee, display their current remaining balance and net dues; allow recording amounts exceeding their balance, resulting in a negative balance. Provide an employee settlement process that clears settled periods without double-counting past months, while preserving active balances for unsettled periods.
+### R4. Multi-Engineer Calculation & Architectural Review
+Subject all stock calculation routines, movement helper functions, and state updates to thorough review across multiple team members to ensure zero calculation skew and complete compliance with project invariants (file length <= 500 lines, zero code comments, no `window.confirm`).
 
 ## Acceptance Criteria
 
-### Distribution Vans & Stock Loading
-- [ ] Users can add and manage distribution vehicles.
-- [ ] Stock transfer/loading into vehicles uses the card-based layout with category filters at the top.
-- [ ] Items support fractional quantity entries according to their packaging breakdown (cartons with pieces, bags, trays, or plain cartons).
-- [ ] Real-time custody inventory on each vehicle is accurately tracked and displayed.
-- [ ] Sales recorded by a driver user automatically deduct stock from their assigned vehicle.
+### Workflow & Confirmation Modals
+- [ ] Clicking "تغيير رصيد أول المدة" in the item details view opens an initial confirmation modal asking "هل أنت متأكد؟".
+- [ ] Confirming the initial prompt opens the warehouse selection and quantity entry view.
+- [ ] Submitting the updated quantity opens a second confirmation modal asking "هل أنت متأكد؟".
+- [ ] Clicking the final confirmation button ("تأكيد أخير") applies the updated opening balance.
+- [ ] Modals use `AX_ConfirmModal` and buttons are styled with pill shapes (`rounded-full`).
 
-### Vehicle End-of-Day Settlement
-- [ ] Settlement allows recording collected revenue split between cash and bank transfer channels.
-- [ ] Settlement allows choosing whether remaining inventory stays on the vehicle or returns to warehouse stock.
-- [ ] Operational expenses (e.g., fuel) can be itemized as multiple expense lines and deducted during the vehicle settlement.
+### Calculation & Consistency
+- [ ] Updating opening balance updates `ax_inventory_stock` and triggers recalculation via `recalculateItemStock`.
+- [ ] Recalculated stock balances and movements reflect the new opening balance without duplicate entries or numerical drift.
+- [ ] Reloading the browser page confirms that the modified balance persists and displays correctly across item and warehouse views.
 
-### Expenses & Cost Centers
-- [ ] A dedicated "المصروفات" page is accessible as a standalone view.
-- [ ] Users can select a cost center entity (Warehouse, Vehicle, Factory, General) before selecting the main expense category.
-- [ ] Active warehouses and vehicles are dynamically populated in the cost center selector.
-- [ ] Expense payments can be split across multiple payment channels/treasuries.
-- [ ] Deferred expenses ("آجل") can be recorded with scheduled payment dates.
-- [ ] The "إدارة بنود المصروفات" modal renders cleanly without overlapping fields, allowing adding and editing categories.
+### Interactive Browser Verification & Teardown
+- [ ] The modification workflow is executed and verified via mouse clicks in the browser at http://localhost:8182.
+- [ ] After browser verification, the tested item and warehouse opening balance is restored to its exact initial value.
+- [ ] A post-verification audit confirms zero remaining test records, zero uncommitted modifications, and 100% calculation consistency across all inventory data.
 
-### HR UI & Mobile Optimization
-- [ ] The top tab bar in HR ("سجل الحضور واليومية", "دليل الموظفين") displays all tabs and subsequent controls without clipping or horizontal overflow.
-- [ ] Attendance logs, daily dates, and date pickers display without overlap or misalignment on mobile screens.
-- [ ] The "Add Employee" button is clearly visible and functional in the employee directory.
-
-### Hold-to-Delete, Wage Calculations & Deductions
-- [ ] Deleting an employee requires holding the delete button with an animated countdown timer before deletion triggers.
-- [ ] Attendance and wage calculations produce verified, correct totals.
-- [ ] Deductions can be applied to an employee directly from their record or card.
-
-### Employee Advances & Settlements
-- [ ] A dedicated expense category exists for employee advances ("سلف").
-- [ ] Recording an employee advance displays their current dues and allows recording amounts exceeding their balance (resulting in a negative balance).
-- [ ] Employee wage settlements clear the settled period without double-counting past months, while retaining unpaid balances.
-
-### Verification & Architectural Quality
-- [ ] Automated tests verify vehicle inventory deductions, settlement math, multi-channel expense splitting, employee wage calculations, and settlement balances.
-- [ ] All automated tests pass cleanly with zero failures.
-- [ ] All modified and new files adhere to project invariants (<= 500 lines per file, zero comments in code, and AXONID UI/UX standards).
+### Architectural Standards
+- [ ] Calculation logic and code changes pass multi-party review with zero errors.
+- [ ] All modified and created files are <= 500 lines and contain zero comments in code.

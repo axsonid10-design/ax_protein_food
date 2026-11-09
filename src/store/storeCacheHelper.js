@@ -1,6 +1,7 @@
 import { generateUUID } from '../utils/AX_UUID.js'
 import { recalculateItemStock } from '../components/warehouses/itemMovementHelpers.js'
 import { getCartonEquivalent } from '../utils/pricingCalculations.js'
+import { offlineDB } from '../services/offlineDB.js'
 
 export const updateLocalCachePayload = (key, value) => {
   try {
@@ -8,6 +9,17 @@ export const updateLocalCachePayload = (key, value) => {
     const parsed = s ? JSON.parse(s) : {}
     parsed[key] = value
     localStorage.setItem('ax_cached_db_payload', JSON.stringify(parsed))
+  } catch {}
+  try {
+    if (typeof offlineDB !== 'undefined' && offlineDB?.cacheData) {
+      offlineDB.cacheData(key, value).catch(() => {})
+      offlineDB.getCachedData('full_database').then((cached) => {
+        if (cached && typeof cached === 'object') {
+          cached[key] = value
+          offlineDB.cacheData('full_database', cached).catch(() => {})
+        }
+      }).catch(() => {})
+    }
   } catch {}
 }
 
@@ -278,13 +290,21 @@ export const saveItemOpeningBalanceState = (state, { itemId, warehouseId, quanti
   const sales = state.invoices?.filter((i) => i.type === 'sale' || i.type === 'sale_return') || []
 
   let updatedInventory = [...(state.inventoryStock || [])]
-  const idx = updatedInventory.findIndex((s) => s.warehouseId === warehouseId && s.itemId === itemId)
+  const idx = updatedInventory.findIndex(
+    (s) => (s.warehouseId || s.warehouse_id) === warehouseId && (s.itemId || s.item_id) === itemId
+  )
   const prevItem = idx !== -1 ? updatedInventory[idx] : null
   const baseUnit = unit || prevItem?.unit || 'كرتونة'
+  const parsedQty = !isNaN(Number(quantity)) && quantity !== '' && quantity !== null ? Number(quantity) : 0
 
   const tempStockRow = {
-    ...(prevItem || { warehouseId, itemId, unit: baseUnit }),
-    openingBalance: Number(quantity) || 0,
+    warehouseId,
+    itemId,
+    unit: baseUnit,
+    ...(prevItem || {}),
+    warehouseId,
+    itemId,
+    openingBalance: parsedQty,
     openingDate: date || null,
   }
 
@@ -303,11 +323,12 @@ export const saveItemOpeningBalanceState = (state, { itemId, warehouseId, quanti
     sales,
     transfers: state.transfers || [],
     stockAudits: state.stockAudits || [],
+    warehouses: state.warehouses || [],
   })
 
   const finalStockRow = { ...tempStockRow, quantity: nextCurrentStock }
   const finalInventory = updatedInventory.map((s) =>
-    s.warehouseId === warehouseId && s.itemId === itemId ? finalStockRow : s
+    (s.warehouseId || s.warehouse_id) === warehouseId && (s.itemId || s.item_id) === itemId ? finalStockRow : s
   )
 
   updateLocalCachePayload('inventoryStock', finalInventory)

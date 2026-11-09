@@ -196,10 +196,11 @@ export function AX_ItemMovementCardModal({
                   type="button"
                   onClick={() => setIsOpeningModalOpen(true)}
                   className="inline-flex items-center gap-1 text-[10px] font-black text-amber-700 bg-amber-500/10 hover:bg-amber-500/20 px-2 py-0.5 rounded-full transition-colors cursor-pointer"
-                  title="تعديل رصيد أول المدة"
+                  title="تغيير رصيد أول المدة"
+                  aria-label="تغيير رصيد أول المدة"
                 >
                   <Layers className="w-3 h-3" />
-                  <span>تعديل</span>
+                  <span>تغيير رصيد أول المدة</span>
                 </button>
               </div>
               <div className={`font-mono font-black text-lg sm:text-xl ${openingBalance < 0 ? 'text-error' : 'text-on-surface'}`}>

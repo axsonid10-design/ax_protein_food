@@ -56,7 +56,7 @@ export function AX_ItemsCatalog() {
       <button type="button" onClick={() => setSelectedItemForCard(item)} className="p-1 rounded-full text-primary hover:bg-primary/10 transition-colors cursor-pointer" title="عرض كارت حركة الصنف 360°">
         <Activity className={isMobile ? 'w-4 h-4' : 'w-3.5 h-3.5'} />
       </button>
-      <button type="button" onClick={() => setItemForOpeningBalance(item)} className="p-1 rounded-full text-amber-700 hover:bg-amber-500/10 transition-colors cursor-pointer" title="تسجيل وتعديل رصيد أول المدة">
+      <button type="button" onClick={() => setItemForOpeningBalance(item)} className="p-1 rounded-full text-amber-700 hover:bg-amber-500/10 transition-colors cursor-pointer" title="تغيير رصيد أول المدة" aria-label="تغيير رصيد أول المدة">
         <Layers className={isMobile ? 'w-4 h-4' : 'w-3.5 h-3.5'} />
       </button>
       <button type="button" onClick={() => setItemToEdit(item)} className="p-1 rounded-full text-secondary hover:bg-secondary/10 transition-colors cursor-pointer" title="تعديل بيانات الصنف">

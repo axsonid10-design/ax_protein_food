@@ -91,6 +91,7 @@ export function recalculateItemStock({
 
   ;(purchases || []).forEach((inv) => {
     if (!inv) return
+    if (inv.type && inv.type !== 'purchase' && inv.type !== 'purchase_return') return
     const invWhId = inv.warehouseId || inv.warehouse_id
     if (invWhId !== warehouseId) return
     if (inv.status === 'cancelled' || inv.status === 'deleted') return
@@ -111,6 +112,7 @@ export function recalculateItemStock({
 
   ;(sales || []).forEach((inv) => {
     if (!inv) return
+    if (inv.type && inv.type !== 'sale' && inv.type !== 'sale_return') return
     const invWhId = inv.warehouseId || inv.warehouse_id
     if (invWhId !== warehouseId) return
     if (inv.status === 'cancelled' || inv.status === 'deleted') return
