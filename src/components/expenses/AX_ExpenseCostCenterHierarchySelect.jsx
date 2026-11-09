@@ -6,6 +6,11 @@ import {
   getCostCenterEntities,
 } from '../../store/expenseStoreHelpers.js'
 import { expenseCategoryHelpers } from '../../store/expenseCategoryHelpers.js'
+import { useAXStore } from '../../store/useAXStore.js'
+import { AX_SearchableSelect } from '../common/AX_SearchableSelect.jsx'
+import { AX_ExpenseCategoryPillSelector } from './AX_ExpenseCategoryPillSelector.jsx'
+import { generateUUID } from '../../utils/AX_UUID.js'
+import { axToast } from '../common/AX_Toast.jsx'
 
 export function AX_ExpenseCostCenterHierarchySelect({
   costCenter = { entityType: EXPENSE_COST_CENTER_TYPES.WAREHOUSE, entityId: '', entityName: '' },
@@ -19,6 +24,9 @@ export function AX_ExpenseCostCenterHierarchySelect({
   distributors = [],
   disabled = false,
 }) {
+  const addExpenseCategory = useAXStore((state) => state.addExpenseCategory)
+  const deleteExpenseCategory = useAXStore((state) => state.deleteExpenseCategory)
+
   const currentEntityType = costCenter?.entityType || EXPENSE_COST_CENTER_TYPES.WAREHOUSE
   const availableEntities = useMemo(() => {
     return getCostCenterEntities(currentEntityType, { warehouses, distributors })
@@ -66,9 +74,8 @@ export function AX_ExpenseCostCenterHierarchySelect({
     })
   }
 
-  const handleEntityIdChange = (e) => {
+  const handleEntityIdSelect = (id) => {
     if (disabled) return
-    const id = e.target.value
     const found = availableEntities.find((item) => item.id === id)
     onCostCenterChange?.({
       entityType: currentEntityType,
@@ -77,10 +84,8 @@ export function AX_ExpenseCostCenterHierarchySelect({
     })
   }
 
-  const handleMainCategoryChange = (e) => {
+  const handleMainCategorySelect = (mainId, mainName) => {
     if (disabled) return
-    const mainId = e.target.value
-    const foundMain = mainCategories.find((m) => m.id === mainId)
     const availableSubs = mainId ? expenseCategoryHelpers.getSubCategories(categories, mainId) : []
     const firstSub = availableSubs[0]
     const availableSecs = firstSub ? expenseCategoryHelpers.getSecondaryCategories(categories, firstSub.id) : []
@@ -88,7 +93,7 @@ export function AX_ExpenseCostCenterHierarchySelect({
 
     onCategoryChange?.({
       mainCategoryId: mainId,
-      mainCategoryName: foundMain ? foundMain.name : '',
+      mainCategoryName: mainName || (mainCategories.find((m) => m.id === mainId)?.name || ''),
       subCategoryId: firstSub ? firstSub.id : '',
       subCategoryName: firstSub ? firstSub.name : '',
       secondaryCategoryId: firstSec ? firstSec.id : '',
@@ -96,10 +101,30 @@ export function AX_ExpenseCostCenterHierarchySelect({
     })
   }
 
-  const handleSubCategoryChange = (e) => {
+  const handleAddMain = (name) => {
+    const newId = `exp-main-${generateUUID()}`
+    addExpenseCategory?.({ id: newId, name, level: 'main', parentId: null })
+    axToast.success(`تمت إضافة البند الرئيسي "${name}"`)
+    handleMainCategorySelect(newId, name)
+  }
+
+  const handleDeleteMain = (id) => {
+    deleteExpenseCategory?.(id)
+    axToast.info('تم حذف البند الرئيسي')
+    if (id === selectedMainCategoryId) {
+      onCategoryChange?.({
+        mainCategoryId: '',
+        mainCategoryName: '',
+        subCategoryId: '',
+        subCategoryName: '',
+        secondaryCategoryId: '',
+        secondaryCategoryName: '',
+      })
+    }
+  }
+
+  const handleSubCategorySelect = (subId, subName) => {
     if (disabled) return
-    const subId = e.target.value
-    const foundSub = subCategories.find((s) => s.id === subId)
     const availableSecs = subId ? expenseCategoryHelpers.getSecondaryCategories(categories, subId) : []
     const firstSec = availableSecs[0]
 
@@ -107,26 +132,82 @@ export function AX_ExpenseCostCenterHierarchySelect({
       mainCategoryId: selectedMainCategoryId,
       mainCategoryName: activeMain ? activeMain.name : '',
       subCategoryId: subId,
-      subCategoryName: foundSub ? foundSub.name : '',
+      subCategoryName: subName || (subCategories.find((s) => s.id === subId)?.name || ''),
       secondaryCategoryId: firstSec ? firstSec.id : '',
       secondaryCategoryName: firstSec ? firstSec.name : '',
     })
   }
 
-  const handleSecondaryCategoryChange = (e) => {
-    if (disabled) return
-    const secId = e.target.value
-    const foundSec = secondaryCategories.find((s) => s.id === secId)
+  const handleAddSub = (name) => {
+    if (!selectedMainCategoryId) {
+      axToast.error('يرجى اختيار البند الرئيسي أولاً لإضافة تصنيف فرعي تحته')
+      return
+    }
+    const newId = `exp-sub-${generateUUID()}`
+    addExpenseCategory?.({ id: newId, name, level: 'sub', parentId: selectedMainCategoryId })
+    axToast.success(`تمت إضافة التصنيف الفرعي "${name}"`)
+    handleSubCategorySelect(newId, name)
+  }
 
+  const handleDeleteSub = (id) => {
+    deleteExpenseCategory?.(id)
+    axToast.info('تم حذف التصنيف الفرعي')
+    if (id === selectedSubCategoryId) {
+      onCategoryChange?.({
+        mainCategoryId: selectedMainCategoryId,
+        mainCategoryName: activeMain ? activeMain.name : '',
+        subCategoryId: '',
+        subCategoryName: '',
+        secondaryCategoryId: '',
+        secondaryCategoryName: '',
+      })
+    }
+  }
+
+  const handleSecondaryCategorySelect = (secId, secName) => {
+    if (disabled) return
     onCategoryChange?.({
       mainCategoryId: selectedMainCategoryId,
       mainCategoryName: activeMain ? activeMain.name : '',
       subCategoryId: selectedSubCategoryId,
       subCategoryName: activeSub ? activeSub.name : '',
       secondaryCategoryId: secId,
-      secondaryCategoryName: foundSec ? foundSec.name : '',
+      secondaryCategoryName: secName || (secondaryCategories.find((s) => s.id === secId)?.name || ''),
     })
   }
+
+  const handleAddSecondary = (name) => {
+    if (!selectedSubCategoryId) {
+      axToast.error('يرجى اختيار التصنيف الفرعي أولاً لإضافة تصنيف ثانوي تحته')
+      return
+    }
+    const newId = `exp-sec-${generateUUID()}`
+    addExpenseCategory?.({ id: newId, name, level: 'secondary', parentId: selectedSubCategoryId })
+    axToast.success(`تمت إضافة التصنيف الثانوي "${name}"`)
+    handleSecondaryCategorySelect(newId, name)
+  }
+
+  const handleDeleteSecondary = (id) => {
+    deleteExpenseCategory?.(id)
+    axToast.info('تم حذف التصنيف الثانوي')
+    if (id === selectedSecondaryCategoryId) {
+      onCategoryChange?.({
+        mainCategoryId: selectedMainCategoryId,
+        mainCategoryName: activeMain ? activeMain.name : '',
+        subCategoryId: selectedSubCategoryId,
+        subCategoryName: activeSub ? activeSub.name : '',
+        secondaryCategoryId: '',
+        secondaryCategoryName: '',
+      })
+    }
+  }
+
+  const entityOptions = useMemo(() => {
+    return availableEntities.map((ent) => ({
+      value: ent.id,
+      label: ent.name + (ent.plateNumber ? ` (${ent.plateNumber})` : ''),
+    }))
+  }, [availableEntities])
 
   return (
     <div className="w-full space-y-3.5 bg-surface-container-low/50 border border-outline-variant/30 rounded-2xl p-3.5 sm:p-4 transition-all">
@@ -199,21 +280,16 @@ export function AX_ExpenseCostCenterHierarchySelect({
 
         {availableEntities.length > 1 ? (
           <div className="pt-1">
-            <select
+            <AX_SearchableSelect
               value={costCenter?.entityId || ''}
-              onChange={handleEntityIdChange}
+              onChange={handleEntityIdSelect}
+              options={entityOptions}
               disabled={disabled}
-              className="w-full h-10 px-3 bg-surface-lowest border border-outline-variant/40 rounded-xl text-xs font-bold text-on-surface focus:outline-none focus:border-primary transition-all cursor-pointer"
-            >
-              {availableEntities.map((ent) => (
-                <option key={ent.id} value={ent.id}>
-                  {ent.name} {ent.plateNumber ? `(${ent.plateNumber})` : ''}
-                </option>
-              ))}
-            </select>
+              placeholder="اختر الجهة أو الفرع أو المركبة..."
+            />
           </div>
         ) : (
-          <div className="h-9 px-3 bg-surface-lowest/70 border border-outline-variant/20 rounded-xl flex items-center justify-between text-xs font-bold text-on-surface">
+          <div className="h-10 px-3 bg-surface-lowest border border-outline-variant/30 rounded-2xl flex items-center justify-between text-xs font-bold text-on-surface">
             <span>{costCenter?.entityName || availableEntities[0]?.name || 'المصنع / الإدارة'}</span>
             <CheckCircle2 className="w-4 h-4 text-emerald-600" />
           </div>
@@ -226,67 +302,51 @@ export function AX_ExpenseCostCenterHierarchySelect({
           2. تصنيف وبند المصروف المشترك
         </label>
 
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-          <div>
-            <span className="block text-[11px] font-bold text-on-surface-variant mb-1">
-              البند الرئيسي <span className="text-red-500">*</span>
-            </span>
-            <select
-              value={selectedMainCategoryId || ''}
-              onChange={handleMainCategoryChange}
-              disabled={disabled}
-              className="w-full h-10 px-2.5 bg-surface-lowest border border-outline-variant/40 rounded-xl text-xs font-bold text-on-surface focus:outline-none focus:border-primary transition-all cursor-pointer"
-            >
-              <option value="">-- اختر البند الرئيسي --</option>
-              {mainCategories.map((m) => (
-                <option key={m.id} value={m.id}>
-                  {m.name}
-                </option>
-              ))}
-            </select>
-          </div>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+          <AX_ExpenseCategoryPillSelector
+            label="البند الرئيسي"
+            value={selectedMainCategoryId}
+            options={mainCategories}
+            onChange={handleMainCategorySelect}
+            onAdd={handleAddMain}
+            onDelete={handleDeleteMain}
+            placeholder="اختر البند الرئيسي..."
+            required={true}
+            disabled={disabled}
+            level="main"
+          />
 
-          <div>
-            <span className="block text-[11px] font-bold text-on-surface-variant mb-1">
-              التصنيف الفرعي <span className="text-red-500">*</span>
-            </span>
-            <select
-              value={selectedSubCategoryId || ''}
-              onChange={handleSubCategoryChange}
-              disabled={disabled || !selectedMainCategoryId}
-              className="w-full h-10 px-2.5 bg-surface-lowest border border-outline-variant/40 rounded-xl text-xs font-bold text-on-surface focus:outline-none focus:border-primary transition-all cursor-pointer disabled:opacity-50"
-            >
-              <option value="">-- اختر التصنيف الفرعي --</option>
-              {subCategories.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name}
-                </option>
-              ))}
-            </select>
-          </div>
+          <AX_ExpenseCategoryPillSelector
+            label="التصنيف الفرعي"
+            value={selectedSubCategoryId}
+            options={subCategories}
+            onChange={handleSubCategorySelect}
+            onAdd={handleAddSub}
+            onDelete={handleDeleteSub}
+            placeholder={selectedMainCategoryId ? 'اختر التصنيف الفرعي...' : 'اختر الرئيسي أولاً'}
+            required={true}
+            disabled={disabled || !selectedMainCategoryId}
+            level="sub"
+          />
 
-          <div>
-            <span className="block text-[11px] font-bold text-on-surface-variant mb-1">التصنيف الثانوي (اختياري)</span>
-            <select
-              value={selectedSecondaryCategoryId || ''}
-              onChange={handleSecondaryCategoryChange}
-              disabled={disabled || !selectedSubCategoryId}
-              className="w-full h-10 px-2.5 bg-surface-lowest border border-outline-variant/40 rounded-xl text-xs font-bold text-on-surface focus:outline-none focus:border-primary transition-all cursor-pointer disabled:opacity-50"
-            >
-              <option value="">-- بدون تصنيف ثانوى --</option>
-              {secondaryCategories.map((sec) => (
-                <option key={sec.id} value={sec.id}>
-                  {sec.name}
-                </option>
-              ))}
-            </select>
-          </div>
+          <AX_ExpenseCategoryPillSelector
+            label="التصنيف الثانوي (اختياري)"
+            value={selectedSecondaryCategoryId}
+            options={secondaryCategories}
+            onChange={handleSecondaryCategorySelect}
+            onAdd={handleAddSecondary}
+            onDelete={handleDeleteSecondary}
+            placeholder={selectedSubCategoryId ? 'اختر التصنيف الثانوي...' : 'بدون تصنيف ثانوي'}
+            required={false}
+            disabled={disabled || !selectedSubCategoryId}
+            level="secondary"
+          />
         </div>
       </div>
 
-      <div className="bg-surface-lowest border border-primary/20 rounded-xl px-3 py-2 flex flex-wrap items-center gap-1.5 text-xs font-bold">
+      <div className="bg-surface-lowest border border-primary/20 rounded-2xl px-3 py-2 flex flex-wrap items-center gap-1.5 text-xs font-bold">
         <span className="text-primary font-black">المسار:</span>
-        <span className="px-2 py-0.5 rounded-full bg-primary/10 text-primary text-[11px] font-black">
+        <span className="px-2.5 py-0.5 rounded-full bg-primary/10 text-primary text-[11px] font-black">
           {costCenter?.entityName || 'عام'}
         </span>
         <span className="text-outline-variant font-black">←</span>
@@ -294,13 +354,13 @@ export function AX_ExpenseCostCenterHierarchySelect({
         {activeSub && (
           <>
             <span className="text-outline-variant font-black">←</span>
-            <span className="text-on-surface-variant">{activeSub.name}</span>
+            <span className="text-on-surface-variant font-black">{activeSub.name}</span>
           </>
         )}
         {activeSec && (
           <>
             <span className="text-outline-variant font-black">←</span>
-            <span className="text-on-surface-variant text-[11px]">{activeSec.name}</span>
+            <span className="text-on-surface-variant text-[11px] font-bold">{activeSec.name}</span>
           </>
         )}
       </div>

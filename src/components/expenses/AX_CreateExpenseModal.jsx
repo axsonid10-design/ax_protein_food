@@ -3,7 +3,9 @@ import { X, Check, Plus, Trash2, Calendar, Wallet, Receipt, Sparkles, CreditCard
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock.js'
 import { useAXStore } from '../../store/useAXStore.js'
 import { AX_CompanyDatePicker } from '../common/AX_CompanyDatePicker.jsx'
+import { AX_SearchableSelect } from '../common/AX_SearchableSelect.jsx'
 import { AX_ExpenseCostCenterHierarchySelect } from './AX_ExpenseCostCenterHierarchySelect.jsx'
+import { AX_ExpenseStatementAutocomplete } from './AX_ExpenseStatementAutocomplete.jsx'
 import {
   EXPENSE_COST_CENTER_TYPES,
   createExpenseRecord,
@@ -33,6 +35,14 @@ export function AX_CreateExpenseModal({ isOpen, onClose, onCreated }) {
   const [installments, setInstallments] = useState([])
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [errorMessage, setErrorMessage] = useState('')
+
+  const treasuryOptions = useMemo(() => (
+    treasuryAccounts.map((t) => ({
+      value: t.id,
+      label: t.name,
+      badge: `${t.balance?.toLocaleString('en-US') || 0} ج.م`
+    }))
+  ), [treasuryAccounts])
 
   if (!isOpen) return null
 
@@ -85,6 +95,14 @@ export function AX_CreateExpenseModal({ isOpen, onClose, onCreated }) {
     if (updated[idx]) {
       updated[idx] = { ...updated[idx], [field]: value }
       setInstallments(updated)
+    }
+  }
+
+  const handleInstallmentCountChange = (num) => {
+    setInstallmentCount(num)
+    const baseAmount = paymentType === 'deferred' ? parsedTotal : remaining
+    if (baseAmount > 0) {
+      setInstallments(generateExpenseInstallments(baseAmount, num, firstDueDate))
     }
   }
 
@@ -156,7 +174,16 @@ export function AX_CreateExpenseModal({ isOpen, onClose, onCreated }) {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-bold text-on-surface mb-1">بيان / وصف المصروف <span className="text-red-500">*</span></label>
-              <input type="text" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="مثال: فاتورة صيانة غرف تبريد..." className="w-full h-10 px-3 bg-surface-lowest border border-outline-variant/40 rounded-xl text-xs font-bold text-on-surface focus:outline-none focus:border-primary" />
+              <AX_ExpenseStatementAutocomplete
+                value={title}
+                onChange={setTitle}
+                pastTransactions={storeState.cashTransactions}
+                selectedMainCategoryName={categoryNames.mainCategoryName}
+                selectedSubCategoryName={categoryNames.subCategoryName}
+                placeholder="مثال: فاتورة صيانة غرف تبريد..."
+                disabled={isSubmitting}
+                required={true}
+              />
             </div>
             <div>
               <label className="block text-xs font-bold text-on-surface mb-1">جهة الصرف / المستفيد / المقاول</label>
@@ -176,27 +203,67 @@ export function AX_CreateExpenseModal({ isOpen, onClose, onCreated }) {
           {(paymentType === 'immediate' || paymentType === 'partial') && (
             <div className="space-y-2.5 p-3.5 bg-surface-container-low/40 rounded-2xl border border-outline-variant/30">
               <div className="flex items-center justify-between">
-                <span className="text-xs font-black text-on-surface flex items-center gap-1.5"><Wallet className="w-3.5 h-3.5 text-emerald-600" />قنوات الصرف المتعددة (Split Payments)</span>
+                <span className="text-xs font-black text-on-surface flex items-center gap-1.5"><Wallet className="w-3.5 h-3.5 text-emerald-600" />قنوات الصرف المتعددة</span>
                 <button type="button" onClick={handleAddPaymentRow} className="inline-flex items-center gap-1 text-[11px] font-black text-primary hover:underline cursor-pointer"><Plus className="w-3 h-3" />إضافة قناة دفع أخرى</button>
               </div>
-              <div className="space-y-2">
+              <div className="space-y-2.5">
                 {payments.map((p) => (
-                  <div key={p.id} className="grid grid-cols-12 gap-2 items-center bg-surface-lowest p-2 rounded-xl border border-outline-variant/20">
-                    <div className="col-span-5 sm:col-span-4">
-                      <select value={p.treasuryId} onChange={(e) => handleUpdatePayment(p.id, 'treasuryId', e.target.value)} className="w-full h-8 px-2 bg-surface-container/50 border border-outline-variant/30 rounded-lg text-xs font-bold">
-                        {treasuryAccounts.map((t) => (<option key={t.id} value={t.id}>{t.name} ({t.balance?.toLocaleString('en-US')} ج.م)</option>))}
-                      </select>
-                    </div>
-                    <div className="col-span-3 sm:col-span-3">
-                      <select value={p.method} onChange={(e) => handleUpdatePayment(p.id, 'method', e.target.value)} className="w-full h-8 px-2 bg-surface-container/50 border border-outline-variant/30 rounded-lg text-xs font-bold">
-                        <option value="cash">نقدي</option><option value="bank_transfer">تحويل بنكي</option><option value="instapay">إنستاباي</option>
-                      </select>
-                    </div>
-                    <div className="col-span-3 sm:col-span-4">
-                      <input type="number" step="0.01" min="0" value={p.amount} onChange={(e) => handleUpdatePayment(p.id, 'amount', e.target.value)} placeholder="المبلغ" className="w-full h-8 px-2 bg-surface-lowest border border-outline-variant/40 rounded-lg text-xs font-black text-on-surface" />
-                    </div>
-                    <div className="col-span-1 flex justify-end">
-                      {payments.length > 1 && (<button type="button" onClick={() => setPayments(payments.filter((row) => row.id !== p.id))} className="w-7 h-7 rounded-lg text-red-600 hover:bg-red-500/10 flex items-center justify-center cursor-pointer"><Trash2 className="w-3.5 h-3.5" /></button>)}
+                  <div key={p.id} className="p-2.5 bg-surface-lowest rounded-2xl border border-outline-variant/20 shadow-xs">
+                    <div className="grid grid-cols-1 sm:grid-cols-12 gap-2 items-center">
+                      <div className="sm:col-span-5">
+                        <AX_SearchableSelect
+                          value={p.treasuryId}
+                          onChange={(val) => handleUpdatePayment(p.id, 'treasuryId', val)}
+                          options={treasuryOptions}
+                          placeholder="اختر الخزينة / الحساب..."
+                          searchable={true}
+                        />
+                      </div>
+                      <div className="sm:col-span-4 flex items-center justify-center">
+                        <div className="inline-flex items-center gap-1 bg-surface-container/40 p-1 rounded-xl border border-outline-variant/20 w-full justify-around">
+                          {[
+                            { id: 'cash', label: 'نقدي' },
+                            { id: 'bank_transfer', label: 'تحويل' },
+                            { id: 'instapay', label: 'إنستاباي' },
+                          ].map((m) => (
+                            <button
+                              key={m.id}
+                              type="button"
+                              onClick={() => handleUpdatePayment(p.id, 'method', m.id)}
+                              className={`flex-1 py-1 rounded-lg text-[11px] font-black transition-all cursor-pointer text-center ${
+                                p.method === m.id
+                                  ? 'bg-primary text-on-primary shadow-xs'
+                                  : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-lowest'
+                              }`}
+                            >
+                              {m.label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                      <div className="sm:col-span-2">
+                        <input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          value={p.amount}
+                          onChange={(e) => handleUpdatePayment(p.id, 'amount', e.target.value)}
+                          placeholder="المبلغ"
+                          className="w-full h-10 px-3 bg-surface-lowest border border-outline-variant/40 rounded-xl text-xs font-black text-on-surface text-center focus:outline-none focus:border-primary"
+                        />
+                      </div>
+                      <div className="sm:col-span-1 flex justify-end">
+                        {payments.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => setPayments(payments.filter((row) => row.id !== p.id))}
+                            className="w-8 h-8 rounded-full text-red-600 hover:bg-red-500/10 flex items-center justify-center cursor-pointer transition-colors"
+                            title="حذف القناة"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        )}
+                      </div>
                     </div>
                   </div>
                 ))}
@@ -211,18 +278,31 @@ export function AX_CreateExpenseModal({ isOpen, onClose, onCreated }) {
           {(paymentType === 'partial' || paymentType === 'deferred') && (
             <div className="space-y-2.5 p-3.5 bg-surface-container-low/40 rounded-2xl border border-outline-variant/30">
               <div className="flex items-center justify-between">
-                <span className="text-xs font-black text-on-surface flex items-center gap-1.5"><Calendar className="w-3.5 h-3.5 text-primary" />جدولة الأقساط المؤجلة (Installment Schedule)</span>
+                <span className="text-xs font-black text-on-surface flex items-center gap-1.5"><Calendar className="w-3.5 h-3.5 text-primary" />جدولة الأقساط المؤجلة</span>
                 <button type="button" onClick={() => setInstallments(generateExpenseInstallments(paymentType === 'deferred' ? parsedTotal : remaining, installmentCount, firstDueDate))} className="inline-flex items-center gap-1 text-[11px] font-black text-primary bg-primary/10 px-2.5 py-1 rounded-full border border-primary/20 cursor-pointer active:scale-95"><Sparkles className="w-3 h-3" />توليد الجدول تلقائياً</button>
               </div>
-              <div className="grid grid-cols-2 gap-2.5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-center">
                 <div>
-                  <label className="block text-[11px] font-bold text-on-surface-variant mb-1">عدد الأقساط</label>
-                  <select value={installmentCount} onChange={(e) => setInstallmentCount(Number(e.target.value))} className="w-full h-8 px-2 bg-surface-lowest border border-outline-variant/40 rounded-lg text-xs font-bold">
-                    {[1, 2, 3, 4, 6, 12].map((num) => (<option key={num} value={num}>{num} {num === 1 ? 'قسط' : 'أقساط'}</option>))}
-                  </select>
+                  <label className="block text-[11px] font-bold text-on-surface-variant mb-1.5">عدد الأقساط</label>
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    {[1, 2, 3, 4, 6, 12].map((num) => (
+                      <button
+                        key={num}
+                        type="button"
+                        onClick={() => handleInstallmentCountChange(num)}
+                        className={`px-3 py-1.5 rounded-full text-xs font-black transition-all cursor-pointer ${
+                          installmentCount === num
+                            ? 'bg-primary text-on-primary shadow-xs'
+                            : 'bg-surface-lowest text-on-surface border border-outline-variant/30 hover:border-primary/50'
+                        }`}
+                      >
+                        {num} {num === 1 ? 'قسط' : 'أقساط'}
+                      </button>
+                    ))}
+                  </div>
                 </div>
                 <div>
-                  <label className="block text-[11px] font-bold text-on-surface-variant mb-1">تاريخ استحقاق أول قسط</label>
+                  <label className="block text-[11px] font-bold text-on-surface-variant mb-1.5">تاريخ استحقاق أول قسط</label>
                   <AX_CompanyDatePicker value={firstDueDate} onChange={setFirstDueDate} />
                 </div>
               </div>

@@ -11,6 +11,7 @@ import { AX_CreateExpenseModal } from './AX_CreateExpenseModal.jsx'
 import { AX_ExpenseCategoriesModal } from './AX_ExpenseCategoriesModal.jsx'
 import { AX_ConfirmModal } from '../common/AX_ConfirmModal.jsx'
 import { AX_CompanyDatePicker } from '../common/AX_CompanyDatePicker.jsx'
+import { AX_SearchableSelect } from '../common/AX_SearchableSelect.jsx'
 
 export function AX_ExpensesManager() {
   const storeState = useAXStore()
@@ -33,6 +34,14 @@ export function AX_ExpensesManager() {
   const [settleTreasuryId, setSettleTreasuryId] = useState(treasuryAccounts[0]?.id || '')
   const [settleMethod, setSettleMethod] = useState('cash')
   const [settleDate, setSettleDate] = useState(() => new Date().toISOString().slice(0, 10))
+
+  const settleTreasuryOptions = useMemo(() => (
+    treasuryAccounts.map((t) => ({
+      value: t.id,
+      label: t.name,
+      badge: `${t.balance?.toLocaleString('en-US') || 0} ج.م`
+    }))
+  ), [treasuryAccounts])
 
   const refreshExpenses = () => setExpenses(getStoredExpenses())
   const kpis = useMemo(() => calculateExpenseKPIs(expenses, timeframe, customRange), [expenses, timeframe, customRange])
@@ -264,13 +273,34 @@ export function AX_ExpensesManager() {
                     <span>سداد القسط #{settlingInstallment.installmentNumber} بمبلغ {settlingInstallment.amount?.toLocaleString('en-US')} ج.م</span>
                     <button type="button" onClick={() => setSettlingInstallment(null)} className="text-on-surface-variant cursor-pointer">إلغاء</button>
                   </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                    <select value={settleTreasuryId} onChange={(e) => setSettleTreasuryId(e.target.value)} className="h-8 px-2 bg-surface-lowest border rounded-lg text-xs font-bold">
-                      {treasuryAccounts.map((t) => (<option key={t.id} value={t.id}>{t.name} ({t.balance?.toLocaleString('en-US')} ج.م)</option>))}
-                    </select>
-                    <select value={settleMethod} onChange={(e) => setSettleMethod(e.target.value)} className="h-8 px-2 bg-surface-lowest border rounded-lg text-xs font-bold">
-                      <option value="cash">نقدي</option><option value="bank_transfer">تحويل بنكي</option><option value="instapay">إنستاباي</option>
-                    </select>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 items-center">
+                    <AX_SearchableSelect
+                      value={settleTreasuryId}
+                      onChange={setSettleTreasuryId}
+                      options={settleTreasuryOptions}
+                      placeholder="اختر الخزينة..."
+                      searchable={true}
+                    />
+                    <div className="inline-flex items-center gap-1 bg-surface-lowest p-1 rounded-2xl border border-outline-variant/30 w-full justify-around">
+                      {[
+                        { id: 'cash', label: 'نقدي' },
+                        { id: 'bank_transfer', label: 'تحويل' },
+                        { id: 'instapay', label: 'إنستاباي' },
+                      ].map((m) => (
+                        <button
+                          key={m.id}
+                          type="button"
+                          onClick={() => setSettleMethod(m.id)}
+                          className={`flex-1 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer text-center ${
+                            settleMethod === m.id
+                              ? 'bg-primary text-on-primary shadow-xs'
+                              : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container'
+                          }`}
+                        >
+                          {m.label}
+                        </button>
+                      ))}
+                    </div>
                     <AX_CompanyDatePicker value={settleDate} onChange={setSettleDate} />
                   </div>
                   <button type="submit" className="w-full py-2 rounded-xl bg-primary text-on-primary text-xs font-black cursor-pointer shadow-xs">تأكيد سداد القسط وخصم المبلغ من الخزينة</button>
