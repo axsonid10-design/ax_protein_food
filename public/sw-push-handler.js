@@ -1,3 +1,6 @@
+let lastPushBody = ''
+let lastPushTime = 0
+
 self.addEventListener('push', function (event) {
   let payload = {}
   try {
@@ -5,6 +8,16 @@ self.addEventListener('push', function (event) {
   } catch (_) {
     payload = { body: event.data ? event.data.text() : '' }
   }
+
+  const title = payload.title || 'بروتين فود — إشعار فوري'
+  const body = payload.body || payload.message || 'تنبيه تشغيلي جديد من منظومة المجمدات'
+  const now = Date.now()
+
+  if (body === lastPushBody && (now - lastPushTime) < 3500) {
+    return
+  }
+  lastPushBody = body
+  lastPushTime = now
 
   const origin = self.location.origin
   const toAbsolute = (url, fallback) => {
@@ -14,12 +27,11 @@ self.addEventListener('push', function (event) {
     return `${origin}${val.startsWith('/') ? '' : '/'}${val}`
   }
 
-  const title = payload.title || 'بروتين فود — إشعار فوري'
-  const body = payload.body || payload.message || 'تنبيه تشغيلي جديد من منظومة المجمدات'
   const icon = toAbsolute(payload.icon, '/pwa-192x192.png')
   const badge = toAbsolute(payload.badge, '/pwa-192x192.png')
   const image = payload.image ? toAbsolute(payload.image, null) : toAbsolute('/og-image.png', null)
   const link = payload.link || payload.url || (payload.data && (payload.data.url || payload.data.link)) || '/'
+  const stableTag = payload.tag || ('ax-push-' + (body || '').slice(0, 25).trim())
 
   const notificationOptions = {
     body,
@@ -28,8 +40,8 @@ self.addEventListener('push', function (event) {
     image,
     dir: 'rtl',
     lang: 'ar-EG',
-    tag: payload.tag || ('ax-push-' + Date.now()),
-    renotify: true,
+    tag: stableTag,
+    renotify: false,
     requireInteraction: true,
     vibrate: [300, 150, 300, 150, 300],
     data: {

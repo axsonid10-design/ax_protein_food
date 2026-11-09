@@ -23,6 +23,32 @@ function arrayBufferToBase64Url(buffer) {
   return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
 }
 
+export function getDeviceFingerprint() {
+  if (typeof window === 'undefined') return 'server'
+  const nav = window.navigator || {}
+  const scr = window.screen || {}
+  const tz = (typeof Intl !== 'undefined' && Intl.DateTimeFormat) ? Intl.DateTimeFormat().resolvedOptions().timeZone : ''
+  const isWin = (nav.userAgent || '').includes('Windows')
+  const isAndroid = (nav.userAgent || '').includes('Android')
+  const isIOS = /iPhone|iPad|iPod/.test(nav.userAgent || '')
+  const os = isWin ? 'Windows' : isAndroid ? 'Android' : isIOS ? 'iOS' : (nav.platform || 'Other')
+  const parts = [
+    scr.width || 0,
+    scr.height || 0,
+    scr.colorDepth || 0,
+    nav.hardwareConcurrency || 4,
+    os,
+    tz || 'UTC'
+  ].join('|')
+
+  let hash = 5381
+  for (let i = 0; i < parts.length; i++) {
+    hash = ((hash << 5) + hash) + parts.charCodeAt(i)
+    hash |= 0
+  }
+  return 'fp_' + Math.abs(hash).toString(16)
+}
+
 export const AX_PushNotificationService = {
   isSupported: () => {
     return (
@@ -80,6 +106,19 @@ export const AX_PushNotificationService = {
         return { success: false, reason: 'invalid_keys' }
       }
 
+      const isLocal = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+      const origin = typeof window !== 'undefined' ? window.location.origin : ''
+      const fingerprint = getDeviceFingerprint()
+
+      try {
+        await supabase
+          .from('ax_push_subscriptions')
+          .delete()
+          .eq('user_id', userId)
+          .eq('device_fingerprint', fingerprint)
+          .neq('endpoint', subscription.endpoint)
+      } catch {}
+
       const { data, error } = await supabase
         .from('ax_push_subscriptions')
         .upsert({
@@ -89,6 +128,9 @@ export const AX_PushNotificationService = {
           auth,
           user_agent: navigator.userAgent,
           project_slug: 'protein-food',
+          device_fingerprint: fingerprint,
+          origin,
+          is_local: isLocal,
           updated_at: new Date().toISOString()
         }, { onConflict: 'endpoint' })
         .select()
