@@ -5,6 +5,7 @@ import { useAXStore } from '../../store/useAXStore.js'
 import { expenseCategoryHelpers } from '../../store/expenseCategoryHelpers.js'
 import { AX_ConfirmModal } from '../common/AX_ConfirmModal.jsx'
 import { generateUUID } from '../../utils/AX_UUID.js'
+import { axToast } from '../common/AX_Toast.jsx'
 
 export function AX_ExpenseCategoriesModal({ isOpen, onClose }) {
   useBodyScrollLock(isOpen, onClose)
@@ -81,16 +82,39 @@ export function AX_ExpenseCategoriesModal({ isOpen, onClose }) {
 
   const handleConfirmDelete = () => {
     if (!deleteTarget) return
+    const target = deleteTarget
+    let idsToRemove = new Set([target.id])
+    if (target.level === 'main') {
+      const childSubs = expenseCategories.filter((c) => c && c.parentId === target.id)
+      childSubs.forEach((s) => {
+        idsToRemove.add(s.id)
+        expenseCategories.filter((c) => c && c.parentId === s.id).forEach((sec) => idsToRemove.add(sec.id))
+      })
+    } else if (target.level === 'sub') {
+      expenseCategories.filter((c) => c && c.parentId === target.id).forEach((sec) => idsToRemove.add(sec.id))
+    }
+    const removedItems = expenseCategories.filter((c) => idsToRemove.has(c.id))
+
     deleteExpenseCategory(deleteTarget.id)
-    if (deleteTarget.id === selectedMainId) {
-      const remaining = mainCategories.filter((m) => m.id !== deleteTarget.id)
+    if (target.id === selectedMainId) {
+      const remaining = mainCategories.filter((m) => m.id !== target.id)
       setSelectedMainId(remaining[0]?.id || '')
       setSelectedSubId('')
-    } else if (deleteTarget.id === selectedSubId) {
-      const remaining = subCategories.filter((s) => s.id !== deleteTarget.id)
+    } else if (target.id === selectedSubId) {
+      const remaining = subCategories.filter((s) => s.id !== target.id)
       setSelectedSubId(remaining[0]?.id || '')
     }
     setDeleteTarget(null)
+
+    axToast.info(`تم حذف "${target.name}" بنجاح`, {
+      action: {
+        label: 'تراجع',
+        onClick: () => {
+          removedItems.forEach((cat) => addExpenseCategory(cat))
+          axToast.success(`تمت استعادة "${target.name}" بنجاح`)
+        },
+      },
+    })
   }
 
   const renderItemRow = (item, isSelected, onSelect) => {

@@ -55,6 +55,12 @@ export const recycleBinHelpers = {
             else stockCopy.push({ warehouseId: whId, itemId: itId, quantity: actQty, unit: item.unit || 'كرتونة' })
           }
           updates.inventoryStock = stockCopy
+        } else if (res.entityType === 'expense' && res.restoredData) {
+          try {
+            const rawExpenses = JSON.parse(localStorage.getItem('ax_expenses') || '[]')
+            const nextExpenses = [res.restoredData, ...rawExpenses.filter((e) => e.id !== res.restoredData.id)]
+            localStorage.setItem('ax_expenses', JSON.stringify(nextExpenses))
+          } catch {}
         }
         return updates
       })

@@ -4,7 +4,7 @@ import {
 } from 'lucide-react'
 import { useAXStore } from '../../store/useAXStore.js'
 import {
-  getStoredExpenses, deleteExpenseRecord, settleExpenseInstallment,
+  getStoredExpenses, saveStoredExpenses, deleteExpenseRecord, settleExpenseInstallment,
   calculateExpenseKPIs, filterExpenses, EXPENSE_COST_CENTER_TYPES, EXPENSE_STATUS_LABELS,
 } from '../../store/expenseStoreHelpers.js'
 import { AX_CreateExpenseModal } from './AX_CreateExpenseModal.jsx'
@@ -12,6 +12,8 @@ import { AX_ExpenseCategoriesModal } from './AX_ExpenseCategoriesModal.jsx'
 import { AX_ConfirmModal } from '../common/AX_ConfirmModal.jsx'
 import { AX_CompanyDatePicker } from '../common/AX_CompanyDatePicker.jsx'
 import { AX_SearchableSelect } from '../common/AX_SearchableSelect.jsx'
+import { axToast } from '../common/AX_Toast.jsx'
+import { AX_RecycleBinService } from '../../services/AX_RecycleBinService.js'
 
 export function AX_ExpensesManager() {
   const storeState = useAXStore()
@@ -55,12 +57,46 @@ export function AX_ExpensesManager() {
 
   useEffect(() => { setPage(1) }, [timeframe, customRange, costCenterType, paymentStatus, search])
 
-  const handleDeleteExpense = () => {
+  const handleDeleteExpense = async () => {
     if (!deleteTargetId) return
+    const targetExpense = expenses.find((e) => e.id === deleteTargetId)
     deleteExpenseRecord(deleteTargetId)
     refreshExpenses()
     if (selectedExpenseForDetails?.id === deleteTargetId) setSelectedExpenseForDetails(null)
     setDeleteTargetId(null)
+
+    if (targetExpense) {
+      try {
+        const recycleRecord = await AX_RecycleBinService.moveToRecycleBin({
+          entityType: 'expense',
+          entityId: targetExpense.id,
+          entityCode: targetExpense.code,
+          entityTitle: `${targetExpense.title} (${targetExpense.totalAmount.toLocaleString('en-US')} ج.م)`,
+          originalData: targetExpense,
+          userProfile: profile,
+        })
+        if (recycleRecord) {
+          useAXStore.setState((s) => ({
+            recycleBin: [recycleRecord, ...(s.recycleBin || [])],
+          }))
+        }
+      } catch {}
+
+      axToast.success(`تم نقل المصروف "${targetExpense.title}" إلى سلة المحذوفات`, {
+        action: {
+          label: 'تراجع',
+          onClick: () => {
+            const cur = getStoredExpenses()
+            saveStoredExpenses([targetExpense, ...cur.filter((e) => e.id !== targetExpense.id)])
+            refreshExpenses()
+            useAXStore.setState((s) => ({
+              recycleBin: (s.recycleBin || []).filter((r) => r.entity_id !== targetExpense.id && r.entityId !== targetExpense.id),
+            }))
+            axToast.info('تم استعادة المصروف بنجاح')
+          },
+        },
+      })
+    }
   }
 
   const handleSettleInstallmentSubmit = async (e) => {

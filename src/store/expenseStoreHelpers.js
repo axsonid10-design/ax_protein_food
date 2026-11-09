@@ -231,17 +231,24 @@ export async function createExpenseRecord(payload = {}, options = {}) {
         }
       }
 
+      const categoryHierarchy = [
+        expenseRecord.mainCategoryName,
+        expenseRecord.subCategoryName,
+        expenseRecord.secondaryCategoryName,
+      ].filter(Boolean).join(' ← ')
+      const costCenterLabel = expenseRecord.costCenter?.entityName || 'عام'
+
       const txRecord = {
         id: generateUUID(),
         code: p.transactionCode,
         type: 'expense',
         partyType: 'expense',
         partyId: expenseRecord.id,
-        partyName: `[${expenseRecord.costCenter.entityName}] ${expenseRecord.mainCategoryName || 'مصروفات'}`,
+        partyName: `[${costCenterLabel}] ${categoryHierarchy || 'مصروفات'}`,
         amount: p.amount,
         treasuryId: p.treasuryId,
         date: p.date,
-        notes: `[${expenseRecord.code}] ${expenseRecord.title} - سداد عبر ${p.method}`,
+        notes: `[${expenseRecord.code}] ${expenseRecord.title} • البند: ${categoryHierarchy || 'عام'} - سداد عبر ${p.method}`,
         createdAt: new Date().toISOString(),
       }
 
@@ -262,6 +269,28 @@ export async function createExpenseRecord(payload = {}, options = {}) {
   const existingExpenses = getStoredExpenses()
   const updatedExpenses = [expenseRecord, ...existingExpenses.filter((e) => e.id !== expenseRecord.id)]
   saveStoredExpenses(updatedExpenses)
+
+  const categoryPath = [
+    expenseRecord.mainCategoryName,
+    expenseRecord.subCategoryName,
+    expenseRecord.secondaryCategoryName,
+  ].filter(Boolean).join(' ← ')
+  const notifPayload = {
+    id: `notif-exp-${Date.now()}`,
+    title: `صرف مصروف تشغيلي (${expenseRecord.totalAmount.toLocaleString('en-US')} ج.م)`,
+    message: `البيان: ${expenseRecord.title} • البند: ${categoryPath || 'عام'} • مركز التكلفة: ${expenseRecord.costCenter?.entityName || 'عام'} • جهة الصرف: ${expenseRecord.payeeName}`,
+    type: 'warning',
+    targetTab: 'expenses',
+    time: 'الآن',
+  }
+
+  if (typeof storeState?.addNotification === 'function') {
+    storeState.addNotification(notifPayload)
+  } else {
+    try {
+      AX_OperationsService.addNotificationInDB(notifPayload)
+    } catch {}
+  }
 
   return { success: true, expense: expenseRecord }
 }

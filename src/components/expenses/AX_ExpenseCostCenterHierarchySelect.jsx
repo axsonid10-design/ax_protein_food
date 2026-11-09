@@ -1,4 +1,4 @@
-import React, { useMemo, useEffect } from 'react'
+import React, { useState, useMemo, useEffect } from 'react'
 import { Warehouse, Truck, Factory, Building2, Layers, CheckCircle2 } from 'lucide-react'
 import {
   EXPENSE_COST_CENTER_TYPES,
@@ -9,6 +9,7 @@ import { expenseCategoryHelpers } from '../../store/expenseCategoryHelpers.js'
 import { useAXStore } from '../../store/useAXStore.js'
 import { AX_SearchableSelect } from '../common/AX_SearchableSelect.jsx'
 import { AX_ExpenseCategoryPillSelector } from './AX_ExpenseCategoryPillSelector.jsx'
+import { AX_ConfirmModal } from '../common/AX_ConfirmModal.jsx'
 import { generateUUID } from '../../utils/AX_UUID.js'
 import { axToast } from '../common/AX_Toast.jsx'
 
@@ -26,6 +27,7 @@ export function AX_ExpenseCostCenterHierarchySelect({
 }) {
   const addExpenseCategory = useAXStore((state) => state.addExpenseCategory)
   const deleteExpenseCategory = useAXStore((state) => state.deleteExpenseCategory)
+  const [categoryToDelete, setCategoryToDelete] = useState(null)
 
   const currentEntityType = costCenter?.entityType || EXPENSE_COST_CENTER_TYPES.WAREHOUSE
   const availableEntities = useMemo(() => {
@@ -109,18 +111,8 @@ export function AX_ExpenseCostCenterHierarchySelect({
   }
 
   const handleDeleteMain = (id) => {
-    deleteExpenseCategory?.(id)
-    axToast.info('تم حذف البند الرئيسي')
-    if (id === selectedMainCategoryId) {
-      onCategoryChange?.({
-        mainCategoryId: '',
-        mainCategoryName: '',
-        subCategoryId: '',
-        subCategoryName: '',
-        secondaryCategoryId: '',
-        secondaryCategoryName: '',
-      })
-    }
+    const target = categories.find((c) => c.id === id)
+    setCategoryToDelete({ type: 'main', id, name: target?.name || 'البند الرئيسي' })
   }
 
   const handleSubCategorySelect = (subId, subName) => {
@@ -150,18 +142,8 @@ export function AX_ExpenseCostCenterHierarchySelect({
   }
 
   const handleDeleteSub = (id) => {
-    deleteExpenseCategory?.(id)
-    axToast.info('تم حذف التصنيف الفرعي')
-    if (id === selectedSubCategoryId) {
-      onCategoryChange?.({
-        mainCategoryId: selectedMainCategoryId,
-        mainCategoryName: activeMain ? activeMain.name : '',
-        subCategoryId: '',
-        subCategoryName: '',
-        secondaryCategoryId: '',
-        secondaryCategoryName: '',
-      })
-    }
+    const target = categories.find((c) => c.id === id)
+    setCategoryToDelete({ type: 'sub', id, name: target?.name || 'التصنيف الفرعي' })
   }
 
   const handleSecondaryCategorySelect = (secId, secName) => {
@@ -188,9 +170,48 @@ export function AX_ExpenseCostCenterHierarchySelect({
   }
 
   const handleDeleteSecondary = (id) => {
+    const target = categories.find((c) => c.id === id)
+    setCategoryToDelete({ type: 'secondary', id, name: target?.name || 'التصنيف الثانوي' })
+  }
+
+  const executeConfirmDeleteCategory = () => {
+    if (!categoryToDelete) return
+    const { type, id, name } = categoryToDelete
+    const target = categories.find((c) => c && c.id === id)
+
+    let idsToRemove = new Set([id])
+    if (target?.level === 'main') {
+      const childSubs = categories.filter((c) => c && c.parentId === id)
+      childSubs.forEach((s) => {
+        idsToRemove.add(s.id)
+        categories.filter((c) => c && c.parentId === s.id).forEach((sec) => idsToRemove.add(sec.id))
+      })
+    } else if (target?.level === 'sub') {
+      categories.filter((c) => c && c.parentId === id).forEach((sec) => idsToRemove.add(sec.id))
+    }
+    const removedItems = categories.filter((c) => idsToRemove.has(c.id))
+
     deleteExpenseCategory?.(id)
-    axToast.info('تم حذف التصنيف الثانوي')
-    if (id === selectedSecondaryCategoryId) {
+
+    if (type === 'main' && id === selectedMainCategoryId) {
+      onCategoryChange?.({
+        mainCategoryId: '',
+        mainCategoryName: '',
+        subCategoryId: '',
+        subCategoryName: '',
+        secondaryCategoryId: '',
+        secondaryCategoryName: '',
+      })
+    } else if (type === 'sub' && id === selectedSubCategoryId) {
+      onCategoryChange?.({
+        mainCategoryId: selectedMainCategoryId,
+        mainCategoryName: activeMain ? activeMain.name : '',
+        subCategoryId: '',
+        subCategoryName: '',
+        secondaryCategoryId: '',
+        secondaryCategoryName: '',
+      })
+    } else if (type === 'secondary' && id === selectedSecondaryCategoryId) {
       onCategoryChange?.({
         mainCategoryId: selectedMainCategoryId,
         mainCategoryName: activeMain ? activeMain.name : '',
@@ -200,6 +221,18 @@ export function AX_ExpenseCostCenterHierarchySelect({
         secondaryCategoryName: '',
       })
     }
+
+    setCategoryToDelete(null)
+
+    axToast.info(`تم حذف "${name}" بنجاح`, {
+      action: {
+        label: 'تراجع',
+        onClick: () => {
+          removedItems.forEach((cat) => addExpenseCategory?.(cat))
+          axToast.success(`تمت استعادة "${name}" بنجاح`)
+        },
+      },
+    })
   }
 
   const entityOptions = useMemo(() => {
@@ -364,6 +397,17 @@ export function AX_ExpenseCostCenterHierarchySelect({
           </>
         )}
       </div>
+
+      <AX_ConfirmModal
+        isOpen={Boolean(categoryToDelete)}
+        title="تأكيد حذف بند المصروف"
+        message={`هل أنت متأكد من رغبتك في حذف "${categoryToDelete?.name || ''}"؟ سيتم حذف أي تصنيفات متفرعة عنه إن وجدت.`}
+        confirmText="تأكيد الحذف"
+        cancelText="إلغاء"
+        isDestructive={true}
+        onConfirm={executeConfirmDeleteCategory}
+        onCancel={() => setCategoryToDelete(null)}
+      />
     </div>
   )
 }

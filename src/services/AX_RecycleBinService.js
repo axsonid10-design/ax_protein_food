@@ -141,6 +141,12 @@ export const AX_RecycleBinService = {
           }
         }
         await supabase.from('ax_stock_audits').update({ status: 'approved' }).eq('id', rawData.id)
+      } else if (entityType === 'expense') {
+        try {
+          const rawExpenses = JSON.parse(localStorage.getItem('ax_expenses') || '[]')
+          const restored = { ...rawData }
+          localStorage.setItem('ax_expenses', JSON.stringify([restored, ...rawExpenses.filter((e) => e.id !== restored.id)]))
+        } catch {}
       }
 
       await supabase.from('ax_recycle_bin').delete().eq('id', item.id)
