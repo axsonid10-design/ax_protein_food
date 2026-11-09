@@ -4,15 +4,16 @@ import fs from 'node:fs'
 import path from 'node:path'
 
 describe('Expense UI Modernization & Version Rollover', () => {
-  it('enforces version 1.12.3 and single-digit patch rollover in package.json and version.json', () => {
+  it('enforces version 2.2.3 and single-digit minor and patch rollover (max 9) in package.json and version.json', () => {
     const pkg = JSON.parse(fs.readFileSync(path.resolve('package.json'), 'utf8'))
     const ver = JSON.parse(fs.readFileSync(path.resolve('public/version.json'), 'utf8'))
 
-    assert.equal(pkg.version, '1.12.3')
-    assert.equal(ver.version, '1.12.3')
+    assert.equal(pkg.version, '2.2.3')
+    assert.equal(ver.version, '2.2.3')
 
-    const patch = Number(pkg.version.split('.')[2])
-    assert.ok(patch >= 0 && patch <= 9)
+    const parts = pkg.version.split('.').map(Number)
+    assert.ok(parts[1] >= 0 && parts[1] <= 9, 'Minor version must be single digit <= 9')
+    assert.ok(parts[2] >= 0 && parts[2] <= 9, 'Patch version must be single digit <= 9')
   })
 
   it('guarantees zero native HTML <select> tags across all expense components', () => {

@@ -1,7 +1,7 @@
 {
   "name": "ax_frozen_foods",
   "private": true,
-  "version": "1.12.3",
+  "version": "2.2.3",
   "type": "module",
   "scripts": {
     "dev": "vite",
