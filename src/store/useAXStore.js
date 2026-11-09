@@ -35,10 +35,7 @@ export const useAXStore = create((set, get) => ({
   subCategories: initialSubCategories,
   secondaryCategories: initialSecondaryCategories,
   expenseCategories: (() => {
-    try {
-      const s = localStorage.getItem('ax_expense_categories')
-      if (s) return JSON.parse(s)
-    } catch {}
+    try { const s = localStorage.getItem('ax_expense_categories'); if (s) return JSON.parse(s) } catch {}
     return initialExpenseCategories
   })(),
 
@@ -122,13 +119,9 @@ export const useAXStore = create((set, get) => ({
     try {
       localStorage.setItem('ax_active_tab', activeTab)
       if (typeof window !== 'undefined') {
-        const url = new URL(window.location.href)
-        url.searchParams.set('tab', activeTab)
-        if (prevTab !== activeTab) {
-          window.history.pushState({ tab: activeTab, type: 'ax_tab' }, '', url.toString())
-        } else {
-          window.history.replaceState({ tab: activeTab, type: 'ax_tab' }, '', url.toString())
-        }
+        const url = new URL(window.location.href); url.searchParams.set('tab', activeTab)
+        if (prevTab !== activeTab) window.history.pushState({ tab: activeTab, type: 'ax_tab' }, '', url.toString())
+        else window.history.replaceState({ tab: activeTab, type: 'ax_tab' }, '', url.toString())
       }
     } catch {}
     set({ activeTab })
@@ -183,11 +176,8 @@ export const useAXStore = create((set, get) => ({
       let updatedInventory = [...state.inventoryStock]
       adjustedStocks.forEach((adj) => {
         const idx = updatedInventory.findIndex((s) => s.warehouseId === adj.warehouseId && s.itemId === adj.itemId)
-        if (idx !== -1) {
-          updatedInventory[idx] = { ...updatedInventory[idx], quantity: Number(adj.actualQty), unit: adj.unit || updatedInventory[idx].unit }
-        } else {
-          updatedInventory.push({ warehouseId: adj.warehouseId, itemId: adj.itemId, quantity: Number(adj.actualQty), unit: adj.unit || 'كرتونة' })
-        }
+        if (idx !== -1) updatedInventory[idx] = { ...updatedInventory[idx], quantity: Number(adj.actualQty), unit: adj.unit || updatedInventory[idx].unit }
+        else updatedInventory.push({ warehouseId: adj.warehouseId, itemId: adj.itemId, quantity: Number(adj.actualQty), unit: adj.unit || 'كرتونة' })
       })
       return { stockAudits: newAudits, inventoryStock: updatedInventory }
     })
@@ -195,7 +185,14 @@ export const useAXStore = create((set, get) => ({
 
   editItem: (item) => { AX_OperationsService.editItemInDB(item, get().profile); set((state) => ({ items: state.items.map((i) => (i.id === item.id ? { ...i, ...item } : i)) })) },
   deleteItem: (id) => { const it = (get().items || []).find((i) => i.id === id); AX_OperationsService.deleteItemInDB(id, get().profile); set((state) => ({ items: state.items.filter((i) => i.id !== id), inventoryStock: state.inventoryStock.filter((s) => s.itemId !== id), recycleBin: it ? [{ id: generateUUID(), entityType: 'item', entityId: id, entityCode: it.code, entityTitle: `صنف: ${it.compositeName || it.code}`, originalData: it, deletedAt: new Date().toISOString() }, ...(state.recycleBin || [])] : state.recycleBin })) },
-  saveItemOpeningBalance: (payload) => { const { inventoryStock, newStock, finalStockRow } = saveItemOpeningBalanceState(get(), payload); AX_OperationsService.saveOpeningBalanceInDB({ ...payload, quantity: !isNaN(Number(payload.quantity)) ? Number(payload.quantity) : 0, unit: finalStockRow?.unit, newStock }, get().profile); set({ inventoryStock }); return { success: true, newStock, updatedStock: finalStockRow } },
+  saveItemOpeningBalance: (payload) => {
+    const item = (get().items || []).find((i) => i.id === payload.itemId), warehouse = (get().warehouses || []).find((w) => w.id === payload.warehouseId)
+    const existingStock = (get().inventoryStock || []).find((s) => s.itemId === payload.itemId && s.warehouseId === payload.warehouseId)
+    const oldOpeningBalance = existingStock?.openingBalance !== undefined ? Number(existingStock.openingBalance) : 0
+    const { inventoryStock, newStock, finalStockRow } = saveItemOpeningBalanceState(get(), payload)
+    AX_OperationsService.saveOpeningBalanceInDB({ ...payload, quantity: !isNaN(Number(payload.quantity)) ? Number(payload.quantity) : 0, unit: finalStockRow?.unit, newStock, itemName: item?.compositeName || item?.name || '', warehouseName: warehouse?.name || '', oldOpeningBalance }, get().profile)
+    set({ inventoryStock }); return { success: true, newStock, updatedStock: finalStockRow }
+  },
 
   addCategory: (name) => { AX_OperationsService.addCategoryInDB({ name, level: 'primary' }, get().profile); set((state) => categoryHelpers.addCategory(state, name)) },
   editCategory: (oldName, newName) => { AX_OperationsService.editCategoryInDB({ oldName, newName, level: 'primary' }, get().profile); set((state) => categoryHelpers.editCategory(state, oldName, newName)) },
@@ -469,7 +466,11 @@ export const useAXStore = create((set, get) => ({
     })
   },
 
-  addInvoice: (inv) => { AX_OperationsService.addInvoiceInDB(inv, get().profile); set((state) => processInvoiceStoreState(state, inv)) },
+  addInvoice: async (inv) => {
+    set((state) => processInvoiceStoreState(state, inv))
+    const res = await AX_OperationsService.addInvoiceInDB(inv, get().profile)
+    return res
+  },
   updateInvoice: (id, updates) => { const oldInv = (get().invoices || []).find((i) => i.id === id); if (oldInv) AX_OperationsService.updateInvoiceInDB(oldInv, { ...oldInv, ...updates, id }, get().profile); set((state) => updateInvoiceStoreState(state, id, updates)) },
   deleteInvoice: (id) => { const inv = (get().invoices || []).find((i) => i.id === id); if (inv) AX_OperationsService.deleteInvoiceInDB(inv, get().profile); set((state) => { const next = deleteInvoiceStoreState(state, id); return { ...next, recycleBin: inv ? [{ id: generateUUID(), entityType: 'invoice', entityId: id, entityCode: inv.code, entityTitle: `فاتورة ${inv.code || ''} - ${inv.partyName || ''}`, originalData: inv, deletedAt: new Date().toISOString() }, ...(state.recycleBin || [])] : state.recycleBin } }) },
   restoreFromRecycleBin: (id) => recycleBinHelpers.restoreItem(get(), id, get().profile, set),

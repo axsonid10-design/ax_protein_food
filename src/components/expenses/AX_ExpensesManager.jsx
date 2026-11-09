@@ -66,6 +66,26 @@ export function AX_ExpensesManager() {
     setDeleteTargetId(null)
 
     if (targetExpense) {
+      if (Array.isArray(targetExpense.payments) && targetExpense.payments.length > 0) {
+        for (const p of targetExpense.payments) {
+          if (p.treasuryId && p.amount > 0) {
+            try {
+              if (supabase && typeof supabase.from === 'function') {
+                await supabase.from('ax_cash_transactions').delete().or(`party_id.eq.${targetExpense.id},notes.ilike.%[${targetExpense.code}]%`)
+                const { data: tr } = await supabase.from('ax_treasuries').select('*').eq('id', p.treasuryId).maybeSingle()
+                if (tr) {
+                  await supabase.from('ax_treasuries').update({ balance: Number(tr.balance || 0) + Number(p.amount) }).eq('id', p.treasuryId)
+                }
+              }
+              useAXStore.setState((s) => ({
+                treasuryAccounts: (s.treasuryAccounts || []).map((t) => t.id === p.treasuryId ? { ...t, balance: (Number(t.balance) || 0) + Number(p.amount) } : t),
+                cashTransactions: (s.cashTransactions || []).filter((tx) => tx.partyId !== targetExpense.id && !tx.notes?.includes(`[${targetExpense.code}]`)),
+              }))
+            } catch {}
+          }
+        }
+      }
+
       try {
         const recycleRecord = await AX_RecycleBinService.moveToRecycleBin({
           entityType: 'expense',

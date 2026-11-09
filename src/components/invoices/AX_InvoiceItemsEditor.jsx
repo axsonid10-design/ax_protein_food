@@ -36,11 +36,13 @@ export function AX_InvoiceItemsEditor({
     if (!row) return
     const itObj = items.find((i) => i.id === row.itemId)
     const isSale = invType === 'sale' || invType === 'sale_return'
-    const newPrice = resolveInvoiceUnitPrice(itObj, newUnit, isSale)
-    if (newPrice !== undefined && newPrice !== null) {
-      onItemRowChange(idx, { unit: newUnit, price: newPrice })
-    } else {
+    const catalogPrice = resolveInvoiceUnitPrice(itObj, newUnit, isSale)
+    if (catalogPrice > 0) {
+      onItemRowChange(idx, { unit: newUnit, price: catalogPrice })
+    } else if (Number(row.price) > 0) {
       onItemRowChange(idx, 'unit', newUnit)
+    } else {
+      onItemRowChange(idx, { unit: newUnit, price: catalogPrice || 0 })
     }
   }
 

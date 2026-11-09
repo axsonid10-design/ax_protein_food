@@ -5,6 +5,7 @@ import { AX_SearchableSelect } from '../common/AX_SearchableSelect'
 import { AX_CompanyDatePicker } from '../common/AX_CompanyDatePicker'
 import { AX_TransferCategoryAccordionGroup } from './AX_TransferCategoryAccordion'
 import { AX_TransferReviewModal } from './AX_TransferReviewModal'
+import { AX_TransferPrintModal } from './AX_TransferPrintModal'
 import { AX_DraftsManagerBanner } from '../common/AX_DraftsManagerBanner'
 import { useDrafts } from '../../hooks/useDrafts'
 import { checkTransferAuditDiscrepancy, executeImmediateTransfer } from '../../store/transferHelpers'
@@ -60,6 +61,7 @@ export function AX_TransferFormModal({ isOpen, onClose }) {
   const [notes, setNotes] = useState('')
   const [showReviewModal, setShowReviewModal] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [createdTransferForPrint, setCreatedTransferForPrint] = useState(null)
 
   useEffect(() => {
     if (isOpen && !activeDraftId) {
@@ -242,7 +244,7 @@ export function AX_TransferFormModal({ isOpen, onClose }) {
 
         axToast.success(`تم تنفيذ وتأكيد التحويل المخزني [${res.transfer.code}] بنجاح`)
         setShowReviewModal(false)
-        onClose()
+        setCreatedTransferForPrint(res.transfer)
       } else {
         axToast.error(res?.error || 'حدث خطأ أثناء تنفيذ التحويل')
       }
@@ -253,7 +255,20 @@ export function AX_TransferFormModal({ isOpen, onClose }) {
     }
   }
 
-  if (!isOpen) return null
+  if (!isOpen && !createdTransferForPrint) return null
+
+  if (createdTransferForPrint) {
+    return (
+      <AX_TransferPrintModal
+        isOpen={Boolean(createdTransferForPrint)}
+        transfer={createdTransferForPrint}
+        onClose={() => {
+          setCreatedTransferForPrint(null)
+          onClose()
+        }}
+      />
+    )
+  }
 
   const fromWarehouseObj = allDestinations.find((d) => d.id === fromId)
   const toWarehouseObj = allDestinations.find((d) => d.id === toId)

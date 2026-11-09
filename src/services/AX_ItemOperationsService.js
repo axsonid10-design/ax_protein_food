@@ -247,7 +247,7 @@ export const AX_ItemOperationsService = {
     }
   },
 
-  saveOpeningBalanceInDB: async ({ itemId, warehouseId, quantity, date, unit, newStock }, userProfile = null) => {
+  saveOpeningBalanceInDB: async ({ itemId, warehouseId, quantity, date, unit, newStock, itemName, warehouseName, oldOpeningBalance }, userProfile = null) => {
     if (!itemId || !warehouseId) return { success: false }
     const parsedQty = !isNaN(Number(quantity)) && quantity !== '' && quantity !== null ? Number(quantity) : 0
     const stockRow = {
@@ -270,13 +270,20 @@ export const AX_ItemOperationsService = {
         onConflict: 'warehouse_id,item_id',
       })
       if (error) throw error
+      const userName = userProfile?.full_name || userProfile?.name || 'الريس'
       try {
         await supabase.from('ax_activity_logs').insert({
           id: generateUUID(),
           table_name: 'ax_inventory_stock',
           action: 'UPDATE_OPENING_BALANCE',
           record_id: `${warehouseId}:${itemId}`,
-          new_data: stockRow,
+          old_data: oldOpeningBalance !== undefined ? { opening_balance: oldOpeningBalance } : null,
+          new_data: {
+            ...stockRow,
+            user_name: userName,
+            item_name: itemName || null,
+            warehouse_name: warehouseName || null,
+          },
           user_id: userProfile?.id || null,
         })
       } catch {}

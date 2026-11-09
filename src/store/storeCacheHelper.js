@@ -133,6 +133,25 @@ export const processInvoiceStoreState = (state, inv) => {
     })
   }
 
+  let updatedItems = [...(state.items || [])]
+  if (inv.type === 'purchase' && !isPurchaseReturn && Array.isArray(inv.items)) {
+    inv.items.forEach((it) => {
+      const itId = it.itemId || it.id
+      const p = Number(it.price) || 0
+      if (itId && p > 0) {
+        const itemIndex = updatedItems.findIndex((x) => x.id === itId)
+        if (itemIndex >= 0) {
+          updatedItems[itemIndex] = {
+            ...updatedItems[itemIndex],
+            buyPrice: p,
+            buy_price: p,
+          }
+        }
+      }
+    })
+    updateLocalCachePayload('items', updatedItems)
+  }
+
   const nextInvoices = [inv, ...state.invoices]
   updateLocalCachePayload('invoices', nextInvoices)
   updateLocalCachePayload('inventoryStock', updatedStock)
@@ -142,6 +161,7 @@ export const processInvoiceStoreState = (state, inv) => {
 
   return {
     invoices: nextInvoices,
+    items: updatedItems,
     clients: updatedClients,
     suppliers: updatedSuppliers,
     inventoryStock: updatedStock,

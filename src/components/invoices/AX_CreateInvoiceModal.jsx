@@ -46,6 +46,7 @@ export function AX_CreateInvoiceModal({
   const [showSupplierModal, setShowSupplierModal] = useState(false)
   const [previewInvoice, setPreviewInvoice] = useState(null)
   const [isPostSavePrint, setIsPostSavePrint] = useState(false)
+  const [isSaving, setIsSaving] = useState(false)
 
   const [draftItem, setDraftItem] = useState({ itemId: '', quantity: 1, price: 0 })
   const [expandedRowIndex, setExpandedRowIndex] = useState(null)
@@ -226,13 +227,16 @@ export function AX_CreateInvoiceModal({
     if (invForm.type === 'purchase_return') paymentTerms = 'مردود مشتريات'
 
     const codePrefix = { sale_return: 'RET-SALE', purchase_return: 'RET-PUR', purchase: 'PUR' }[invForm.type] || 'INV'
+    const matchedParty = partyList.find((p) => (p.name || '').trim() === partyName || (p.companyName || '').trim() === partyName)
+    const partyId = matchedParty?.id || null
 
     return {
       id: generateUUID(),
-      code: isDraft ? `DRAFT-${Date.now().toString().slice(-4)}` : `${codePrefix}-${Date.now().toString().slice(-5)}`,
+      code: isDraft ? `DRAFT-${Date.now().toString().slice(-4)}` : `${codePrefix}-${Date.now().toString().slice(-6)}-${Math.floor(100 + Math.random() * 900)}`,
       type: invForm.type,
       partyType: partyKind,
       partyKind,
+      partyId,
       partyName: partyName || 'مسودة غير محددة',
       isIncompleteData: !isPartyInList(partyName),
       date: invForm.date,
@@ -258,14 +262,27 @@ export function AX_CreateInvoiceModal({
     }
   }
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault()
-    if (invForm.items.length === 0) return
+    if (invForm.items.length === 0 || isSaving) return
 
-    const newInv = buildInvoicePayload(false)
-    onSave(newInv)
-    setPreviewInvoice(newInv)
-    setIsPostSavePrint(true)
+    setIsSaving(true)
+    try {
+      const newInv = buildInvoicePayload(false)
+      const res = await onSave(newInv)
+      if (res && res.success === false) {
+        axToast.error(res.error || 'فشل حفظ الفاتورة، يرجى المحاولة ثانية')
+        setIsSaving(false)
+        return
+      }
+      axToast.success(`تم حفظ الفاتورة [${newInv.code}] بنجاح`)
+      setPreviewInvoice(newInv)
+      setIsPostSavePrint(true)
+    } catch {
+      axToast.error('حدث خطأ أثناء حفظ الفاتورة')
+    } finally {
+      setIsSaving(false)
+    }
   }
 
   const isIncomplete = invForm.partyName && !isPartyInList(invForm.partyName)
@@ -438,21 +455,13 @@ export function AX_CreateInvoiceModal({
         />
 
         <div className="flex items-center justify-end pt-2 border-t border-surface-container gap-2">
-          <button
-            type="button"
-            onClick={onClose}
-            className="px-5 py-2 rounded-full bg-surface-container text-on-surface-variant text-xs font-bold cursor-pointer"
-          >
+          <button type="button" onClick={onClose} className="px-5 py-2 rounded-full bg-surface-container text-on-surface-variant text-xs font-bold cursor-pointer">
             إلغاء
           </button>
           <button
             type="button"
             disabled={invForm.items.length === 0}
-            onClick={() => {
-              const draft = buildInvoicePayload(true)
-              setPreviewInvoice(draft)
-              setIsPostSavePrint(false)
-            }}
+            onClick={() => { setPreviewInvoice(buildInvoicePayload(true)); setIsPostSavePrint(false); }}
             className="px-4 py-2 rounded-full bg-surface-low border border-outline-variant/30 text-on-surface hover:bg-surface-container text-xs font-bold transition-all disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer flex items-center gap-1.5"
             title="معاينة شكل الفاتورة قبل الحفظ"
           >
@@ -461,10 +470,10 @@ export function AX_CreateInvoiceModal({
           </button>
           <button
             type="submit"
-            disabled={invForm.items.length === 0}
+            disabled={invForm.items.length === 0 || isSaving}
             className="px-6 py-2 rounded-full bg-primary text-white text-xs font-extrabold shadow-sm hover:bg-primary-dark transition-all disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
           >
-            حفظ الفاتورة
+            {isSaving ? 'جاري الحفظ...' : 'حفظ الفاتورة'}
           </button>
         </div>
       </form>

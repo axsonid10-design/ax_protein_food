@@ -14,13 +14,22 @@ export const AX_InvoiceOperationsService = {
       const dbType = (isSaleReturn || inv.type === 'sale') ? 'sale' : 'purchase'
       const defaultTerms = isSaleReturn ? 'مردود مبيعات' : isPurchaseReturn ? 'مردود مشتريات' : (Number(inv.remainingAmount || 0) > 0 ? 'مدفوع جزئي' : 'مدفوع كلي')
 
+      let resolvedPartyId = inv.partyId || inv.party_id || null
+      if (!resolvedPartyId && (inv.partyName || inv.party_name)) {
+        try {
+          const targetTable = (isSaleReturn || dbType === 'sale') ? 'ax_clients' : 'ax_suppliers'
+          const { data: matchedParty } = await supabase.from(targetTable).select('id').eq('name', (inv.partyName || inv.party_name).trim()).maybeSingle()
+          if (matchedParty?.id) resolvedPartyId = matchedParty.id
+        } catch {}
+      }
+
       const invoiceRow = {
         id: invoiceId,
-        code: inv.code || (isSaleReturn ? `RET-SALE-${Date.now().toString().slice(-4)}` : isPurchaseReturn ? `RET-PURCHASE-${Date.now().toString().slice(-4)}` : `INV-${Date.now().toString().slice(-5)}`),
+        code: inv.code || (isSaleReturn ? `RET-SALE-${Date.now().toString().slice(-6)}-${Math.floor(100 + Math.random() * 900)}` : isPurchaseReturn ? `RET-PUR-${Date.now().toString().slice(-6)}-${Math.floor(100 + Math.random() * 900)}` : dbType === 'purchase' ? `PUR-${Date.now().toString().slice(-6)}-${Math.floor(100 + Math.random() * 900)}` : `INV-${Date.now().toString().slice(-6)}-${Math.floor(100 + Math.random() * 900)}`),
         type: inv.type || dbType,
         party_name: inv.partyName || inv.party_name || '',
         party_type: inv.partyKind || inv.partyType || (dbType === 'sale' ? 'customer' : 'supplier'),
-        party_id: inv.partyId || inv.party_id || null,
+        party_id: resolvedPartyId,
         warehouse_id: inv.warehouseId || inv.warehouse_id || null,
         transport_cost: Number(inv.transportCost || inv.transport_cost || 0),
         loading_cost: Number(inv.loadingCost || inv.loading_cost || 0),
@@ -52,6 +61,15 @@ export const AX_InvoiceOperationsService = {
             await supabase.from('ax_inventory_stock').update({ quantity: newQty, updated_at: new Date().toISOString() }).eq('id', stockRow.id)
           } else {
             await supabase.from('ax_inventory_stock').insert({ id: generateUUID(), warehouse_id: invoiceRow.warehouse_id, item_id: itemId, quantity: delta, unit: stockRow?.unit || itemMeta?.unit_type || 'كرتونة' })
+          }
+
+          if (dbType === 'purchase' && !isPurchaseReturn && Number(item.price) > 0) {
+            try {
+              await supabase.from('ax_items').update({
+                buy_price: Number(item.price),
+                updated_at: new Date().toISOString(),
+              }).eq('id', itemId)
+            } catch {}
           }
         }
       }
@@ -108,7 +126,7 @@ export const AX_InvoiceOperationsService = {
       }
 
       try { await supabase.from('ax_activity_logs').insert({ id: generateUUID(), table_name: 'ax_invoices', action: 'INSERT', record_id: invoiceId, new_data: invoiceRow, user_id: userProfile?.id || null }) } catch {}
-      return { success: true }
+      return { success: true, invoice: invoiceRow }
     } catch (err) {
       return { success: false, error: err.message }
     }

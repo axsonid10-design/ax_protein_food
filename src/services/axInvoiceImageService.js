@@ -114,3 +114,70 @@ export async function shareInvoiceImageToWhatsApp(invoice, element) {
     return false
   }
 }
+
+export async function downloadTransferImage(transfer, element) {
+  try {
+    const blob = await getInvoiceImageBlob(element)
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    const fileName = `اذن_تحويل_${transfer?.code || 'بروتين_فود'}.png`
+    a.href = url
+    a.download = fileName
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    setTimeout(() => URL.revokeObjectURL(url), 2000)
+    axToast.success(`تم تحميل صورة إذن التحويل (${fileName}) بنجاح`)
+    return true
+  } catch {
+    axToast.error('تعذر تحميل صورة إذن التحويل')
+    return false
+  }
+}
+
+export async function shareTransferImageToWhatsApp(transfer, element, fromName = '', toName = '') {
+  try {
+    const blob = await getInvoiceImageBlob(element)
+    const fileName = `اذن_تحويل_${transfer?.code || 'بروتين_فود'}.png`
+    const file = new File([blob], fileName, { type: 'image/png' })
+
+    const totalQty = (transfer?.items || []).reduce((acc, it) => acc + (Number(it.quantity) || 0), 0)
+    const shareTitle = `إذن تحويل مخزني ${transfer?.code || ''}`
+    const shareText = `إذن تحويل مخزني ${transfer?.code || ''}\nمن: ${fromName || 'مخزن'}\nإلى: ${toName || 'مخزن'}\nعدد الأصناف: ${(transfer?.items || []).length} صنف (إجمالي ${totalQty} وحدة)\nبروتين فود`
+
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      await navigator.share({
+        files: [file],
+        title: shareTitle,
+        text: shareText,
+      })
+      axToast.success('تمت مشاركة إذن التحويل بنجاح')
+      return true
+    }
+
+    if (navigator.clipboard && window.ClipboardItem) {
+      try {
+        await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })])
+        axToast.info('تم نسخ صورة إذن التحويل للحافظة، يمكنك لصقها الآن في محادثة الواتساب')
+      } catch (e) {}
+    }
+
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = fileName
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    setTimeout(() => URL.revokeObjectURL(url), 2000)
+
+    const waUrl = `https://api.whatsapp.com/send?text=${encodeURIComponent(shareText)}`
+    window.open(waUrl, '_blank')
+    axToast.success('تم تجهيز صورة الإذن وفتح واتساب لمشاركتها')
+    return true
+  } catch (err) {
+    if (err.name === 'AbortError') return false
+    axToast.error('حدث خطأ أثناء مشاركة إذن التحويل')
+    return false
+  }
+}

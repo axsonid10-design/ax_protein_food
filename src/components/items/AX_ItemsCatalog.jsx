@@ -10,6 +10,7 @@ import { AX_EditItemModal } from './AX_EditItemModal'
 import { AX_BulkAddItemsModal } from './AX_BulkAddItemsModal'
 import { AX_ItemMovementCardModal } from '../warehouses/AX_ItemMovementCardModal'
 import { AX_ItemOpeningBalanceModal } from './AX_ItemOpeningBalanceModal'
+import { AX_OpeningBalancesManager } from './AX_OpeningBalancesManager'
 import { AX_ItemStatusIndicators } from './AX_ItemStatusIndicators'
 import { formatDualUnits, isItemNearDepletion } from '../../utils/itemUnitFormatters'
 import { getCategoryClass } from '../../utils/categoryColors'
@@ -26,6 +27,7 @@ export function AX_ItemsCatalog() {
   } = useAXStore()
 
   const [searchTerm, setSearchTerm] = useState('')
+  const [catalogSubTab, setCatalogSubTab] = useState('catalog')
   const [selectedPrimary, setSelectedPrimary] = useState('الكل')
   const [isSingleAddOpen, setIsSingleAddOpen] = useState(false)
   const [isBulkAddOpen, setIsBulkAddOpen] = useState(false)
@@ -120,23 +122,53 @@ export function AX_ItemsCatalog() {
           </span>
         </div>
 
-        <div className="flex items-center gap-2 self-end sm:self-center">
-          <button
-            type="button"
-            onClick={() => setIsBulkAddOpen(true)}
-            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-surface-low hover:bg-surface-container border border-outline-variant/30 text-xs font-black text-on-surface transition-all active:scale-95 cursor-pointer shadow-xs"
-          >
-            <Layers className="w-3.5 h-3.5 text-primary" />
-            <span>إضافة متعددة (جملة)</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setIsSingleAddOpen(true)}
-            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-primary text-white text-xs font-black shadow-level1 hover:bg-primary-dark transition-all active:scale-95 cursor-pointer"
-          >
-            <Plus className="w-4 h-4" />
-            <span>إضافة صنف ورصيد بداية</span>
-          </button>
+        <div className="flex items-center gap-2 self-end sm:self-center flex-wrap">
+          <div className="flex items-center p-1 bg-surface-low rounded-full border border-outline-variant/30">
+            <button
+              type="button"
+              onClick={() => setCatalogSubTab('catalog')}
+              className={`px-3 py-1.5 rounded-full text-xs font-black transition-all cursor-pointer ${
+                catalogSubTab === 'catalog'
+                  ? 'bg-primary text-white shadow-xs'
+                  : 'text-on-surface-variant hover:text-on-surface'
+              }`}
+            >
+              كتالوج الأصناف
+            </button>
+            <button
+              type="button"
+              onClick={() => setCatalogSubTab('opening_balances')}
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-black transition-all cursor-pointer ${
+                catalogSubTab === 'opening_balances'
+                  ? 'bg-primary text-white shadow-xs'
+                  : 'text-on-surface-variant hover:text-on-surface'
+              }`}
+            >
+              <Layers className="w-3.5 h-3.5" />
+              <span>أرصدة أول المدة وسجل التدقيق</span>
+            </button>
+          </div>
+
+          {catalogSubTab === 'catalog' && (
+            <>
+              <button
+                type="button"
+                onClick={() => setIsBulkAddOpen(true)}
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-surface-low hover:bg-surface-container border border-outline-variant/30 text-xs font-black text-on-surface transition-all active:scale-95 cursor-pointer shadow-xs"
+              >
+                <Layers className="w-3.5 h-3.5 text-primary" />
+                <span>إضافة متعددة (جملة)</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsSingleAddOpen(true)}
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-primary text-white text-xs font-black shadow-level1 hover:bg-primary-dark transition-all active:scale-95 cursor-pointer"
+              >
+                <Plus className="w-4 h-4" />
+                <span>إضافة صنف</span>
+              </button>
+            </>
+          )}
         </div>
       </div>
 
@@ -177,7 +209,11 @@ export function AX_ItemsCatalog() {
         />
       )}
 
-      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-surface-lowest border border-outline-variant/30 rounded-2xl p-3 shadow-level1">
+      {catalogSubTab === 'opening_balances' ? (
+        <AX_OpeningBalancesManager />
+      ) : (
+        <>
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-surface-lowest border border-outline-variant/30 rounded-2xl p-3 shadow-level1">
         <div className="relative flex-1">
           <Search className="w-4 h-4 text-on-surface-variant absolute right-3 top-3 pointer-events-none" />
           <input
@@ -430,15 +466,19 @@ export function AX_ItemsCatalog() {
         warehouses={warehouses}
       />
 
-      <button
-        type="button"
-        onClick={() => setIsSingleAddOpen(true)}
-        className="fixed bottom-20 lg:bottom-6 left-6 z-30 flex items-center gap-2 px-5 py-3 rounded-full bg-primary hover:bg-primary-dark text-white font-black text-xs sm:text-sm shadow-level3 active:scale-95 transition-all cursor-pointer"
-        title="إضافة صنف جديد"
-      >
-        <Plus className="w-4 h-4 sm:w-5 sm:h-5" />
-        <span>إضافة صنف</span>
-      </button>
+      {catalogSubTab === 'catalog' && (
+        <button
+          type="button"
+          onClick={() => setIsSingleAddOpen(true)}
+          className="fixed bottom-20 lg:bottom-6 left-6 z-30 flex items-center gap-2 px-5 py-3 rounded-full bg-primary hover:bg-primary-dark text-white font-black text-xs sm:text-sm shadow-level3 active:scale-95 transition-all cursor-pointer"
+          title="إضافة صنف جديد"
+        >
+          <Plus className="w-4 h-4 sm:w-5 sm:h-5" />
+          <span>إضافة صنف</span>
+        </button>
+      )}
+        </>
+      )}
     </div>
   )
 }

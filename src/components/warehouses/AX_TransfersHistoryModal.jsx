@@ -14,10 +14,12 @@ import {
   Edit3,
   Trash2,
   RotateCcw,
+  Share2,
 } from 'lucide-react'
 import { useAXStore } from '../../store/useAXStore'
 import { AX_ConfirmModal } from '../common/AX_ConfirmModal'
 import { AX_CompanyDatePicker } from '../common/AX_CompanyDatePicker'
+import { AX_TransferPrintModal } from './AX_TransferPrintModal'
 import { axToast } from '../common/AX_Toast'
 
 export function AX_TransfersHistoryModal({
@@ -39,6 +41,7 @@ export function AX_TransfersHistoryModal({
   const [transferToEditDate, setTransferToEditDate] = useState(null)
   const [newDateVal, setNewDateVal] = useState('')
   const [transferToRollback, setTransferToRollback] = useState(null)
+  const [transferToPrint, setTransferToPrint] = useState(null)
   const [isProcessing, setIsProcessing] = useState(false)
 
   const handleSaveTransferDate = async () => {
@@ -337,6 +340,19 @@ export function AX_TransfersHistoryModal({
                               type="button"
                               onClick={(e) => {
                                 e.stopPropagation()
+                                setTransferToPrint(trf)
+                              }}
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-800 text-xs font-black border border-emerald-500/20 transition-all cursor-pointer active:scale-95"
+                              title="طباعة ومشاركة إذن التحويل على واتساب"
+                            >
+                              <Share2 className="w-3.5 h-3.5" />
+                              <span>إذن تحويل / واتساب</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation()
                                 setTransferToEditDate(trf)
                                 setNewDateVal(String(trf.operationalDate || trf.date || trf.requestedAt || '').slice(0, 10))
                               }}
@@ -452,6 +468,14 @@ export function AX_TransfersHistoryModal({
           isDestructive={true}
           onConfirm={handleConfirmRollback}
           onCancel={() => setTransferToRollback(null)}
+        />
+      )}
+
+      {transferToPrint && (
+        <AX_TransferPrintModal
+          isOpen={Boolean(transferToPrint)}
+          transfer={transferToPrint}
+          onClose={() => setTransferToPrint(null)}
         />
       )}
     </div>
