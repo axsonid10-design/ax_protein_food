@@ -20,6 +20,8 @@ import { AX_VanCustodySummaryCard } from './AX_VanCustodySummaryCard'
 import { AX_VanSettlementModal } from './AX_VanSettlementModal'
 import { AX_VanSettlementReceiptModal } from './AX_VanSettlementReceiptModal'
 import { AX_SearchableSelect } from '../common/AX_SearchableSelect'
+import { AX_ConfirmModal } from '../common/AX_ConfirmModal'
+import { AX_RecycleBinService } from '../../services/AX_RecycleBinService'
 
 export function AX_VanDistribution() {
   const warehouses = useAXStore((state) => state.warehouses) || []
@@ -29,12 +31,16 @@ export function AX_VanDistribution() {
   const items = useAXStore((state) => state.items) || []
   const clients = useAXStore((state) => state.clients) || []
   const addInvoice = useAXStore((state) => state.addInvoice)
+  const addWarehouse = useAXStore((state) => state.addWarehouse)
+  const deleteWarehouse = useAXStore((state) => state.deleteWarehouse)
+  const profile = useAXStore((state) => state.profile)
 
   const vanWarehouses = useMemo(() => {
     return getVanWarehouses(warehouses, distributors)
   }, [warehouses, distributors])
 
   const [selectedVanId, setSelectedVanId] = useState(() => vanWarehouses[0]?.id || '')
+  const [vehicleToDelete, setVehicleToDelete] = useState(null)
 
   const currentVan = useMemo(() => {
     return vanWarehouses.find((w) => w.id === selectedVanId) || vanWarehouses[0]
@@ -141,6 +147,41 @@ export function AX_VanDistribution() {
     setShowReceiptModal(true)
   }
 
+  const handleConfirmDeleteVehicle = async () => {
+    if (!vehicleToDelete) return
+    const target = vehicleToDelete
+    const remainingVans = vanWarehouses.filter((v) => v.id !== target.id)
+
+    deleteWarehouse(target.id)
+
+    try {
+      await AX_RecycleBinService.moveToRecycleBin({
+        entityType: 'vehicle',
+        entityId: target.id,
+        entityCode: target.plateNumber || '',
+        entityTitle: target.name,
+        originalData: target,
+        userProfile: profile,
+      })
+    } catch {}
+
+    setVehicleToDelete(null)
+    if (selectedVanId === target.id) {
+      setSelectedVanId(remainingVans[0]?.id || '')
+    }
+
+    axToast.info(`تم حذف سيارة التوزيع "${target.name}" بنجاح`, {
+      action: {
+        label: 'تراجع',
+        onClick: () => {
+          addWarehouse(target)
+          setSelectedVanId(target.id)
+          axToast.success(`تمت استعادة سيارة التوزيع "${target.name}" بنجاح`)
+        },
+      },
+    })
+  }
+
   return (
     <div className="w-full px-3 sm:px-6 lg:px-8 space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -180,7 +221,21 @@ export function AX_VanDistribution() {
         onOpenLoadModal={() => setShowLoadModal(true)}
         onOpenSaleModal={handleOpenDirectSale}
         onOpenSettlementModal={() => setShowSettlementModal(true)}
+        onDeleteVehicle={(van) => setVehicleToDelete(van)}
       />
+
+      {vehicleToDelete && (
+        <AX_ConfirmModal
+          isOpen={Boolean(vehicleToDelete)}
+          title="تأكيد حذف سيارة التوزيع"
+          message={`هل أنت متأكد من حذف سيارة التوزيع "${vehicleToDelete.name}" (لوحة: ${vehicleToDelete.plateNumber || 'بدون'})؟ سيتم نقلها لسلة المحذوفات.`}
+          confirmText="نعم، حذف السيارة"
+          cancelText="إلغاء"
+          isDestructive={true}
+          onConfirm={handleConfirmDeleteVehicle}
+          onCancel={() => setVehicleToDelete(null)}
+        />
+      )}
 
       <AX_AddVehicleModal
         isOpen={showAddVehicleModal}

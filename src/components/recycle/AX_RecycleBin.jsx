@@ -14,6 +14,7 @@ import {
   User,
   AlertTriangle,
   Receipt,
+  Truck,
 } from 'lucide-react'
 import { useAXStore } from '../../store/useAXStore'
 import { AX_ConfirmModal } from '../common/AX_ConfirmModal'
@@ -28,6 +29,8 @@ const TYPE_CONFIG = {
   transfer: { label: 'إذن تحويل', icon: ArrowLeftRight, color: 'text-purple-700 bg-purple-500/10 border-purple-500/20' },
   audit: { label: 'محضر جرد', icon: ClipboardCheck, color: 'text-rose-700 bg-rose-500/10 border-rose-500/20' },
   expense: { label: 'مصروف', icon: Receipt, color: 'text-rose-700 bg-rose-500/10 border-rose-500/20' },
+  vehicle: { label: 'سيارة توزيع', icon: Truck, color: 'text-amber-700 bg-amber-500/10 border-amber-500/20' },
+  warehouse: { label: 'مخزن', icon: Building2, color: 'text-cyan-700 bg-cyan-500/10 border-cyan-500/20' },
 }
 
 export function AX_RecycleBin() {
@@ -51,7 +54,8 @@ export function AX_RecycleBin() {
         (activeTab === 'items' && item.entityType === 'item') ||
         (activeTab === 'parties' && (item.entityType === 'client' || item.entityType === 'customer' || item.entityType === 'supplier')) ||
         (activeTab === 'operations' && (item.entityType === 'transfer' || item.entityType === 'audit')) ||
-        (activeTab === 'expenses' && item.entityType === 'expense')
+        (activeTab === 'expenses' && item.entityType === 'expense') ||
+        (activeTab === 'vehicles' && (item.entityType === 'vehicle' || item.entityType === 'warehouse'))
 
       if (!matchesTab) return false
       if (!q) return true
@@ -134,6 +138,7 @@ export function AX_RecycleBin() {
             { id: 'parties', label: 'العملاء والموردين' },
             { id: 'operations', label: 'التحويلات والمخازن' },
             { id: 'expenses', label: 'المصروفات' },
+            { id: 'vehicles', label: 'السيارات' },
           ].map((tab) => (
             <button
               key={tab.id}

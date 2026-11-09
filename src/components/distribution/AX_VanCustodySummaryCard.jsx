@@ -11,6 +11,7 @@ import {
   Hash,
   Phone,
   FileCheck2,
+  Trash2,
 } from 'lucide-react'
 import {
   calculateItemBreakdown,
@@ -25,6 +26,7 @@ export function AX_VanCustodySummaryCard({
   onOpenLoadModal,
   onOpenSaleModal,
   onOpenSettlementModal,
+  onDeleteVehicle,
 }) {
   const getItemObj = (id) => items.find((i) => i.id === id) || {}
 
@@ -43,9 +45,31 @@ export function AX_VanCustodySummaryCard({
               <Truck className="w-4 h-4 text-primary" />
               بيانات المركبة والمندوب
             </span>
-            <span className="px-2.5 py-0.5 rounded-full bg-secondary-container text-secondary-on-container text-[11px] font-bold">
-              {currentVan?.status === 'maintenance' ? 'في الصيانة' : 'متصل ميدانياً'}
-            </span>
+            <div className="flex items-center gap-1.5">
+              <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold ${
+                currentVan?.status === 'maintenance'
+                  ? 'bg-amber-500/10 text-amber-700'
+                  : currentVan?.status === 'inactive'
+                  ? 'bg-error/10 text-error'
+                  : 'bg-emerald-500/10 text-emerald-700'
+              }`}>
+                {currentVan?.status === 'maintenance'
+                  ? 'في الصيانة'
+                  : currentVan?.status === 'inactive'
+                  ? 'لا تعمل'
+                  : 'تعمل ميدانياً'}
+              </span>
+              {onDeleteVehicle && currentVan && (
+                <button
+                  type="button"
+                  onClick={() => onDeleteVehicle(currentVan)}
+                  className="p-1 rounded-full hover:bg-error/10 text-error/80 hover:text-error transition-all cursor-pointer"
+                  title="حذف سيارة التوزيع"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              )}
+            </div>
           </div>
 
           <div className="space-y-1.5">

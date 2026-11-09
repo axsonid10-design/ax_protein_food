@@ -147,6 +147,20 @@ export const AX_RecycleBinService = {
           const restored = { ...rawData }
           localStorage.setItem('ax_expenses', JSON.stringify([restored, ...rawExpenses.filter((e) => e.id !== restored.id)]))
         } catch {}
+      } else if (entityType === 'vehicle' || entityType === 'warehouse') {
+        if (supabase && typeof supabase.from === 'function') {
+          await supabase.from('ax_warehouses').upsert({
+            id: rawData.id,
+            name: rawData.name,
+            type: rawData.type || 'van',
+            plate_number: rawData.plateNumber || rawData.plate_number || null,
+            model: rawData.model || '',
+            manager: rawData.manager || rawData.driverName || null,
+            phone: rawData.phone || null,
+            treasury_id: rawData.treasuryId || rawData.treasury_id || null,
+            status: rawData.status || 'active',
+          }, { onConflict: 'id' })
+        }
       }
 
       await supabase.from('ax_recycle_bin').delete().eq('id', item.id)

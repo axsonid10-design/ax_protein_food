@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react'
 import { Trash2 } from 'lucide-react'
+import { axToast } from '../common/AX_Toast'
 
 export function AX_HoldToDeleteButton({
   onTrigger,
@@ -98,6 +99,11 @@ export function AX_HoldToDeleteButton({
         onPointerUp={stopHold}
         onPointerLeave={stopHold}
         onPointerCancel={stopHold}
+        onClick={() => {
+          if (!triggeredRef.current && !isHolding) {
+            axToast.info('اضغط مع الاستمرار لمدة ثانيتين لتأكيد الحذف')
+          }
+        }}
         onContextMenu={(e) => e.preventDefault()}
         disabled={disabled}
         title={title}
@@ -155,6 +161,11 @@ export function AX_HoldToDeleteButton({
       onPointerUp={stopHold}
       onPointerLeave={stopHold}
       onPointerCancel={stopHold}
+      onClick={() => {
+        if (!triggeredRef.current && !isHolding) {
+          axToast.info('اضغط مع الاستمرار لمدة ثانيتين لتأكيد الحذف')
+        }
+      }}
       onContextMenu={(e) => e.preventDefault()}
       disabled={disabled}
       title={title}

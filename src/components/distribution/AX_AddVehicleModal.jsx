@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react'
-import { Truck, Plus, X, User, Phone, Hash, ShieldCheck } from 'lucide-react'
+import { Truck, Plus, X, User, Phone, Hash, Wallet } from 'lucide-react'
 import { useAXStore } from '../../store/useAXStore'
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock'
 import { generateUUID } from '../../utils/AX_UUID'
@@ -16,11 +16,10 @@ export function AX_AddVehicleModal({ isOpen, onClose, onCreated }) {
 
   const [name, setName] = useState('')
   const [plateNumber, setPlateNumber] = useState('')
-  const [model, setModel] = useState('')
   const [driverId, setDriverId] = useState('')
   const [driverName, setDriverName] = useState('')
   const [driverPhone, setDriverPhone] = useState('')
-  const [treasuryId, setTreasuryId] = useState('')
+  const [isManualDriver, setIsManualDriver] = useState(false)
   const [status, setStatus] = useState('active')
   const [errorMsg, setErrorMsg] = useState(null)
 
@@ -42,14 +41,6 @@ export function AX_AddVehicleModal({ isOpen, onClose, onCreated }) {
     return list
   }, [profile, employees])
 
-  const treasuryOptions = useMemo(() => {
-    return treasuryAccounts.map((t) => ({
-      value: t.id,
-      label: t.name,
-      badge: `${(Number(t.balance) || 0).toLocaleString('en-US')} ج.م`,
-    }))
-  }, [treasuryAccounts])
-
   if (!isOpen) return null
 
   const handleDriverChange = (selectedId) => {
@@ -65,7 +56,7 @@ export function AX_AddVehicleModal({ isOpen, onClose, onCreated }) {
   const handleSubmit = (e) => {
     e.preventDefault()
     if (!name.trim()) {
-      setErrorMsg('يرجى إدخال اسم أو كود السيارة')
+      setErrorMsg('يرجى إدخال اسم أو مسمى السيارة')
       return
     }
     if (!plateNumber.trim()) {
@@ -84,29 +75,22 @@ export function AX_AddVehicleModal({ isOpen, onClose, onCreated }) {
       return
     }
 
-    if (!driverId) {
-      const msg = 'يرجى اختيار السائق المسؤول لربط مبيعات السيارة والخصم التلقائي'
-      setErrorMsg(msg)
-      axToast.error(msg)
-      return
-    }
+    const finalDriver = driverName.trim() || (staffOptions.find((s) => s.value === driverId)?.label?.split(' (')[0]) || 'مندوب التوزيع'
 
     try {
-      const fallbackTreasury = treasuryAccounts.find((t) => t.type === 'van_cash')?.id || treasuryAccounts[0]?.id || null
-      const finalTreasuryId = treasuryId || fallbackTreasury
-      const finalDriver = driverName.trim() || 'مندوب التوزيع'
+      const fallbackTreasury = treasuryAccounts.find((t) => t.type === 'van_cash')?.id || treasuryAccounts[0]?.id || 'c0000000-0000-0000-0000-000000000005'
 
       const newVehicle = {
         id: generateUUID(),
         name: name.trim(),
         type: 'van',
-        plateNumber: plateNumber.trim(),
-        model: model.trim(),
+        plateNumber: cleanPlate,
+        model: '',
         manager: finalDriver,
         driverName: finalDriver,
-        driverId: driverId || null,
+        driverId: isManualDriver ? null : (driverId || null),
         phone: driverPhone.trim() || null,
-        treasuryId: finalTreasuryId,
+        treasuryId: fallbackTreasury,
         status,
         createdAt: new Date().toISOString(),
       }
@@ -133,7 +117,7 @@ export function AX_AddVehicleModal({ isOpen, onClose, onCreated }) {
             <div>
               <h3 className="text-sm font-black text-on-surface">إضافة سيارة توزيع جديدة</h3>
               <span className="text-[11px] font-bold text-on-surface-variant block">
-                تسجيل بيانات المركبة وربطها بالمندوب وعهدة الكاش
+                تسجيل بيانات المركبة ومسؤول التوزيع
               </span>
             </div>
           </div>
@@ -164,69 +148,94 @@ export function AX_AddVehicleModal({ isOpen, onClose, onCreated }) {
                 placeholder="مثال: سيارة جامبو 1 - الدلتا"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                className="w-full px-3.5 py-2 rounded-2xl bg-surface-low border border-outline-variant/30 text-xs font-bold text-on-surface focus:border-primary transition-all"
+                className="w-full px-3.5 py-2.5 rounded-2xl bg-surface-low border border-outline-variant/30 text-xs font-bold text-on-surface focus:border-primary transition-all"
               />
             </div>
 
             <div>
-              <label className="text-xs font-bold text-on-surface-variant block mb-1">
-                رقم اللوحة المرورية <span className="text-error">*</span>
-              </label>
-              <div className="relative">
-                <input
-                  type="text"
-                  required
-                  placeholder="مثال: س ع ص 4821"
-                  value={plateNumber}
-                  onChange={(e) => setPlateNumber(e.target.value)}
-                  className="w-full px-3.5 py-2 rounded-2xl bg-surface-low border border-outline-variant/30 text-xs font-bold text-on-surface font-mono"
-                />
-                <Hash className="w-3.5 h-3.5 text-on-surface-variant absolute left-3 top-2.5" />
-              </div>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <label className="text-xs font-bold text-on-surface-variant block mb-1">
-                موديل وطراز السيارة
+              <label className="text-xs font-bold text-on-surface-variant flex items-center gap-1.5 mb-1">
+                <Hash className="w-3.5 h-3.5 text-primary" />
+                <span>رقم اللوحة المرورية</span> <span className="text-error">*</span>
               </label>
               <input
                 type="text"
-                placeholder="مثال: شيفروليه جامبو تبريد 2024"
-                value={model}
-                onChange={(e) => setModel(e.target.value)}
-                className="w-full px-3.5 py-2 rounded-2xl bg-surface-low border border-outline-variant/30 text-xs font-bold text-on-surface"
+                required
+                placeholder="مثال: س ع ص 4821"
+                value={plateNumber}
+                onChange={(e) => setPlateNumber(e.target.value)}
+                className="w-full px-3.5 py-2.5 rounded-2xl bg-surface-low border border-outline-variant/30 text-xs font-bold text-on-surface font-mono focus:border-primary transition-all"
               />
-            </div>
-
-            <div>
-              <label className="text-xs font-bold text-on-surface-variant block mb-1">
-                حالة السيارة التشغيلية
-              </label>
-              <select
-                value={status}
-                onChange={(e) => setStatus(e.target.value)}
-                className="w-full px-3.5 py-2 rounded-2xl bg-surface-low border border-outline-variant/30 text-xs font-bold text-on-surface cursor-pointer"
-              >
-                <option value="active">جاهزة وتعمل ميدانياً</option>
-                <option value="maintenance">في الصيانة والتجهيز</option>
-                <option value="inactive">معطلة أو خارج الخدمة</option>
-              </select>
             </div>
           </div>
 
-          <div className="p-3 rounded-2xl bg-surface-low/60 border border-outline-variant/20 space-y-3">
-            <span className="text-xs font-black text-primary flex items-center gap-1.5">
-              <User className="w-3.5 h-3.5" />
-              ربط السائق والعهدة النقدية
-            </span>
+          <div className="space-y-1.5">
+            <label className="text-xs font-bold text-on-surface-variant block">
+              حالة السيارة التشغيلية
+            </label>
+            <div className="grid grid-cols-3 gap-2">
+              <button
+                type="button"
+                onClick={() => setStatus('active')}
+                className={`py-2 px-3 rounded-full text-xs font-black transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                  status === 'active'
+                    ? 'bg-emerald-600 text-white shadow-xs'
+                    : 'bg-surface-low border border-outline-variant/30 text-on-surface hover:bg-surface-container'
+                }`}
+              >
+                <span className="w-2 h-2 rounded-full bg-emerald-300" />
+                <span>تعمل</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setStatus('maintenance')}
+                className={`py-2 px-3 rounded-full text-xs font-black transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                  status === 'maintenance'
+                    ? 'bg-amber-600 text-white shadow-xs'
+                    : 'bg-surface-low border border-outline-variant/30 text-on-surface hover:bg-surface-container'
+                }`}
+              >
+                <span className="w-2 h-2 rounded-full bg-amber-300" />
+                <span>في الصيانة</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setStatus('inactive')}
+                className={`py-2 px-3 rounded-full text-xs font-black transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                  status === 'inactive'
+                    ? 'bg-error text-white shadow-xs'
+                    : 'bg-surface-low border border-outline-variant/30 text-on-surface hover:bg-surface-container'
+                }`}
+              >
+                <span className="w-2 h-2 rounded-full bg-error-container" />
+                <span>لا تعمل</span>
+              </button>
+            </div>
+          </div>
+
+          <div className="p-3.5 rounded-2xl bg-surface-low/60 border border-outline-variant/20 space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-black text-primary flex items-center gap-1.5">
+                <User className="w-3.5 h-3.5" />
+                المندوب المسؤول
+              </span>
+              {staffOptions.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsManualDriver(!isManualDriver)
+                    setDriverId('')
+                  }}
+                  className="text-[11px] text-primary hover:underline font-bold cursor-pointer"
+                >
+                  {isManualDriver ? 'اختيار من فريق العمل' : 'كتابة اسم يدوي'}
+                </button>
+              )}
+            </div>
 
             <div>
-              <label className="text-xs font-bold text-on-surface-variant block mb-1">
-                اختر المندوب / السائق المسؤول
-              </label>
-              {staffOptions.length > 0 ? (
+              {!isManualDriver && staffOptions.length > 0 ? (
                 <AX_SearchableSelect
                   value={driverId}
                   onChange={handleDriverChange}
@@ -236,48 +245,39 @@ export function AX_AddVehicleModal({ isOpen, onClose, onCreated }) {
               ) : (
                 <input
                   type="text"
-                  placeholder="اسم المندوب..."
+                  placeholder="اسم المندوب أو السائق..."
                   value={driverName}
                   onChange={(e) => setDriverName(e.target.value)}
-                  className="w-full px-3.5 py-2 rounded-2xl bg-surface-lowest border border-outline-variant/30 text-xs font-bold text-on-surface"
+                  className="w-full px-3.5 py-2.5 rounded-2xl bg-surface-lowest border border-outline-variant/30 text-xs font-bold text-on-surface focus:border-primary transition-all"
                 />
               )}
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <label className="text-xs font-bold text-on-surface-variant block mb-1">
-                  هاتف السائق الميداني
-                </label>
-                <div className="relative">
-                  <input
-                    type="tel"
-                    placeholder="010..."
-                    value={driverPhone}
-                    onChange={(e) => setDriverPhone(e.target.value)}
-                    className="w-full px-3.5 py-2 rounded-2xl bg-surface-lowest border border-outline-variant/30 text-xs font-bold text-on-surface font-mono"
-                  />
-                  <Phone className="w-3.5 h-3.5 text-on-surface-variant absolute left-3 top-2.5" />
-                </div>
-              </div>
+            <div>
+              <label className="text-xs font-bold text-on-surface-variant flex items-center gap-1.5 mb-1">
+                <Phone className="w-3.5 h-3.5 text-primary" />
+                <span>رقم هاتف المندوب / السيارة</span>
+              </label>
+              <input
+                type="tel"
+                dir="ltr"
+                placeholder="010XXXXXXXX"
+                value={driverPhone}
+                onChange={(e) => setDriverPhone(e.target.value)}
+                className="w-full px-3.5 py-2.5 rounded-2xl bg-surface-lowest border border-outline-variant/30 text-xs font-bold text-on-surface font-mono text-right focus:border-primary transition-all"
+              />
+            </div>
+          </div>
 
-              <div>
-                <label className="text-xs font-bold text-on-surface-variant block mb-1">
-                  خزينة العهدة النقدية للسيارة
-                </label>
-                <select
-                  value={treasuryId}
-                  onChange={(e) => setTreasuryId(e.target.value)}
-                  className="w-full px-3.5 py-2 rounded-2xl bg-surface-lowest border border-outline-variant/30 text-xs font-bold text-on-surface cursor-pointer"
-                >
-                  <option value="">عهدة كاش السيارة الافتراضية</option>
-                  {treasuryOptions.map((t) => (
-                    <option key={t.value} value={t.value}>
-                      {t.label} ({t.badge})
-                    </option>
-                  ))}
-                </select>
-              </div>
+          <div className="p-3 rounded-2xl bg-surface-low/80 border border-outline-variant/20 flex items-center gap-2.5 text-xs">
+            <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary shrink-0">
+              <Wallet className="w-4 h-4" />
+            </div>
+            <div>
+              <span className="font-black text-on-surface block">خزينة وعهدة السيارة</span>
+              <span className="text-[11px] text-on-surface-variant font-bold">
+                تُخصص عهدة نقدية مستقلة للسيارة تلقائياً لتسجيل المبيعات والمصاريف وتصفيتها يومياً.
+              </span>
             </div>
           </div>
 

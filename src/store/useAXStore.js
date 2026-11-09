@@ -293,6 +293,7 @@ export const useAXStore = create((set, get) => ({
     AX_OperationsService.deleteWarehouseInDB(id, get().profile)
     set((state) => {
       const nextWh = state.warehouses.filter((w) => w.id !== id)
+      const nextDist = (state.distributors || []).filter((d) => d.id !== id)
       let stockCopy = state.inventoryStock.filter((s) => (s.warehouseId || s.warehouse_id) !== id)
       const nextTransfers = (state.transfers || []).map((t) => {
         const fromId = t.fromId || t.fromWarehouseId || t.from_warehouse_id
@@ -314,10 +315,8 @@ export const useAXStore = create((set, get) => ({
         }
         return t
       })
-      updateLocalCachePayload('warehouses', nextWh)
-      updateLocalCachePayload('transfers', nextTransfers)
-      updateLocalCachePayload('inventoryStock', stockCopy)
-      return { warehouses: nextWh, transfers: nextTransfers, inventoryStock: stockCopy }
+      updateLocalCachePayload('warehouses', nextWh); updateLocalCachePayload('distributors', nextDist); updateLocalCachePayload('transfers', nextTransfers); updateLocalCachePayload('inventoryStock', stockCopy)
+      return { warehouses: nextWh, distributors: nextDist, transfers: nextTransfers, inventoryStock: stockCopy }
     })
   },
   addTreasuryAccount: (account) => { const acc = { ...account, id: account.id || generateUUID() }; AX_OperationsService.addTreasuryAccountInDB(acc, get().profile); set((state) => { const nextTr = [...state.treasuryAccounts, acc]; updateLocalCachePayload('treasuryAccounts', nextTr); return { treasuryAccounts: nextTr } }) },

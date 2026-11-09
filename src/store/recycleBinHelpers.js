@@ -61,6 +61,13 @@ export const recycleBinHelpers = {
             const nextExpenses = [res.restoredData, ...rawExpenses.filter((e) => e.id !== res.restoredData.id)]
             localStorage.setItem('ax_expenses', JSON.stringify(nextExpenses))
           } catch {}
+        } else if ((res.entityType === 'vehicle' || res.entityType === 'warehouse') && res.restoredData) {
+          updates.warehouses = [res.restoredData, ...(s.warehouses || []).filter((w) => w.id !== res.restoredData.id)]
+          try {
+            const payload = JSON.parse(localStorage.getItem('ax_cached_db_payload') || '{}')
+            payload.warehouses = updates.warehouses
+            localStorage.setItem('ax_cached_db_payload', JSON.stringify(payload))
+          } catch {}
         }
         return updates
       })
