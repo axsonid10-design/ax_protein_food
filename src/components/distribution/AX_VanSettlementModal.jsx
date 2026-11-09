@@ -1,26 +1,13 @@
 import React, { useState, useMemo, useEffect } from 'react'
-import {
-  FileCheck2,
-  X,
-  Plus,
-  Trash2,
-  Wallet,
-  Boxes,
-  Fuel,
-  CreditCard,
-} from 'lucide-react'
+import { FileCheck2, X, AlertTriangle } from 'lucide-react'
 import { useAXStore } from '../../store/useAXStore'
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock'
 import { axToast } from '../common/AX_Toast'
 import { AX_SearchableSelect } from '../common/AX_SearchableSelect'
+import { AX_VanSettlementExpenseSection } from './AX_VanSettlementExpenseSection'
+import { AX_VanSettlementRemittanceSection } from './AX_VanSettlementRemittanceSection'
 import { executeVanSettlement } from '../../store/vanDistributionHelpers'
-
-const DEFAULT_EXPENSE_CATEGORIES = [
-  { id: 'exp-sec-trn-fuel', name: 'وقود وسولار سيارات التوزيع' },
-  { id: 'exp-sec-trn-tolls', name: 'رسوم طرق وكارتات ومواقف' },
-  { id: 'exp-sec-trn-porter', name: 'مشالات وعتالة نقل وتنزيل' },
-  { id: 'exp-sec-mnt-vans', name: 'صيانة ميكانيكا سيارات التبريد' },
-]
+import { generateUUID } from '../../utils/AX_UUID'
 
 export function AX_VanSettlementModal({
   isOpen,
@@ -36,6 +23,8 @@ export function AX_VanSettlementModal({
   const items = useAXStore((state) => state.items) || []
   const stockAudits = useAXStore((state) => state.stockAudits) || []
   const inventoryStock = useAXStore((state) => state.inventoryStock) || []
+  const expenseCategories = useAXStore((state) => state.expenseCategories) || []
+  const addExpenseCategory = useAXStore((state) => state.addExpenseCategory)
 
   const addCashTransaction = useAXStore((state) => state.addCashTransaction)
   const addPendingCashTransfer = useAXStore((state) => state.addPendingCashTransfer)
@@ -52,28 +41,79 @@ export function AX_VanSettlementModal({
   )
 
   const defaultCashTreasury = targetTreasuries.find((t) => t.type === 'cash') || targetTreasuries[0]
-  const defaultBankTreasury = targetTreasuries.find((t) => t.type === 'bank' || t.type === 'instapay') || targetTreasuries[1]
   const custodyCashBalance = Number(currentVanCash?.balance) || 0
 
   const [settlementDate, setSettlementDate] = useState(() => new Date().toISOString().split('T')[0])
   const [expenseRows, setExpenseRows] = useState([])
-  const [cashRemitAmount, setCashRemitAmount] = useState('')
-  const [cashTreasuryId, setCashTreasuryId] = useState(defaultCashTreasury?.id || '')
-  const [bankRemitAmount, setBankRemitAmount] = useState('')
-  const [bankTreasuryId, setBankTreasuryId] = useState(defaultBankTreasury?.id || '')
+  const [remittanceRows, setRemittanceRows] = useState([])
   const [stockAction, setStockAction] = useState('retain')
   const [returnWarehouseId, setReturnWarehouseId] = useState(nonVanWarehouses[0]?.id || '')
   const [notes, setNotes] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
 
-  const handleAddExpenseRow = () => {
+  const totalExpenses = useMemo(
+    () => expenseRows.reduce((acc, r) => acc + (Number(r.amount) || 0), 0),
+    [expenseRows]
+  )
+
+  const netBalance = custodyCashBalance - totalExpenses
+  const isNetNegative = netBalance < 0
+
+  const totalRemitted = useMemo(
+    () => remittanceRows.reduce((acc, r) => acc + (Number(r.amount) || 0), 0),
+    [remittanceRows]
+  )
+
+  useEffect(() => {
+    if (!isOpen) return
+    setExpenseRows([])
+    setRemittanceRows(
+      defaultCashTreasury
+        ? [
+            {
+              id: `remit-${generateUUID()}`,
+              treasuryId: defaultCashTreasury.id,
+              amount: '',
+              method: defaultCashTreasury.type === 'cash' ? 'cash' : 'transfer',
+            },
+          ]
+        : []
+    )
+    setNotes('')
+    setStockAction('retain')
+    if (nonVanWarehouses[0]?.id) setReturnWarehouseId(nonVanWarehouses[0].id)
+  }, [isOpen, currentVan?.id])
+
+  if (!isOpen) return null
+
+  const handleAddNewCategory = (categoryName) => {
+    const trimmed = String(categoryName || '').trim()
+    if (!trimmed) return null
+    const newId = `exp-sec-${generateUUID()}`
+    const newCat = {
+      id: newId,
+      name: trimmed,
+      level: 'secondary',
+      parentId: 'exp-sub-trn',
+      code: 'EXP-CUSTOM',
+      createdAt: new Date().toISOString(),
+    }
+    if (typeof addExpenseCategory === 'function') {
+      addExpenseCategory(newCat)
+    }
+    axToast.success(`تم حفظ البند "${trimmed}" وتثبيته في النظام`)
+    return newCat
+  }
+
+  const handleAddExpenseRow = (categoryId, categoryName) => {
     setExpenseRows((prev) => [
       ...prev,
       {
-        id: `row-${Date.now()}-${Math.random()}`,
-        categoryId: DEFAULT_EXPENSE_CATEGORIES[0].id,
-        categoryName: DEFAULT_EXPENSE_CATEGORIES[0].name,
+        id: `row-${generateUUID()}`,
+        categoryId: categoryId || 'exp-sec-trn-fuel',
+        categoryName: categoryName || 'وقود وسولار سيارات التوزيع',
         amount: '',
+        paymentMethod: 'van_custody',
         notes: '',
       },
     ])
@@ -83,58 +123,77 @@ export function AX_VanSettlementModal({
     setExpenseRows((prev) => prev.filter((r) => r.id !== rowId))
   }
 
-  const handleExpenseChange = (rowId, field, val) => {
+  const handleChangeExpenseRow = (rowId, field, val, extraName) => {
     setExpenseRows((prev) =>
       prev.map((r) => {
         if (r.id !== rowId) return r
         if (field === 'categoryId') {
-          const cat = DEFAULT_EXPENSE_CATEGORIES.find((c) => c.id === val)
-          return { ...r, categoryId: val, categoryName: cat?.name || val }
+          return { ...r, categoryId: val, categoryName: extraName || r.categoryName }
         }
         return { ...r, [field]: val }
       })
     )
   }
 
-  const totalExpenses = useMemo(
-    () => expenseRows.reduce((acc, r) => acc + (Number(r.amount) || 0), 0),
-    [expenseRows]
-  )
-
-  const netRemitDue = Math.max(0, custodyCashBalance - totalExpenses)
-  const totalRemitted = (Number(cashRemitAmount) || 0) + (Number(bankRemitAmount) || 0)
-
-  const handleAutoFillRemaining = (channel = 'cash') => {
-    const unallocated = Math.max(0, custodyCashBalance - totalExpenses)
-    if (channel === 'cash') {
-      setCashRemitAmount(Math.max(0, unallocated - (Number(bankRemitAmount) || 0)))
-    } else {
-      setBankRemitAmount(Math.max(0, unallocated - (Number(cashRemitAmount) || 0)))
+  const handleAddRemittanceRow = () => {
+    const selectedIds = new Set(remittanceRows.map((r) => r.treasuryId).filter(Boolean))
+    const nextAvailable = targetTreasuries.find((t) => !selectedIds.has(t.id))
+    if (!nextAvailable) {
+      axToast.error('تم استخدام كافة الحسابات والخزائن المتاحة للتوريد')
+      return
     }
+
+    setRemittanceRows((prev) => [
+      ...prev,
+      {
+        id: `remit-${generateUUID()}`,
+        treasuryId: nextAvailable.id,
+        amount: '',
+        method: nextAvailable.type === 'cash' ? 'cash' : 'transfer',
+      },
+    ])
   }
 
-  useEffect(() => {
-    setExpenseRows([])
-    setCashRemitAmount('')
-    setBankRemitAmount('')
-    setNotes('')
-    setStockAction('retain')
-    if (defaultCashTreasury?.id) setCashTreasuryId(defaultCashTreasury.id)
-    if (defaultBankTreasury?.id) setBankTreasuryId(defaultBankTreasury.id)
-    if (nonVanWarehouses[0]?.id) setReturnWarehouseId(nonVanWarehouses[0].id)
-  }, [isOpen, currentVan?.id])
+  const handleRemoveRemittanceRow = (rowId) => {
+    setRemittanceRows((prev) => prev.filter((r) => r.id !== rowId))
+  }
 
-  if (!isOpen) return null
+  const handleChangeRemittanceRow = (rowId, field, val) => {
+    setRemittanceRows((prev) =>
+      prev.map((r) => {
+        if (r.id !== rowId) return r
+        if (field === 'treasuryId') {
+          const targetTr = targetTreasuries.find((t) => t.id === val)
+          return {
+            ...r,
+            treasuryId: val,
+            method: targetTr?.type === 'cash' ? 'cash' : 'transfer',
+          }
+        }
+        return { ...r, [field]: val }
+      })
+    )
+  }
+
+  const handleAutoFillRemaining = (rowId) => {
+    const otherRowsSum = remittanceRows
+      .filter((r) => r.id !== rowId)
+      .reduce((sum, r) => sum + (Number(r.amount) || 0), 0)
+    const remaining = Math.max(0, netBalance - otherRowsSum)
+    setRemittanceRows((prev) =>
+      prev.map((r) => (r.id === rowId ? { ...r, amount: remaining > 0 ? remaining : '' } : r))
+    )
+  }
 
   const handleSubmit = async (e) => {
     e.preventDefault()
 
-    if (totalExpenses > custodyCashBalance) {
-      axToast.error('إجمالي المصاريف يتجاوز رصيد العهدة النقدية للسيارة')
+    if (isNetNegative && totalRemitted > 0) {
+      axToast.error('لا يمكن توريد مبالغ إضافية بينما صافي عهدة السيارة بالسالب')
       return
     }
 
-    if (totalRemitted > netRemitDue) {
+    if (!isNetNegative && totalRemitted > netBalance) {
       axToast.error('إجمالي مبالغ التوريد يتجاوز صافي العهدة المتاح')
       return
     }
@@ -144,28 +203,17 @@ export function AX_VanSettlementModal({
       return
     }
 
-    const validPayments = []
-    if (Number(cashRemitAmount) > 0) {
-      const tId = cashTreasuryId || defaultCashTreasury?.id
-      const tr = targetTreasuries.find((t) => t.id === tId)
-      validPayments.push({
-        destinationTreasuryId: tId,
-        amount: Number(cashRemitAmount),
-        method: 'cash',
-        treasuryName: tr?.name || 'الخزينة الرئيسية',
+    const validPayments = remittanceRows
+      .filter((r) => Number(r.amount) > 0)
+      .map((r) => {
+        const tr = targetTreasuries.find((t) => t.id === r.treasuryId)
+        return {
+          destinationTreasuryId: r.treasuryId,
+          amount: Number(r.amount),
+          method: tr?.type === 'cash' ? 'cash' : tr?.type === 'instapay' ? 'instapay' : 'transfer',
+          treasuryName: tr?.name || 'الخزينة',
+        }
       })
-    }
-
-    if (Number(bankRemitAmount) > 0) {
-      const tId = bankTreasuryId || defaultBankTreasury?.id
-      const tr = targetTreasuries.find((t) => t.id === tId)
-      validPayments.push({
-        destinationTreasuryId: tId,
-        amount: Number(bankRemitAmount),
-        method: tr?.type === 'instapay' ? 'instapay' : 'transfer',
-        treasuryName: tr?.name || 'الحساب البنكي',
-      })
-    }
 
     const returnStockPayload = {
       action: stockAction,
@@ -232,7 +280,11 @@ export function AX_VanSettlementModal({
               </span>
             </div>
           </div>
-          <button type="button" onClick={onClose} className="p-1.5 rounded-full hover:bg-surface-container text-on-surface-variant cursor-pointer transition-all">
+          <button
+            type="button"
+            onClick={onClose}
+            className="p-1.5 rounded-full hover:bg-surface-container text-on-surface-variant cursor-pointer transition-all"
+          >
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -241,163 +293,81 @@ export function AX_VanSettlementModal({
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 p-3 rounded-2xl bg-surface-low border border-outline-variant/30 text-center font-mono">
             <div>
               <span className="text-xs font-bold text-on-surface-variant block">إجمالي عهدة الكاش</span>
-              <span className="text-base font-black text-on-surface">{custodyCashBalance.toLocaleString('en-US')} ج.م</span>
+              <span className="text-base font-black text-on-surface">
+                {custodyCashBalance.toLocaleString('en-US')} ج.م
+              </span>
             </div>
             <div>
               <span className="text-xs font-bold text-on-surface-variant block">مصاريف المندوب</span>
-              <span className="text-base font-black text-error">-{totalExpenses.toLocaleString('en-US')} ج.م</span>
+              <span className="text-base font-black text-error">
+                -{totalExpenses.toLocaleString('en-US')} ج.م
+              </span>
             </div>
             <div>
-              <span className="text-xs font-bold text-on-surface-variant block">الصافي للتوريد</span>
-              <span className="text-base font-black text-primary">{netRemitDue.toLocaleString('en-US')} ج.م</span>
-            </div>
-          </div>
-
-          <div className="space-y-2.5">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-black text-on-surface flex items-center gap-1.5">
-                <Fuel className="w-4 h-4 text-primary" />
-                المصاريف التشغيلية للمندوب (سولار، كارتات، مشالات)
+              <span className="text-xs font-bold text-on-surface-variant block">
+                {isNetNegative ? 'الرصيد بالسالب (مستحق)' : 'الصافي للتوريد'}
               </span>
-              <button
-                type="button"
-                onClick={handleAddExpenseRow}
-                className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-surface-low hover:bg-surface-container text-primary text-xs font-bold transition-all cursor-pointer"
-              >
-                <Plus className="w-3.5 h-3.5" />
-                <span>إضافة بند مصروف</span>
-              </button>
+              <div className="flex items-center justify-center gap-1">
+                {isNetNegative && <AlertTriangle className="w-4 h-4 text-error" />}
+                <span className={`text-base font-black ${isNetNegative ? 'text-error' : 'text-primary'}`}>
+                  {isNetNegative
+                    ? `-${Math.abs(netBalance).toLocaleString('en-US')} ج.م`
+                    : `${netBalance.toLocaleString('en-US')} ج.م`}
+                </span>
+              </div>
             </div>
-
-            {expenseRows.length === 0 ? (
-              <div className="p-2.5 rounded-2xl bg-surface-low/50 border border-outline-variant/20 text-center text-xs font-bold text-on-surface-variant">
-                لم يتم تسجيل أي مصاريف تشغيلية خلال جولة اليوم.
-              </div>
-            ) : (
-              <div className="space-y-1.5">
-                {expenseRows.map((row) => (
-                  <div key={row.id} className="grid grid-cols-1 sm:grid-cols-12 gap-2 items-center p-2 rounded-2xl bg-surface-low border border-outline-variant/20">
-                    <select
-                      value={row.categoryId}
-                      onChange={(e) => handleExpenseChange(row.id, 'categoryId', e.target.value)}
-                      className="sm:col-span-4 px-2.5 py-1.5 rounded-xl bg-surface-lowest border border-outline-variant/30 text-xs font-bold text-on-surface"
-                    >
-                      {DEFAULT_EXPENSE_CATEGORIES.map((c) => (
-                        <option key={c.id} value={c.id}>{c.name}</option>
-                      ))}
-                    </select>
-                    <input
-                      type="number"
-                      min="0"
-                      placeholder="المبلغ (ج.م)"
-                      value={row.amount}
-                      onChange={(e) => handleExpenseChange(row.id, 'amount', e.target.value)}
-                      className="sm:col-span-3 px-2.5 py-1.5 rounded-xl bg-surface-lowest border border-outline-variant/30 text-xs font-mono font-bold text-on-surface"
-                    />
-                    <input
-                      type="text"
-                      placeholder="بيان وملاحظة المصروف..."
-                      value={row.notes}
-                      onChange={(e) => handleExpenseChange(row.id, 'notes', e.target.value)}
-                      className="sm:col-span-4 px-2.5 py-1.5 rounded-xl bg-surface-lowest border border-outline-variant/30 text-xs font-bold text-on-surface"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => handleRemoveExpenseRow(row.id)}
-                      className="sm:col-span-1 p-1 rounded-full hover:bg-error/10 text-error flex justify-center cursor-pointer"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
           </div>
 
-          <div className="space-y-2.5">
-            <span className="text-xs font-black text-on-surface flex items-center gap-1.5">
-              <CreditCard className="w-4 h-4 text-primary" />
-              توزيع توريد الإيرادات (تصفية متعددة القنوات: كاش + تحويل بنكي / إنستاباي)
-            </span>
+          <AX_VanSettlementExpenseSection
+            expenseRows={expenseRows}
+            onAddRow={handleAddExpenseRow}
+            onRemoveRow={handleRemoveExpenseRow}
+            onChangeRow={handleChangeExpenseRow}
+            onAddNewCategory={handleAddNewCategory}
+            totalExpenses={totalExpenses}
+            expenseCategories={expenseCategories}
+          />
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-              <div className="p-3 rounded-2xl bg-surface-low border border-outline-variant/30 space-y-2">
-                <div className="flex items-center justify-between text-xs font-bold">
-                  <span className="text-on-surface flex items-center gap-1">
-                    <Wallet className="w-3.5 h-3.5 text-primary" />
-                    توريد نقدي (كاش)
-                  </span>
-                  <button type="button" onClick={() => handleAutoFillRemaining('cash')} className="text-[11px] text-primary hover:underline cursor-pointer">
-                    تعبئة المتبقي
-                  </button>
-                </div>
-                <input
-                  type="number"
-                  min="0"
-                  placeholder="المبلغ نقداً..."
-                  value={cashRemitAmount}
-                  onChange={(e) => setCashRemitAmount(e.target.value)}
-                  className="w-full px-3 py-1.5 rounded-xl bg-surface-lowest border border-outline-variant/30 text-xs font-mono font-bold text-on-surface"
-                />
-                <select
-                  value={cashTreasuryId}
-                  onChange={(e) => setCashTreasuryId(e.target.value)}
-                  className="w-full px-3 py-1.5 rounded-xl bg-surface-lowest border border-outline-variant/30 text-xs font-bold text-on-surface"
-                >
-                  {targetTreasuries.filter((t) => t.type === 'cash').map((t) => (
-                    <option key={t.id} value={t.id}>{t.name}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="p-3 rounded-2xl bg-surface-low border border-outline-variant/30 space-y-2">
-                <div className="flex items-center justify-between text-xs font-bold">
-                  <span className="text-on-surface flex items-center gap-1">
-                    <CreditCard className="w-3.5 h-3.5 text-secondary" />
-                    توريد بنكي / إنستاباي
-                  </span>
-                  <button type="button" onClick={() => handleAutoFillRemaining('bank')} className="text-[11px] text-secondary hover:underline cursor-pointer">
-                    تعبئة المتبقي
-                  </button>
-                </div>
-                <input
-                  type="number"
-                  min="0"
-                  placeholder="مبلغ التحويل..."
-                  value={bankRemitAmount}
-                  onChange={(e) => setBankRemitAmount(e.target.value)}
-                  className="w-full px-3 py-1.5 rounded-xl bg-surface-lowest border border-outline-variant/30 text-xs font-mono font-bold text-on-surface"
-                />
-                <select
-                  value={bankTreasuryId}
-                  onChange={(e) => setBankTreasuryId(e.target.value)}
-                  className="w-full px-3 py-1.5 rounded-xl bg-surface-lowest border border-outline-variant/30 text-xs font-bold text-on-surface"
-                >
-                  {targetTreasuries.filter((t) => t.type !== 'cash').map((t) => (
-                    <option key={t.id} value={t.id}>{t.name} ({t.type === 'instapay' ? 'إنستاباي' : 'بنك'})</option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-            <div className="flex items-center justify-between p-2.5 rounded-2xl bg-surface-low border border-outline-variant/20 text-xs font-bold">
-              <span>إجمالي المبالغ الموردة الآن:</span>
-              <span className="font-mono font-black text-primary text-sm">{totalRemitted.toLocaleString('en-US')} ج.م</span>
-            </div>
-          </div>
+          <AX_VanSettlementRemittanceSection
+            remittanceRows={remittanceRows}
+            onAddRow={handleAddRemittanceRow}
+            onRemoveRow={handleRemoveRemittanceRow}
+            onChangeRow={handleChangeRemittanceRow}
+            onAutoFillRemaining={handleAutoFillRemaining}
+            targetTreasuries={targetTreasuries}
+            netBalance={netBalance}
+            totalRemitted={totalRemitted}
+          />
 
           <div className="space-y-2">
-            <span className="text-xs font-black text-on-surface flex items-center gap-1.5">
-              <Boxes className="w-4 h-4 text-primary" />
+            <span className="text-xs font-black text-on-surface block">
               تسوية البضاعة المتبقية بالسيارة ({currentVanStock.length} صنف)
             </span>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-              <label className={`p-3 rounded-2xl border cursor-pointer flex items-center gap-2 transition-all ${stockAction === 'retain' ? 'bg-primary/5 border-primary' : 'bg-surface-low border-outline-variant/30'}`}>
-                <input type="radio" name="stockAction" checked={stockAction === 'retain'} onChange={() => setStockAction('retain')} />
+              <label
+                className={`p-3 rounded-2xl border cursor-pointer flex items-center gap-2 transition-all ${
+                  stockAction === 'retain' ? 'bg-primary/5 border-primary' : 'bg-surface-low border-outline-variant/30'
+                }`}
+              >
+                <input
+                  type="radio"
+                  name="stockAction"
+                  checked={stockAction === 'retain'}
+                  onChange={() => setStockAction('retain')}
+                />
                 <span className="text-xs font-black text-on-surface">إبقاء الرصيد بعهدة السيارة</span>
               </label>
-              <label className={`p-3 rounded-2xl border cursor-pointer flex items-center gap-2 transition-all ${stockAction === 'return' ? 'bg-primary/5 border-primary' : 'bg-surface-low border-outline-variant/30'}`}>
-                <input type="radio" name="stockAction" checked={stockAction === 'return'} onChange={() => setStockAction('return')} />
+              <label
+                className={`p-3 rounded-2xl border cursor-pointer flex items-center gap-2 transition-all ${
+                  stockAction === 'return' ? 'bg-primary/5 border-primary' : 'bg-surface-low border-outline-variant/30'
+                }`}
+              >
+                <input
+                  type="radio"
+                  name="stockAction"
+                  checked={stockAction === 'return'}
+                  onChange={() => setStockAction('return')}
+                />
                 <span className="text-xs font-black text-on-surface">إرجاع البضاعة للمخزن المركزي</span>
               </label>
             </div>
@@ -416,15 +386,25 @@ export function AX_VanSettlementModal({
             placeholder="ملاحظات ختامية للتسوية..."
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
-            className="w-full px-3.5 py-2 rounded-2xl bg-surface-low border border-outline-variant/30 text-xs font-bold text-on-surface"
+            className="w-full px-3.5 py-2 rounded-2xl bg-surface-low border border-outline-variant/30 text-xs font-bold text-on-surface focus:outline-none focus:border-primary"
           />
         </form>
 
         <div className="p-4 border-t border-surface-container bg-surface-lowest flex justify-end gap-2">
-          <button type="button" onClick={onClose} disabled={isSubmitting} className="px-5 py-2 rounded-full bg-surface-container text-on-surface-variant text-xs font-bold cursor-pointer">
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={isSubmitting}
+            className="px-5 py-2 rounded-full bg-surface-container text-on-surface-variant text-xs font-bold cursor-pointer transition-all"
+          >
             إلغاء
           </button>
-          <button type="button" onClick={handleSubmit} disabled={isSubmitting} className="px-6 py-2 rounded-full bg-primary hover:bg-primary-dark text-white text-xs font-black shadow-level1 flex items-center gap-1.5 cursor-pointer disabled:opacity-40">
+          <button
+            type="button"
+            onClick={handleSubmit}
+            disabled={isSubmitting}
+            className="px-6 py-2 rounded-full bg-primary hover:bg-primary-dark text-white text-xs font-black shadow-level1 flex items-center gap-1.5 cursor-pointer disabled:opacity-40 transition-all"
+          >
             <FileCheck2 className="w-4 h-4" />
             <span>{isSubmitting ? 'جاري التنفيذ...' : 'اعتماد وحفظ التسوية'}</span>
           </button>

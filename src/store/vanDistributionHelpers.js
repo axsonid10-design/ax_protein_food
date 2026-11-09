@@ -138,16 +138,20 @@ export function calculateSettlementTotals({ grossCash = 0, expenses = [], paymen
 
   const totalExpenses = expenseList.reduce((acc, e) => acc + (Number(e.amount) || 0), 0)
   const gross = Number(grossCash) || 0
-  const netRemitDue = Math.max(0, gross - totalExpenses)
+  const netBalance = gross - totalExpenses
+  const netRemitDue = Math.max(0, netBalance)
   const totalRemitted = paymentList.reduce((acc, p) => acc + (Number(p.amount) || 0), 0)
   const variance = totalRemitted - netRemitDue
 
   return {
     grossCash: gross,
     totalExpenses,
+    netBalance,
     netRemitDue,
     totalRemitted,
     variance,
+    isNegative: netBalance < 0,
+    deficitAmount: netBalance < 0 ? Math.abs(netBalance) : 0,
   }
 }
 
@@ -264,9 +268,9 @@ export async function executeVanSettlement(
       partyType: 'expense',
       partyName: `مصاريف سيارة: ${exp.categoryName || 'مصروف تشغيلي'}`,
       amount: amt,
-      treasuryId: vanTreasuryId,
+      treasuryId: exp.paymentMethod === 'driver_personal' ? null : vanTreasuryId,
       date: settlementDate,
-      notes: `تسوية يومية - ${vanName || 'سيارة'}: ${exp.notes || exp.description || ''}`,
+      notes: `تسوية يومية - ${vanName || 'سيارة'}: ${exp.notes || exp.description || ''}${exp.paymentMethod ? ` [طريقة الدفع: ${exp.paymentMethod === 'driver_personal' ? 'نقد شخصي من المندوب' : exp.paymentMethod === 'transfer' ? 'تحويل بنكي' : 'عهدة السيارة'}]` : ''}`,
       expenseSecondaryCategoryId: exp.categoryId || exp.expenseCategoryId || 'exp-sec-trn-fuel',
       expenseSecondaryCategoryName: exp.categoryName || 'وقود وسولار سيارات التوزيع',
     }
@@ -376,7 +380,10 @@ export async function executeVanSettlement(
     grossCash,
     expenses: recordedExpenses,
     totalExpenses: totals.totalExpenses,
+    netBalance: totals.netBalance,
     netRemitDue: totals.netRemitDue,
+    isNegative: totals.isNegative,
+    deficitAmount: totals.deficitAmount,
     payments: recordedPayments,
     totalRemitted: totals.totalRemitted,
     variance: totals.variance,
