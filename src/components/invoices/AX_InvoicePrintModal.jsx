@@ -27,6 +27,7 @@ import {
   downloadInvoiceImage,
   copyInvoiceImageToClipboard,
 } from '../../services/axInvoiceImageService'
+import { formatTime12H } from '../../utils/dateHelpers'
 
 export function AX_InvoicePrintModal({ invoice, isOpen, onClose }) {
   useBodyScrollLock(isOpen)
@@ -311,6 +312,11 @@ export function AX_InvoicePrintModal({ invoice, isOpen, onClose }) {
                   <div>
                     <span className="text-slate-500 text-[11px]">رقم الفاتورة: </span>
                     <strong className="text-slate-900">{invoice.code}</strong>
+                    {(invoice.createdAt || invoice.created_at) && (
+                      <span className="text-slate-500 text-[10px] mr-1">
+                        ({formatTime12H(invoice.createdAt || invoice.created_at)})
+                      </span>
+                    )}
                   </div>
                   <div>
                     <span className="text-slate-500 text-[11px]">التاريخ: </span>
@@ -344,7 +350,7 @@ export function AX_InvoicePrintModal({ invoice, isOpen, onClose }) {
                   المخزن: <strong className="text-slate-900 font-bold">{getWarehouseName(invoice.warehouseId)}</strong>
                 </span>
                 <span className="text-slate-700 block text-[11px]">
-                  تاريخ القيد: <bdi dir="ltr" className="font-mono">{formatPrintDate(invoice.createdAt || invoice.date)}</bdi>
+                  تاريخ القيد: <bdi dir="ltr" className="font-mono">{formatPrintDate(invoice.createdAt || invoice.date)}{(invoice.createdAt || invoice.created_at) ? ` ${formatTime12H(invoice.createdAt || invoice.created_at)}` : ''}</bdi>
                 </span>
               </div>
             </div>

@@ -20,6 +20,7 @@ import { AX_InvoiceTimeframeFilter } from '../invoices/AX_InvoiceTimeframeFilter
 import { AX_InvoiceReturnModal } from '../invoices/AX_InvoiceReturnModal'
 import { AX_ConfirmModal } from '../common/AX_ConfirmModal'
 import { getInvoiceTypeTheme } from '../invoices/invoiceThemeHelper'
+import { formatTime12H, matchesInvoiceTimeframe } from '../../utils/dateHelpers'
 
 export function AX_SalesManager() {
   const {
@@ -60,34 +61,7 @@ export function AX_SalesManager() {
       if (salesTab === 'sales_only' && inv.type !== 'sale') return false
       if (salesTab === 'returns_only' && inv.type !== 'sale_return') return false
 
-      if (timeframe === 'all') return true
-      const rawDate = inv.date || inv.operationalDate || inv.createdAt
-      if (!rawDate) return false
-      const itemDate = String(rawDate).slice(0, 10)
-      const now = new Date()
-      const todayStr = now.toISOString().split('T')[0]
-
-      if (timeframe === 'day') return itemDate === todayStr
-      if (timeframe === 'week') {
-        const pastWeek = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
-        return itemDate >= pastWeek && itemDate <= todayStr
-      }
-      if (timeframe === 'month') {
-        const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0]
-        return itemDate >= startOfMonth && itemDate <= todayStr
-      }
-      if (timeframe === 'year') {
-        const startOfYear = new Date(now.getFullYear(), 0, 1).toISOString().split('T')[0]
-        return itemDate >= startOfYear && itemDate <= todayStr
-      }
-      if (timeframe === 'specific_day') return specificDate ? itemDate === specificDate : true
-      if (timeframe === 'custom') {
-        if (customStart && customEnd) return itemDate >= customStart && itemDate <= customEnd
-        if (customStart) return itemDate >= customStart
-        if (customEnd) return itemDate <= customEnd
-        return true
-      }
-      return true
+      return matchesInvoiceTimeframe(inv, { timeframe, specificDate, customStart, customEnd })
     })
   }, [salesInvoices, salesTab, timeframe, specificDate, customStart, customEnd])
 
@@ -250,8 +224,13 @@ export function AX_SalesManager() {
                       onClick={() => setSelectedInvoiceForModal(inv)}
                       className={`h-11 transition-colors cursor-pointer ${theme.rowClass}`}
                     >
-                      <td className={`px-3.5 whitespace-nowrap font-mono font-black ${theme.codeClass}`}>
-                        {inv.code}
+                      <td className="px-3.5 whitespace-nowrap">
+                        <div className={`font-mono font-black ${theme.codeClass}`}>{inv.code}</div>
+                        {(inv.createdAt || inv.created_at) && (
+                          <div className="text-[10px] text-on-surface-variant font-mono">
+                            {formatTime12H(inv.createdAt || inv.created_at)}
+                          </div>
+                        )}
                       </td>
                       <td className="px-3.5 whitespace-nowrap">
                         <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold border ${theme.badgeClass}`}>
@@ -261,9 +240,9 @@ export function AX_SalesManager() {
                       <td className="px-3.5 whitespace-nowrap font-black">{inv.partyName}</td>
                       <td className="px-3.5 whitespace-nowrap text-on-surface-variant font-mono">
                         <div>{inv.date || inv.operationalDate}</div>
-                        {inv.createdAt && (
+                        {(inv.createdAt || inv.created_at) && (
                           <div className="text-[10px] text-on-surface-variant/70">
-                            قيد: {String(inv.createdAt).slice(11, 16) || String(inv.createdAt).slice(0, 10)}
+                            قيد: {formatTime12H(inv.createdAt || inv.created_at)}
                           </div>
                         )}
                       </td>
@@ -336,7 +315,14 @@ export function AX_SalesManager() {
               return (
                 <div key={inv.id} className={`p-3 rounded-2xl border ${theme.rowClass} space-y-2`}>
                   <div className="flex items-center justify-between">
-                    <span className={`font-mono font-black text-xs ${theme.codeClass}`}>{inv.code}</span>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className={`font-mono font-black text-xs ${theme.codeClass}`}>{inv.code}</span>
+                      {(inv.createdAt || inv.created_at) && (
+                        <span className="text-[10px] text-on-surface-variant font-mono">
+                          • {formatTime12H(inv.createdAt || inv.created_at)}
+                        </span>
+                      )}
+                    </div>
                     <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${theme.badgeClass}`}>
                       {theme.label}
                     </span>

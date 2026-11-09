@@ -8,6 +8,8 @@ import { AX_InvoicePrintModal } from './AX_InvoicePrintModal'
 import { axToast } from '../common/AX_Toast'
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock'
 import { getItemDisplayName } from '../../utils/AX_ItemNameHelper'
+import { formatTime12H } from '../../utils/dateHelpers'
+import { validateInvoiceItems } from './invoiceValidationHelper'
 
 export function AX_EditInvoiceModal({
   isOpen,
@@ -38,6 +40,7 @@ export function AX_EditInvoiceModal({
   const [paidInput, setPaidInput] = useState('')
   const [selectedTreasuryId, setSelectedTreasuryId] = useState('')
   const [showPrintModal, setShowPrintModal] = useState(false)
+  const [validationError, setValidationError] = useState(null)
   const [draftItem, setDraftItem] = useState({ itemId: '', quantity: 1, price: 0 })
   const [expandedRowIndex, setExpandedRowIndex] = useState(null)
 
@@ -61,6 +64,7 @@ export function AX_EditInvoiceModal({
       setSelectedTreasuryId(invoice.treasuryId || treasuryAccounts[0]?.id || '')
       setDraftItem({ itemId: '', quantity: 1, price: 0 })
       setExpandedRowIndex(null)
+      setValidationError(null)
     }
   }, [invoice, isOpen, warehouses, treasuryAccounts])
 
@@ -175,10 +179,13 @@ export function AX_EditInvoiceModal({
       axToast.error('يرجى اختيار أو إدخال الطرف')
       return
     }
-    if (invForm.items.length === 0) {
-      axToast.error('يجب إضافة صنف واحد على الأقل في الفاتورة')
+    const validation = validateInvoiceItems(invForm.items, items, { invType: invForm.type })
+    if (!validation.isValid) {
+      axToast.error(validation.error)
+      setValidationError(validation.error)
       return
     }
+    setValidationError(null)
 
     const updatedData = {
       ...invoice,
@@ -212,6 +219,11 @@ export function AX_EditInvoiceModal({
             <div>
               <div className="flex items-center gap-2">
                 <span className="font-mono text-xs font-black text-secondary">{invoice.code}</span>
+                {(invoice.createdAt || invoice.created_at) && (
+                  <span className="text-[10px] text-on-surface-variant font-mono">
+                    {formatTime12H(invoice.createdAt || invoice.created_at)}
+                  </span>
+                )}
                 <span className="text-xs px-2 py-0.5 rounded-full bg-surface-low border border-outline-variant/30 font-bold">
                   تعديل فاتورة
                 </span>
@@ -350,6 +362,13 @@ export function AX_EditInvoiceModal({
             setSelectedTreasuryId={setSelectedTreasuryId}
             treasuryAccounts={treasuryAccounts}
           />
+
+          {validationError && (
+            <div role="alert" className="flex items-center gap-2 p-2.5 rounded-2xl bg-rose-500/10 border border-rose-500/30 text-rose-700 text-xs font-bold animate-in fade-in">
+              <AlertTriangle className="w-4 h-4 shrink-0 text-rose-600" />
+              <span>{validationError}</span>
+            </div>
+          )}
 
           <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-surface-container">
             <button

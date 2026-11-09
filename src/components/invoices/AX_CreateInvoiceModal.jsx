@@ -13,11 +13,11 @@ import { useBodyScrollLock } from '../../hooks/useBodyScrollLock'
 import { generateUUID } from '../../utils/AX_UUID'
 import { getItemDisplayName } from '../../utils/AX_ItemNameHelper'
 import { getCartonEquivalent } from '../../utils/pricingCalculations'
+import { getLocalTodayStr } from '../../utils/dateHelpers'
+import { validateInvoiceItems } from './invoiceValidationHelper'
 
 export function AX_CreateInvoiceModal({
-  isOpen, onClose, items = [], warehouses = [], clients = [],
-  suppliers = [], treasuryAccounts = [], inventoryStock: propInventoryStock, onSave,
-  defaultType = 'sale', lockGroup = null,
+  isOpen, onClose, items = [], warehouses = [], clients = [], suppliers = [], treasuryAccounts = [], inventoryStock: propInventoryStock, onSave, defaultType = 'sale', lockGroup = null,
 }) {
   useBodyScrollLock(isOpen, onClose)
 
@@ -28,14 +28,8 @@ export function AX_CreateInvoiceModal({
   const defaultWarehouseId = (userBranchId && warehouses.some((w) => w.id === userBranchId)) ? userBranchId : (warehouses[0]?.id || '')
 
   const [invForm, setInvForm] = useState({
-    type: defaultType || 'sale',
-    partyName: clients[0]?.name || '',
-    isCustomParty: false,
-    warehouseId: defaultWarehouseId,
-    date: new Date().toISOString().split('T')[0],
-    transportCost: '',
-    loadingCost: '',
-    items: [],
+    type: defaultType || 'sale', partyName: clients[0]?.name || '', isCustomParty: false,
+    warehouseId: defaultWarehouseId, date: getLocalTodayStr(), transportCost: '', loadingCost: '', items: [],
   })
 
   const [paymentStatus, setPaymentStatus] = useState('unpaid')
@@ -47,6 +41,7 @@ export function AX_CreateInvoiceModal({
   const [previewInvoice, setPreviewInvoice] = useState(null)
   const [isPostSavePrint, setIsPostSavePrint] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
+  const [validationError, setValidationError] = useState(null)
 
   const [draftItem, setDraftItem] = useState({ itemId: '', quantity: 1, price: 0 })
   const [expandedRowIndex, setExpandedRowIndex] = useState(null)
@@ -58,16 +53,10 @@ export function AX_CreateInvoiceModal({
 
   const typeButtons = useMemo(() => {
     if (lockGroup === 'sales') {
-      return [
-        ['sale', 'فاتورة مبيعات', 'bg-primary text-white shadow-xs'],
-        ['sale_return', 'مردود مبيعات', 'bg-purple-700 text-white shadow-xs'],
-      ]
+      return [['sale', 'فاتورة مبيعات', 'bg-primary text-white shadow-xs'], ['sale_return', 'مردود مبيعات', 'bg-purple-700 text-white shadow-xs']]
     }
     if (lockGroup === 'purchases') {
-      return [
-        ['purchase', 'فاتورة مشتريات', 'bg-secondary text-white shadow-xs'],
-        ['purchase_return', 'مردود مشتريات', 'bg-amber-600 text-white shadow-xs'],
-      ]
+      return [['purchase', 'فاتورة مشتريات', 'bg-secondary text-white shadow-xs'], ['purchase_return', 'مردود مشتريات', 'bg-amber-600 text-white shadow-xs']]
     }
     return [
       ['sale', 'فاتورة مبيعات', 'bg-primary text-white shadow-xs'],
@@ -91,7 +80,7 @@ export function AX_CreateInvoiceModal({
       const initPartyName = initPartyKind === 'customer' ? (clients[0]?.name || '') : (suppliers[0]?.companyName || suppliers[0]?.name || '')
       setInvForm({
         type: resType, partyName: initPartyName, isCustomParty: false,
-        warehouseId: initialWarehouseId, date: new Date().toISOString().split('T')[0],
+        warehouseId: initialWarehouseId, date: getLocalTodayStr(),
         transportCost: '', loadingCost: '', items: [],
       })
       setPartyKind(initPartyKind)
@@ -103,6 +92,7 @@ export function AX_CreateInvoiceModal({
       setShowSupplierModal(false)
       setPreviewInvoice(null)
       setIsPostSavePrint(false)
+      setValidationError(null)
     }
   }, [isOpen, defaultType, defaultWarehouseId])
 
@@ -161,47 +151,41 @@ export function AX_CreateInvoiceModal({
   const handleCommitDraftItem = () => {
     if (!draftItem.itemId || Number(draftItem.quantity) <= 0) return
     const curObj = items.find((i) => i.id === draftItem.itemId)
-    const committedItem = {
-      ...draftItem,
-      unit: draftItem.unit || curObj?.unitType || 'كرتونة',
-    }
+    const committedItem = { ...draftItem, unit: draftItem.unit || curObj?.unitType || 'كرتونة' }
     const newItems = [committedItem, ...invForm.items]
     setInvForm({ ...invForm, items: newItems })
     const newSelected = new Set(newItems.map((r) => r.itemId))
     const nextAvail = items.filter((it) => !newSelected.has(it.id))
     const next = nextAvail[0]
     setDraftItem({
-      itemId: next?.id || '',
-      quantity: 1,
-      unit: next?.unitType || 'كرتونة',
+      itemId: next?.id || '', quantity: 1, unit: next?.unitType || 'كرتونة',
       price: next ? (isSaleType ? (next.sellPrice ?? 0) : (next.buyPrice ?? 0)) : 0,
     })
+    setValidationError(null)
   }
 
   const handleDirectAddItem = (newItem) => {
-    setInvForm((prev) => ({
-      ...prev,
-      items: [newItem, ...prev.items],
-    }))
+    setInvForm((prev) => ({ ...prev, items: [newItem, ...prev.items] }))
+    setValidationError(null)
   }
 
   const handleRemoveItem = (idx) => {
     setInvForm({ ...invForm, items: invForm.items.filter((_, i) => i !== idx) })
     if (expandedRowIndex === idx) setExpandedRowIndex(null)
     else if (expandedRowIndex > idx) setExpandedRowIndex(expandedRowIndex - 1)
+    setValidationError(null)
   }
 
   const handleItemRowChange = (idx, fieldOrUpdates, value) => {
     setInvForm((prev) => {
       const row = prev.items[idx]
       if (!row) return prev
-      const updates = typeof fieldOrUpdates === 'object' && fieldOrUpdates !== null
-        ? fieldOrUpdates
-        : { [fieldOrUpdates]: value }
+      const updates = typeof fieldOrUpdates === 'object' && fieldOrUpdates !== null ? fieldOrUpdates : { [fieldOrUpdates]: value }
       const updated = [...prev.items]
       updated[idx] = { ...updated[idx], ...updates }
       return { ...prev, items: updated }
     })
+    setValidationError(null)
   }
 
   const computeSubtotal = () => {
@@ -266,6 +250,14 @@ export function AX_CreateInvoiceModal({
     e.preventDefault()
     if (invForm.items.length === 0 || isSaving) return
 
+    const validation = validateInvoiceItems(invForm.items, items, { invType: invForm.type })
+    if (!validation.isValid) {
+      axToast.error(validation.error)
+      setValidationError(validation.error)
+      return
+    }
+    setValidationError(null)
+
     setIsSaving(true)
     try {
       const newInv = buildInvoicePayload(false)
@@ -323,32 +315,10 @@ export function AX_CreateInvoiceModal({
               <div className="flex items-center gap-1.5">
                 <span className="text-xs font-bold text-on-surface-variant">الطرف:</span>
                 <div className="inline-flex rounded-full bg-surface-low p-0.5 border border-outline-variant/30">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setPartyKind('customer')
-                      setInvForm((prev) => ({ ...prev, partyName: clients[0]?.name || '' }))
-                    }}
-                    className={`px-2.5 py-0.5 rounded-full text-[11px] font-black transition-all cursor-pointer ${
-                      partyKind === 'customer'
-                        ? 'bg-primary text-white shadow-xs'
-                        : 'text-on-surface-variant hover:text-on-surface'
-                    }`}
-                  >
+                  <button type="button" onClick={() => { setPartyKind('customer'); setInvForm((prev) => ({ ...prev, partyName: clients[0]?.name || '' })); }} className={`px-2.5 py-0.5 rounded-full text-[11px] font-black transition-all cursor-pointer ${partyKind === 'customer' ? 'bg-primary text-white shadow-xs' : 'text-on-surface-variant hover:text-on-surface'}`}>
                     عميل
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setPartyKind('supplier')
-                      setInvForm((prev) => ({ ...prev, partyName: suppliers[0]?.companyName || suppliers[0]?.name || '' }))
-                    }}
-                    className={`px-2.5 py-0.5 rounded-full text-[11px] font-black transition-all cursor-pointer ${
-                      partyKind === 'supplier'
-                        ? 'bg-secondary text-white shadow-xs'
-                        : 'text-on-surface-variant hover:text-on-surface'
-                    }`}
-                  >
+                  <button type="button" onClick={() => { setPartyKind('supplier'); setInvForm((prev) => ({ ...prev, partyName: suppliers[0]?.companyName || suppliers[0]?.name || '' })); }} className={`px-2.5 py-0.5 rounded-full text-[11px] font-black transition-all cursor-pointer ${partyKind === 'supplier' ? 'bg-secondary text-white shadow-xs' : 'text-on-surface-variant hover:text-on-surface'}`}>
                     مورد
                   </button>
                 </div>
@@ -413,20 +383,12 @@ export function AX_CreateInvoiceModal({
         </div>
 
         <AX_InvoiceItemsEditor
-          items={items}
-          availableItems={availableItems}
-          invoiceItems={invForm.items}
-          invType={invForm.type}
-          warehouseId={invForm.warehouseId}
-          inventoryStock={inventoryStock}
-          getItemStock={getItemStock}
-          draftItem={draftItem}
-          onDraftItemChange={handleDraftItemChange}
-          onCommitDraftItem={handleCommitDraftItem}
-          onAddItem={handleDirectAddItem}
-          onRemoveItem={handleRemoveItem}
-          onItemRowChange={handleItemRowChange}
-          expandedRowIndex={expandedRowIndex}
+          items={items} availableItems={availableItems} invoiceItems={invForm.items}
+          invType={invForm.type} warehouseId={invForm.warehouseId} inventoryStock={inventoryStock}
+          getItemStock={getItemStock} draftItem={draftItem}
+          onDraftItemChange={handleDraftItemChange} onCommitDraftItem={handleCommitDraftItem}
+          onAddItem={handleDirectAddItem} onRemoveItem={handleRemoveItem}
+          onItemRowChange={handleItemRowChange} expandedRowIndex={expandedRowIndex}
           setExpandedRowIndex={setExpandedRowIndex}
         />
 
@@ -442,17 +404,19 @@ export function AX_CreateInvoiceModal({
         </div>
 
         <AX_InvoicePaymentSection
-          paymentStatus={paymentStatus}
-          setPaymentStatus={setPaymentStatus}
-          paidInput={paidInput}
-          setPaidInput={setPaidInput}
-          selectedTreasuryId={selectedTreasuryId}
-          setSelectedTreasuryId={setSelectedTreasuryId}
-          treasuryAccounts={treasuryAccounts}
-          currentTotal={currentTotal}
-          currentPaid={currentPaid}
-          currentRemaining={currentRemaining}
+          paymentStatus={paymentStatus} setPaymentStatus={setPaymentStatus}
+          paidInput={paidInput} setPaidInput={setPaidInput}
+          selectedTreasuryId={selectedTreasuryId} setSelectedTreasuryId={setSelectedTreasuryId}
+          treasuryAccounts={treasuryAccounts} currentTotal={currentTotal}
+          currentPaid={currentPaid} currentRemaining={currentRemaining}
         />
+
+        {validationError && (
+          <div role="alert" className="flex items-center gap-2 p-2.5 rounded-2xl bg-rose-500/10 border border-rose-500/30 text-rose-700 text-xs font-bold animate-in fade-in">
+            <AlertTriangle className="w-4 h-4 shrink-0 text-rose-600" />
+            <span>{validationError}</span>
+          </div>
+        )}
 
         <div className="flex items-center justify-end pt-2 border-t border-surface-container gap-2">
           <button type="button" onClick={onClose} className="px-5 py-2 rounded-full bg-surface-container text-on-surface-variant text-xs font-bold cursor-pointer">

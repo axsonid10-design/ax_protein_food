@@ -13,6 +13,7 @@ import {
 import { useAXStore } from '../../store/useAXStore'
 import { AX_CompanyDatePicker } from '../common/AX_CompanyDatePicker'
 import { formatCurrency, filterByDateRange } from '../../utils/reportCalculations'
+import { calculateFifoProfits } from '../../utils/fifoCalculations'
 
 import { AX_IncomeStatementReport } from './AX_IncomeStatementReport'
 import { AX_Ledger360Report } from './AX_Ledger360Report'
@@ -43,23 +44,19 @@ export function AX_ReportsManager() {
     const salesOnly = invoices.filter((i) => i.type === 'sale')
     const filteredSales = filterByDateRange(salesOnly, 'date', timeframe, customStart, customEnd)
 
+    const fifoResults = calculateFifoProfits(invoices, items, inventoryStock)
     let totalSales = 0
     let totalCogs = 0
-
-    const itemsCostMap = {}
-    items.forEach((it) => {
-      itemsCostMap[it.id] = Number(it.buyPrice) || 0
-    })
+    let grossProfit = 0
 
     filteredSales.forEach((inv) => {
       totalSales += Number(inv.subtotal) || Number(inv.total) || 0
-      ;(inv.items || []).forEach((line) => {
-        const cost = itemsCostMap[line.itemId] || Number(line.price) * 0.82
-        totalCogs += cost * (Number(line.quantity) || 1)
-      })
+      const p = fifoResults.salesProfits.get(inv.id)
+      if (p && p.profitStatus === 'calculated') {
+        totalCogs += Number(p.cogs) || 0
+        grossProfit += Number(p.profit) || 0
+      }
     })
-
-    const grossProfit = totalSales - totalCogs
     const totalCash = treasuryAccounts.reduce((sum, acc) => sum + (Number(acc.balance) || 0), 0)
     const totalClientDebts = clients.reduce((sum, c) => sum + (Number(c.balance) || 0), 0)
     const totalSupplierLiabilities = suppliers.reduce((sum, s) => sum + (Number(s.balance) || 0), 0)
@@ -295,6 +292,7 @@ export function AX_ReportsManager() {
           <AX_IncomeStatementReport
             invoices={invoices}
             items={items}
+            inventoryStock={inventoryStock}
             timeframe={timeframe}
             customStart={customStart}
             customEnd={customEnd}

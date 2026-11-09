@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react'
-import { X, Layers, Warehouse, AlertCircle, ArrowLeft } from 'lucide-react'
+import { X, Layers, Warehouse, AlertCircle, ArrowLeft, Package, Boxes, Scale } from 'lucide-react'
 import { AX_SearchableSelect } from '../common/AX_SearchableSelect'
 import { AX_CompanyDatePicker } from '../common/AX_CompanyDatePicker'
 import { AX_ConfirmModal } from '../common/AX_ConfirmModal'
@@ -18,7 +18,48 @@ export function AX_ItemOpeningBalanceModal({ isOpen, onClose, item, warehouses =
   const [openingQty, setOpeningQty] = useState('')
   const [openingDate, setOpeningDate] = useState(() => new Date().toISOString().split('T')[0])
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [entryMode, setEntryMode] = useState('dual')
+  const [cartonsPart, setCartonsPart] = useState('')
+  const [piecesPart, setPiecesPart] = useState('')
   const prevIsOpenRef = useRef(false)
+
+  const piecesPerCarton = Number(item?.piecesPerCarton || item?.pieces_per_carton || 0)
+  const weightPerCarton = Number(item?.weightPerCarton || item?.weight_per_carton || 0)
+  const subUnitName = item?.subUnitType || item?.sub_unit_type || 'قطعة'
+  const baseUnit = item?.unitType || 'كرتونة'
+  const isCarton = baseUnit === 'كرتونة'
+  const hasPieces = isCarton && piecesPerCarton > 1
+
+  const syncBreakdown = (val) => {
+    const num = Number(val)
+    if (!isNaN(num) && num > 0 && hasPieces) {
+      const c = Math.floor(num)
+      const p = Math.round((num - c) * piecesPerCarton)
+      setCartonsPart(c > 0 ? String(c) : '')
+      setPiecesPart(p > 0 ? String(p) : '')
+    } else {
+      setCartonsPart('')
+      setPiecesPart('')
+    }
+  }
+
+  const handleCartonsChange = (cVal) => {
+    setCartonsPart(cVal)
+    const c = Number(cVal) || 0
+    const p = Number(piecesPart) || 0
+    const total = piecesPerCarton > 0 ? c + (p / piecesPerCarton) : c
+    const rounded = Number.isInteger(total) ? total : Number(total.toFixed(4))
+    setOpeningQty(total > 0 ? String(rounded) : (cVal === '' && piecesPart === '' ? '' : '0'))
+  }
+
+  const handlePiecesChange = (pVal) => {
+    setPiecesPart(pVal)
+    const c = Number(cartonsPart) || 0
+    const p = Number(pVal) || 0
+    const total = piecesPerCarton > 0 ? c + (p / piecesPerCarton) : c
+    const rounded = Number.isInteger(total) ? total : Number(total.toFixed(4))
+    setOpeningQty(total > 0 ? String(rounded) : (cartonsPart === '' && pVal === '' ? '' : '0'))
+  }
 
   useEffect(() => {
     if (isOpen && !prevIsOpenRef.current) {
@@ -29,6 +70,7 @@ export function AX_ItemOpeningBalanceModal({ isOpen, onClose, item, warehouses =
       const match = (inventoryStock || []).find((s) => s.itemId === item?.id && s.warehouseId === initialWhId)
       if (match && match.openingBalance !== undefined) {
         setOpeningQty(String(match.openingBalance))
+        syncBreakdown(match.openingBalance)
         if (match.openingDate && match.openingDate !== 'غير محدد') {
           setOpeningDate(match.openingDate)
         } else {
@@ -36,6 +78,8 @@ export function AX_ItemOpeningBalanceModal({ isOpen, onClose, item, warehouses =
         }
       } else {
         setOpeningQty('')
+        setCartonsPart('')
+        setPiecesPart('')
         setOpeningDate(new Date().toISOString().split('T')[0])
       }
     }
@@ -70,11 +114,14 @@ export function AX_ItemOpeningBalanceModal({ isOpen, onClose, item, warehouses =
     const row = stockRows.find((r) => r.warehouseId === whId)
     if (row && row.openingBalance !== undefined) {
       setOpeningQty(String(row.openingBalance))
+      syncBreakdown(row.openingBalance)
       if (row.openingDate && row.openingDate !== 'غير محدد') {
         setOpeningDate(row.openingDate)
       }
     } else {
       setOpeningQty('')
+      setCartonsPart('')
+      setPiecesPart('')
     }
   }
 
@@ -198,24 +245,114 @@ export function AX_ItemOpeningBalanceModal({ isOpen, onClose, item, warehouses =
               </div>
             </div>
 
-            <div>
-              <label className="block text-xs font-black text-on-surface mb-1">
-                الكمية الافتتاحية ({item.unitType || 'كرتونة'}):
-              </label>
-              <div className="relative">
-                <input
-                  type="number"
-                  step="any"
-                  value={openingQty}
-                  onChange={(e) => setOpeningQty(e.target.value)}
-                  placeholder="أدخل كمية أول المدة..."
-                  required
-                  className="w-full h-11 px-4 rounded-2xl bg-surface-container-low border border-outline-variant/30 text-on-surface font-mono font-bold text-sm focus:outline-none focus:border-primary"
-                />
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-on-surface-variant">
-                  {item.unitType || 'كرتونة'}
-                </span>
+            <div className="space-y-3 p-3.5 rounded-2xl bg-surface-container-low/50 border border-outline-variant/30">
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <label className="text-xs font-black text-on-surface flex items-center gap-1.5">
+                  <Boxes className="w-4 h-4 text-primary" />
+                  <span>الكمية الافتتاحية ({baseUnit}):</span>
+                </label>
+                {hasPieces && (
+                  <div className="flex items-center p-0.5 bg-surface-lowest rounded-full border border-outline-variant/30 text-[11px] font-black">
+                    <button
+                      type="button"
+                      onClick={() => setEntryMode('dual')}
+                      className={`px-3 py-1 rounded-full transition-all cursor-pointer ${
+                        entryMode === 'dual'
+                          ? 'bg-primary text-white shadow-xs'
+                          : 'text-on-surface-variant hover:text-on-surface'
+                      }`}
+                    >
+                      كراتين + {subUnitName}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setEntryMode('total')}
+                      className={`px-3 py-1 rounded-full transition-all cursor-pointer ${
+                        entryMode === 'total'
+                          ? 'bg-primary text-white shadow-xs'
+                          : 'text-on-surface-variant hover:text-on-surface'
+                      }`}
+                    >
+                      إدخال إجمالي
+                    </button>
+                  </div>
+                )}
               </div>
+
+              {hasPieces && entryMode === 'dual' ? (
+                <div className="space-y-2.5">
+                  <div className="grid grid-cols-2 gap-2.5">
+                    <div>
+                      <span className="block text-[11px] font-bold text-on-surface-variant mb-1">
+                        عدد الكراتين الكاملة:
+                      </span>
+                      <div className="relative">
+                        <input
+                          type="number"
+                          min="0"
+                          step="1"
+                          value={cartonsPart}
+                          onChange={(e) => handleCartonsChange(e.target.value)}
+                          placeholder="مثلاً: 10"
+                          className="w-full h-10 px-3 pr-3 pl-12 rounded-xl bg-surface-lowest border border-outline-variant/30 text-on-surface font-mono font-bold text-xs focus:outline-none focus:border-primary"
+                        />
+                        <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[11px] font-bold text-on-surface-variant pointer-events-none">
+                          كرتونة
+                        </span>
+                      </div>
+                    </div>
+                    <div>
+                      <span className="block text-[11px] font-bold text-on-surface-variant mb-1">
+                        عدد الـ {subUnitName} الفردية:
+                      </span>
+                      <div className="relative">
+                        <input
+                          type="number"
+                          min="0"
+                          step="1"
+                          value={piecesPart}
+                          onChange={(e) => handlePiecesChange(e.target.value)}
+                          placeholder={`أقل من ${piecesPerCarton}`}
+                          className="w-full h-10 px-3 pr-3 pl-12 rounded-xl bg-surface-lowest border border-outline-variant/30 text-on-surface font-mono font-bold text-xs focus:outline-none focus:border-primary"
+                        />
+                        <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[11px] font-bold text-on-surface-variant pointer-events-none">
+                          {subUnitName}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="p-2.5 rounded-xl bg-surface-lowest border border-outline-variant/20 flex items-center justify-between text-xs font-bold text-on-surface">
+                    <span className="text-on-surface-variant text-[11px]">الرصيد الإجمالي المحسوب:</span>
+                    <span className="font-mono font-black text-amber-800">
+                      {openingQty || 0} كرتونة
+                      {piecesPerCarton > 0 && Number(openingQty) > 0 && (
+                        <span className="text-primary text-[11px] mr-1">
+                          ({Math.round(Number(openingQty) * piecesPerCarton)} {subUnitName})
+                        </span>
+                      )}
+                    </span>
+                  </div>
+                </div>
+              ) : (
+                <div className="relative">
+                  <input
+                    type="number"
+                    step="any"
+                    value={openingQty}
+                    onChange={(e) => {
+                      setOpeningQty(e.target.value)
+                      syncBreakdown(e.target.value)
+                    }}
+                    placeholder="أدخل كمية أول المدة..."
+                    required
+                    className="w-full h-11 px-4 rounded-2xl bg-surface-lowest border border-outline-variant/30 text-on-surface font-mono font-bold text-sm focus:outline-none focus:border-primary"
+                  />
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-on-surface-variant pointer-events-none">
+                    {baseUnit}
+                  </span>
+                </div>
+              )}
             </div>
 
             <div className="pt-2">

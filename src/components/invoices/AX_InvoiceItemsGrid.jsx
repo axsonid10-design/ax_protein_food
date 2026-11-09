@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react'
 import { Search, Plus, Minus, Check, Layers } from 'lucide-react'
 import { getItemDisplayName } from '../../utils/AX_ItemNameHelper'
 import { resolveInvoiceUnitPrice, getCartonEquivalent } from '../../utils/pricingCalculations'
+import { calculateDynamicRemainingStock, getRemainingStockBadge } from './invoiceValidationHelper'
 import { axToast } from '../common/AX_Toast'
 
 export function AX_InvoiceItemsGrid({
@@ -193,8 +194,11 @@ export function AX_InvoiceItemsGrid({
                   )
                   const isAdded = Boolean(matchingRow)
                   const addedQty = matchingRow ? Number(matchingRow.quantity) || 0 : 0
-                  const avail = getStock(item.id)
-                  const isNegativeStock = avail <= 0
+                  const avail = isSale
+                    ? calculateDynamicRemainingStock(item.id, warehouseId, inventoryStock, invoiceItems, items)
+                    : getStock(item.id)
+                  const stockBadge = getRemainingStockBadge(avail)
+                  const isNegativeStock = isSale ? avail < 0 : avail <= 0
 
                   return (
                     <div
@@ -229,12 +233,8 @@ export function AX_InvoiceItemsGrid({
                               </button>
                             ))}
                           </div>
-                          <span className={`text-[10px] font-mono font-black px-1.5 py-0.5 rounded-md border shrink-0 ${
-                            avail > 0
-                              ? 'bg-emerald-500/10 text-emerald-700 border-emerald-500/20'
-                              : 'bg-rose-600 text-white border-rose-700 font-black'
-                          }`}>
-                            {avail > 0 ? `متاح: ${avail}` : avail === 0 ? 'رصيد 0 (سحب سالب)' : `سالب: ${avail}`}
+                          <span className={`text-[10px] font-mono font-black px-1.5 py-0.5 rounded-md border shrink-0 ${stockBadge.className}`}>
+                            {stockBadge.text}
                           </span>
                           {isAdded && (
                             <span className="w-4 h-4 rounded-full bg-primary text-white flex items-center justify-center shrink-0">

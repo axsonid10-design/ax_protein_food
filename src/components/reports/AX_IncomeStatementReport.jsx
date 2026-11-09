@@ -16,10 +16,12 @@ import {
   filterByDateRange,
   exportToCsv,
 } from '../../utils/reportCalculations'
+import { calculateFifoProfits } from '../../utils/fifoCalculations'
 
 export function AX_IncomeStatementReport({
   invoices = [],
   items = [],
+  inventoryStock = [],
   timeframe = 'all',
   customStart = '',
   customEnd = '',
@@ -27,45 +29,60 @@ export function AX_IncomeStatementReport({
   const [currentPage, setCurrentPage] = useState(1)
   const pageSize = 15
 
-  const itemsCostMap = useMemo(() => {
-    const map = {}
-    items.forEach((it) => {
-      map[it.id] = Number(it.buyPrice) || 0
-    })
-    return map
-  }, [items])
-
   const filteredSales = useMemo(() => {
     const salesOnly = invoices.filter((inv) => inv.type === 'sale')
     return filterByDateRange(salesOnly, 'date', timeframe, customStart, customEnd)
   }, [invoices, timeframe, customStart, customEnd])
 
   const calculations = useMemo(() => {
+    const fifoResults = calculateFifoProfits(invoices, items, inventoryStock)
+
     let grossSales = 0
     let totalTransport = 0
     let totalLoading = 0
     let totalCogs = 0
+    let grossProfit = 0
+    let pendingCount = 0
+    let calculatedCount = 0
 
     const rows = filteredSales.map((inv) => {
-      let invCogs = 0
       const invItems = inv.items || []
-
-      invItems.forEach((line) => {
-        const unitCost = itemsCostMap[line.itemId] || Number(line.price) * 0.82
-        const lineCost = unitCost * Number(line.quantity || 1)
-        invCogs += lineCost
-      })
-
       const subtotal = Number(inv.subtotal) || Number(inv.total) || 0
       const transport = Number(inv.transportCost) || 0
       const loading = Number(inv.loadingCost) || 0
-      const profit = subtotal - invCogs
-      const margin = subtotal > 0 ? (profit / subtotal) * 100 : 0
 
       grossSales += subtotal
       totalTransport += transport
       totalLoading += loading
-      totalCogs += invCogs
+
+      const fifoData = fifoResults.salesProfits.get(inv.id)
+      const isPending = !fifoData || fifoData.profitStatus === 'pending' || fifoData.isProfitPending
+
+      if (isPending) {
+        pendingCount++
+        return {
+          id: inv.id,
+          code: inv.code,
+          date: inv.date,
+          partyName: inv.partyName,
+          itemsCount: invItems.length,
+          subtotal,
+          cogs: null,
+          profit: null,
+          margin: null,
+          profitStatus: 'pending',
+          transport,
+          loading,
+        }
+      }
+
+      calculatedCount++
+      const cogs = Number(fifoData.cogs) || 0
+      const profit = Number(fifoData.profit) || 0
+      const margin = typeof fifoData.profitMargin === 'number' ? fifoData.profitMargin : (subtotal > 0 ? (profit / subtotal) * 100 : 0)
+
+      totalCogs += cogs
+      grossProfit += profit
 
       return {
         id: inv.id,
@@ -74,19 +91,20 @@ export function AX_IncomeStatementReport({
         partyName: inv.partyName,
         itemsCount: invItems.length,
         subtotal,
-        cogs: invCogs,
+        cogs,
         profit,
         margin,
+        profitStatus: 'calculated',
         transport,
         loading,
       }
     })
 
-    const grossProfit = grossSales - totalCogs
     const grossMarginPct = grossSales > 0 ? (grossProfit / grossSales) * 100 : 0
     const operatingExpenses = totalTransport + totalLoading
     const netOperatingProfit = grossProfit - operatingExpenses
     const netMarginPct = grossSales > 0 ? (netOperatingProfit / grossSales) * 100 : 0
+    const hasPending = pendingCount > 0
 
     return {
       grossSales,
@@ -96,9 +114,12 @@ export function AX_IncomeStatementReport({
       operatingExpenses,
       netOperatingProfit,
       netMarginPct,
+      hasPending,
+      pendingCount,
+      calculatedCount,
       rows,
     }
-  }, [filteredSales, itemsCostMap])
+  }, [invoices, items, inventoryStock, filteredSales])
 
   const totalPages = Math.ceil(calculations.rows.length / pageSize) || 1
   const paginatedRows = useMemo(() => {
@@ -124,9 +145,9 @@ export function AX_IncomeStatementReport({
       r.partyName,
       r.itemsCount,
       r.subtotal,
-      r.cogs,
-      r.profit,
-      r.margin.toFixed(1),
+      r.profitStatus === 'pending' ? 'قيد الاحتساب' : r.cogs,
+      r.profitStatus === 'pending' ? 'قيد الاحتساب' : r.profit,
+      r.profitStatus === 'pending' ? 'قيد الاحتساب' : r.margin.toFixed(1),
       r.transport + r.loading,
     ])
     exportToCsv(`تقرير_الأرباح_والخسائر_${new Date().toISOString().split('T')[0]}`, headers, data)
@@ -191,7 +212,9 @@ export function AX_IncomeStatementReport({
             {formatCurrency(calculations.totalCogs)}
           </div>
           <div className="text-[10px] font-bold text-on-surface-variant mt-0.5">
-            محسوبة بسعر شراء الأصناف
+            {calculations.hasPending
+              ? `محسوبة بنظام FIFO (${calculations.pendingCount} معلق)`
+              : 'محسوبة بنظام الوارد أولاً صادر أولاً (FIFO)'}
           </div>
         </div>
 
@@ -204,7 +227,9 @@ export function AX_IncomeStatementReport({
             {formatCurrency(calculations.grossProfit)}
           </div>
           <div className="text-[10px] font-bold text-emerald-700 mt-0.5">
-            هامش ربح {calculations.grossMarginPct.toFixed(1)}%
+            {calculations.hasPending
+              ? `هامش ${calculations.grossMarginPct.toFixed(1)}% (${calculations.pendingCount} قيد الاحتساب)`
+              : `هامش ربح ${calculations.grossMarginPct.toFixed(1)}%`}
           </div>
         </div>
 
@@ -265,15 +290,31 @@ export function AX_IncomeStatementReport({
                       {formatCurrency(r.subtotal)}
                     </td>
                     <td className="py-2.5 px-3.5 text-left font-mono text-amber-700 whitespace-nowrap">
-                      {formatCurrency(r.cogs)}
+                      {r.profitStatus === 'pending' ? (
+                        <span className="text-on-surface-variant text-[11px]">قيد الاحتساب</span>
+                      ) : (
+                        formatCurrency(r.cogs)
+                      )}
                     </td>
                     <td className="py-2.5 px-3.5 text-left font-mono font-black text-emerald-600 whitespace-nowrap">
-                      {formatCurrency(r.profit)}
+                      {r.profitStatus === 'pending' ? (
+                        <span className="px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-700 border border-amber-500/20 text-[10px] font-black">
+                          قيد الاحتساب
+                        </span>
+                      ) : (
+                        formatCurrency(r.profit)
+                      )}
                     </td>
                     <td className="py-2.5 px-3.5 text-center font-mono whitespace-nowrap">
-                      <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-700 border border-emerald-500/20 text-[10px]">
-                        {r.margin.toFixed(1)}%
-                      </span>
+                      {r.profitStatus === 'pending' ? (
+                        <span className="px-2 py-0.5 rounded-full bg-surface-low text-on-surface-variant border border-outline-variant/30 text-[10px]">
+                          —
+                        </span>
+                      ) : (
+                        <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-700 border border-emerald-500/20 text-[10px]">
+                          {r.margin.toFixed(1)}%
+                        </span>
+                      )}
                     </td>
                   </tr>
                 ))
@@ -302,7 +343,15 @@ export function AX_IncomeStatementReport({
                   </div>
                   <div>
                     <span className="text-on-surface-variant block text-[10px]">الربح:</span>
-                    <span className="font-mono font-black text-emerald-600">{formatCurrency(r.profit)} ({r.margin.toFixed(1)}%)</span>
+                    {r.profitStatus === 'pending' ? (
+                      <span className="px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-700 border border-amber-500/20 text-[10px] font-black inline-block mt-0.5">
+                        قيد الاحتساب
+                      </span>
+                    ) : (
+                      <span className="font-mono font-black text-emerald-600">
+                        {formatCurrency(r.profit)} ({r.margin.toFixed(1)}%)
+                      </span>
+                    )}
                   </div>
                 </div>
               </div>

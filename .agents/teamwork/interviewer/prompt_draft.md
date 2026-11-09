@@ -1,46 +1,53 @@
-Use the full team. Implement a 3-stage confirmation workflow for modifying the opening stock balance ("رصيد أول المدة") of items per warehouse in AX_PROTEIN_FOOD, with interactive browser verification and multi-engineer calculation audits.
+Refactor and fix invoice creation timestamp formatting, date range filtering, dynamic stock deduction, FIFO cost and profit calculation, and expense registration forms in AX_PROTEIN_FOOD.
 
 Working directory: d:\AXONID_PROJECTS\AX_FROZEN_FOODS
 Integrity mode: development
 
 ## Requirements
 
-### R1. Multi-Stage Opening Stock Modification Workflow
-Provide a feature to change the opening stock balance ("رصيد أول المدة") of any item across warehouses, accessible from the item card/details modal in the items directory (`src/components/items/`). The workflow must enforce a strict 3-stage confirmation sequence:
-1. Clicking "تغيير رصيد أول المدة" triggers a first confirmation modal asking "هل أنت متأكد؟".
-2. Confirming displays a warehouse view allowing selection of the target warehouse and entry of the new opening quantity (and unit).
-3. Submitting the new quantity triggers a second confirmation modal asking "هل أنت متأكد؟".
-4. A final confirmation action ("تأكيد أخير") applies the modification.
-All confirmation modals and actions must conform to project invariants (`AX_ConfirmModal` and pill-shaped action buttons `rounded-full`).
+### R1. Invoice Creation Timestamp & 12-Hour Format
+Display the invoice creation timestamp alongside the invoice number in both Sales and Purchases invoices. Format all time displays using a 12-hour clock (hh:mm AM/PM) instead of 24-hour time across invoice headers, lists, and detail views.
 
-### R2. Inventory Recalculation & Data Integrity
-Updating the opening stock balance must update `ax_inventory_stock` for the specified `item_id` and `warehouse_id` and invoke `recalculateItemStock` (in `src/components/warehouses/itemMovementHelpers.js`). The update must recompute running balances accurately without creating duplicate movement records, corrupting historical transactions, or introducing accounting discrepancies.
+### R2. Invoice Date Range & "Today" Filter
+Fix the date filter in both Sales and Purchases invoice modules so that selecting "Today" strictly displays invoices created on the current calendar day. Ensure custom date range filters accurately scope invoices within the selected start and end dates.
 
-### R3. Interactive Browser Verification & Clean State Restoration
-Verify the complete workflow interactively using mouse actions in the browser via Chrome DevTools MCP on the local running server (http://localhost:8182). Select an existing item and warehouse, execute the multi-step opening balance modification, refresh the page in the browser to verify data persistence and balance calculations, and then cleanly restore the item's original opening stock balance so that no test data or modified balances remain in the system.
+### R3. Dynamic Available Stock Indicator & Zero-Value Validation in Sales Invoices
+In the Sales Invoice creation interface, dynamically decrement and display the remaining available stock for each product in real-time as item quantities are entered. If the entered quantity exceeds available stock, display the remaining stock as a negative number while continuing to allow the invoice to be saved. Prevent saving the invoice and show a clear alert if any product line has a unit sale price or quantity that is zero or empty.
 
-### R4. Multi-Engineer Calculation & Architectural Review
-Subject all stock calculation routines, movement helper functions, and state updates to thorough review across multiple team members to ensure zero calculation skew and complete compliance with project invariants (file length <= 500 lines, zero code comments, no `window.confirm`).
+### R4. Purchase Cost Tracking & Sales Profit Calculation (FIFO)
+Track inventory items with multiple purchase costs across purchase batches. When selling items, calculate profit using First-In, First-Out (FIFO) matching against available purchase batches. If a product's purchase price was not determined at the time of purchase, defer profit calculation safely and display profit as pending/uncalculated.
+
+### R5. Expense Registration Form Simplification
+Refactor the expense registration modal by completely removing the "Cost Center" selection and the "Description/Statement of Expense/Project" field. Retain the hierarchical expense classification structure (Main Category, Sub-category, Secondary Item). Reposition the "Total Expense Amount" field to appear at the bottom, directly above the settlement and payment method section.
 
 ## Acceptance Criteria
 
-### Workflow & Confirmation Modals
-- [ ] Clicking "تغيير رصيد أول المدة" in the item details view opens an initial confirmation modal asking "هل أنت متأكد؟".
-- [ ] Confirming the initial prompt opens the warehouse selection and quantity entry view.
-- [ ] Submitting the updated quantity opens a second confirmation modal asking "هل أنت متأكد؟".
-- [ ] Clicking the final confirmation button ("تأكيد أخير") applies the updated opening balance.
-- [ ] Modals use `AX_ConfirmModal` and buttons are styled with pill shapes (`rounded-full`).
+### Invoice Formatting & Filtering
+- [ ] Both Sales and Purchases invoices show creation timestamp formatted in 12-hour clock with AM/PM indicator.
+- [ ] Invoices list filtered by "Today" returns exclusively records created on the current calendar day.
+- [ ] Invoices list filtered by custom date ranges includes all records within the range and excludes records outside of it.
 
-### Calculation & Consistency
-- [ ] Updating opening balance updates `ax_inventory_stock` and triggers recalculation via `recalculateItemStock`.
-- [ ] Recalculated stock balances and movements reflect the new opening balance without duplicate entries or numerical drift.
-- [ ] Reloading the browser page confirms that the modified balance persists and displays correctly across item and warehouse views.
+### Sales Stock & Zero Validation
+- [ ] Entering quantities in sales invoice rows decrements the displayed available stock dynamically in real-time.
+- [ ] If entered quantity exceeds available stock, remaining stock displays as negative and invoice saving remains allowed.
+- [ ] Attempting to save a sales invoice with any item whose unit sale price is 0, empty, or unentered displays an alert and blocks submission.
+- [ ] Attempting to save a sales invoice with any item whose quantity is 0, empty, or unentered displays an alert and blocks submission.
 
-### Interactive Browser Verification & Teardown
-- [ ] The modification workflow is executed and verified via mouse clicks in the browser at http://localhost:8182.
-- [ ] After browser verification, the tested item and warehouse opening balance is restored to its exact initial value.
-- [ ] A post-verification audit confirms zero remaining test records, zero uncommitted modifications, and 100% calculation consistency across all inventory data.
+### Multi-Price Inventory & FIFO Profit
+- [ ] Multiple purchase invoices for the same product at different prices create distinct cost batches with their respective quantities.
+- [ ] Sales profit calculation depletes purchase batches using FIFO (earliest purchased stock cost first).
+- [ ] Items sold without a defined purchase cost do not cause calculation errors and indicate uncalculated or pending profit.
 
-### Architectural Standards
-- [ ] Calculation logic and code changes pass multi-party review with zero errors.
-- [ ] All modified and created files are <= 500 lines and contain zero comments in code.
+### Expenses Form Structure
+- [ ] The "Cost Center" field and selection dropdown are absent from the expense registration modal.
+- [ ] The "Description / Statement of Expense / Project" field is absent from the expense registration modal.
+- [ ] The hierarchical expense classification (Main Category, Sub-category, Secondary Item) remains present and functional.
+- [ ] The "Total Expense Amount" input field is positioned directly before the settlement and payment method section.
+
+### Verification & Test Suite
+- [ ] Existing automated tests in `tests/*.test.js` pass, with new/updated tests covering the modified invoice, expense, and calculation workflows.
+- [ ] Browser/E2E test verification confirms UI calculations, form validations, and clean console without runtime errors.
+
+## Verification Resources
+- Existing test suite located in `tests/*.test.js`.
+- Browser/E2E verification tests checking invoice workflows, stock calculations, modal behaviors, and expense submissions.

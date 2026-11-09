@@ -1,16 +1,22 @@
-import React, { useState } from 'react'
+import React, { useState, useMemo } from 'react'
 import { Printer, X, RotateCcw, Edit3, Trash2 } from 'lucide-react'
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock'
 import { getItemDisplayName } from '../../utils/AX_ItemNameHelper'
 import { AX_InvoicePrintModal } from './AX_InvoicePrintModal'
 import { AX_InvoiceReturnModal } from './AX_InvoiceReturnModal'
 import { AX_ConfirmModal } from '../common/AX_ConfirmModal'
+import { formatTime12H, formatDateTime12H } from '../../utils/dateHelpers'
+import { useAXStore } from '../../store/useAXStore'
+import { getInvoiceFifoProfit } from '../../utils/fifoCalculations'
 
 export function AX_InvoiceDetailsModal({
   invoice,
   onClose,
   warehouses = [],
   treasuryAccounts = [],
+  invoices: invoicesProp,
+  items: itemsProp,
+  inventoryStock: inventoryStockProp,
   onSaveReturn,
   onEdit,
   onDelete,
@@ -19,6 +25,17 @@ export function AX_InvoiceDetailsModal({
   const [showPrintModal, setShowPrintModal] = useState(false)
   const [showReturnModal, setShowReturnModal] = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+
+  const store = useAXStore()
+  const effectiveInvoices = invoicesProp?.length ? invoicesProp : (store.invoices || [])
+  const effectiveItems = itemsProp?.length ? itemsProp : (store.items || [])
+  const effectiveStock = inventoryStockProp?.length ? inventoryStockProp : (store.inventoryStock || [])
+
+  const fifoProfit = useMemo(() => {
+    if (!invoice || invoice.type !== 'sale') return null
+    return getInvoiceFifoProfit(invoice, effectiveInvoices, effectiveItems, effectiveStock)
+  }, [invoice, effectiveInvoices, effectiveItems, effectiveStock])
+
   if (!invoice) return null
 
   const items = invoice.items || []
@@ -68,6 +85,11 @@ export function AX_InvoiceDetailsModal({
               <span className="font-mono text-xs font-bold text-primary">
                 {invoice.code}
               </span>
+              {(invoice.createdAt || invoice.created_at) && (
+                <span className="text-[10px] text-on-surface-variant font-mono">
+                  {formatTime12H(invoice.createdAt || invoice.created_at)}
+                </span>
+              )}
               <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black border ${getTypeStyle(invoice.type)}`}>
                 {getTypeLabel(invoice.type)}
               </span>
@@ -89,7 +111,7 @@ export function AX_InvoiceDetailsModal({
             <div className="flex items-center gap-3 text-xs font-mono text-on-surface-variant mt-1">
               <span>تاريخ الفاتورة: <strong className="text-on-surface">{invoice.date || invoice.operationalDate || '—'}</strong></span>
               {(invoice.createdAt || invoice.created_at) && (
-                <span>تاريخ القيد: <strong className="text-on-surface">{invoice.createdAt || invoice.created_at}</strong></span>
+                <span>تاريخ القيد: <strong className="text-on-surface">{formatDateTime12H(invoice.createdAt || invoice.created_at)}</strong></span>
               )}
             </div>
           </div>
@@ -192,6 +214,20 @@ export function AX_InvoiceDetailsModal({
             <span>شروط السداد:</span>
             <span className="font-bold">{paymentTerms}</span>
           </div>
+          {invoice.type === 'sale' && fifoProfit && (
+            <div className="flex justify-between items-center pt-1 border-t border-surface-container text-xs">
+              <span className="text-on-surface-variant font-bold">مجمل ربح الفاتورة (FIFO):</span>
+              {fifoProfit.profitStatus === 'pending' ? (
+                <span className="px-2.5 py-0.5 rounded-full bg-amber-500/10 text-amber-700 border border-amber-500/20 text-[10px] font-black">
+                  قيد الاحتساب (تكلفة الشراء غير محددة)
+                </span>
+              ) : (
+                <span className="font-mono font-black text-emerald-600">
+                  {fifoProfit.profit?.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ج.م ({fifoProfit.profitMargin?.toFixed(1)}%)
+                </span>
+              )}
+            </div>
+          )}
         </div>
       </div>
 

@@ -4,6 +4,7 @@ import { AX_SearchableSelect } from '../common/AX_SearchableSelect'
 import { AX_InvoiceItemsGrid } from './AX_InvoiceItemsGrid'
 import { getItemDisplayName } from '../../utils/AX_ItemNameHelper'
 import { resolveInvoiceUnitPrice, getCartonEquivalent } from '../../utils/pricingCalculations'
+import { calculateDynamicRemainingStock, getRemainingStockBadge } from './invoiceValidationHelper'
 
 export function AX_InvoiceItemsEditor({
   items = [],
@@ -29,6 +30,13 @@ export function AX_InvoiceItemsEditor({
     if (!warehouseId || !itemId) return 0
     const row = (inventoryStock || []).find((s) => s.warehouseId === warehouseId && s.itemId === itemId)
     return Number(row?.quantity) || 0
+  }
+
+  const getDynamicStock = (itemId) => {
+    if (invType === 'sale') {
+      return calculateDynamicRemainingStock(itemId, warehouseId, inventoryStock, invoiceItems, items)
+    }
+    return getStock(itemId)
   }
 
   const handleUnitChange = (idx, newUnit) => {
@@ -181,15 +189,15 @@ export function AX_InvoiceItemsEditor({
             </div>
 
             <div className="flex items-center gap-2">
-              {invType === 'sale' && draftItem?.itemId ? (
-                <span className={`text-[11px] font-mono font-bold px-2 py-0.5 rounded-full border ${
-                  getStock(draftItem.itemId) > 0
-                    ? 'bg-emerald-500/10 text-emerald-700 border-emerald-500/30'
-                    : 'bg-rose-500/10 text-rose-700 border-rose-500/30'
-                }`}>
-                  المتاح بالمخزن: {getStock(draftItem.itemId)} {items.find((i) => i.id === draftItem.itemId)?.unitType || 'كرتونة'}
-                </span>
-              ) : <span />}
+              {invType === 'sale' && draftItem?.itemId ? (() => {
+                const draftDynamic = getDynamicStock(draftItem.itemId)
+                const badge = getRemainingStockBadge(draftDynamic)
+                return (
+                  <span className={`text-[11px] font-mono font-bold px-2 py-0.5 rounded-full border ${badge.className}`}>
+                    {badge.text} {items.find((i) => i.id === draftItem.itemId)?.unitType || 'كرتونة'}
+                  </span>
+                )
+              })() : <span />}
 
               <button
                 type="button"
@@ -222,7 +230,11 @@ export function AX_InvoiceItemsEditor({
             const subUnit = Number(itObj?.piecesPerCarton || itObj?.pieces_per_carton) > 0 ? (itObj?.subUnitType || itObj?.sub_unit_type || 'قطعة') : null
             const availableUnits = Array.from(new Set([itObj?.unitType || 'كرتونة', 'كيلو', subUnit].filter(Boolean)))
 
-            const isNegativeStock = invType === 'sale' && (getStock(row.itemId) <= 0 || getStock(row.itemId) < getCartonEquivalent(row.quantity, currentUnit, itObj))
+            const remStock = getDynamicStock(row.itemId)
+            const stockBadge = getRemainingStockBadge(remStock)
+            const isNegativeStock = invType === 'sale' && remStock < 0
+            const isQtyInvalid = row.quantity === '' || row.quantity === null || row.quantity === undefined || Number(row.quantity) <= 0
+            const isPriceInvalid = row.price === '' || row.price === null || row.price === undefined || Number(row.price) <= 0
 
             return (
               <div
@@ -242,12 +254,8 @@ export function AX_InvoiceItemsEditor({
                       {getItemDisplayName(itObj || row)}
                     </span>
                     {invType === 'sale' && (
-                      <span className={`text-[10px] font-mono font-bold px-1.5 py-0.5 rounded border shrink-0 ${
-                        !isNegativeStock
-                          ? 'bg-emerald-500/10 text-emerald-700 border-emerald-500/20'
-                          : 'bg-rose-600 text-white border-rose-700 font-black'
-                      }`}>
-                        {isNegativeStock ? `سالب: رصيد المخزن (${getStock(row.itemId)})` : `متاح: ${getStock(row.itemId)}`}
+                      <span className={`text-[10px] font-mono font-bold px-1.5 py-0.5 rounded border shrink-0 ${stockBadge.className}`}>
+                        {stockBadge.text}
                       </span>
                     )}
                   </div>
@@ -287,7 +295,9 @@ export function AX_InvoiceItemsEditor({
                   </div>
 
                   <div className="flex items-center gap-2">
-                    <div className="flex items-center gap-1 bg-surface-lowest px-2 py-0.5 rounded-xl border border-outline-variant/40 focus-within:border-primary">
+                    <div className={`flex items-center gap-1 bg-surface-lowest px-2 py-0.5 rounded-xl border focus-within:border-primary ${
+                      isQtyInvalid ? 'border-rose-500 ring-1 ring-rose-500/40 bg-rose-500/5' : 'border-outline-variant/40'
+                    }`}>
                       <label className="text-[10px] font-bold text-on-surface-variant">الكمية:</label>
                       <input
                         type="number"
@@ -300,7 +310,9 @@ export function AX_InvoiceItemsEditor({
                       <span className="text-[10px] font-bold text-on-surface-variant">{currentUnit}</span>
                     </div>
 
-                    <div className="flex items-center gap-1 bg-surface-lowest px-2 py-0.5 rounded-xl border border-primary/40 focus-within:border-primary focus-within:ring-1 focus-within:ring-primary shadow-2xs">
+                    <div className={`flex items-center gap-1 bg-surface-lowest px-2 py-0.5 rounded-xl border shadow-2xs ${
+                      isPriceInvalid ? 'border-rose-500 ring-1 ring-rose-500/40 bg-rose-500/5' : 'border-primary/40 focus-within:border-primary focus-within:ring-1 focus-within:ring-primary'
+                    }`}>
                       <label className="text-[10px] font-bold text-primary">السعر:</label>
                       <input
                         type="number"

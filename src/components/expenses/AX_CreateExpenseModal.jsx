@@ -5,7 +5,6 @@ import { useAXStore } from '../../store/useAXStore.js'
 import { AX_CompanyDatePicker } from '../common/AX_CompanyDatePicker.jsx'
 import { AX_SearchableSelect } from '../common/AX_SearchableSelect.jsx'
 import { AX_ExpenseCostCenterHierarchySelect } from './AX_ExpenseCostCenterHierarchySelect.jsx'
-import { AX_ExpenseStatementAutocomplete } from './AX_ExpenseStatementAutocomplete.jsx'
 import {
   EXPENSE_COST_CENTER_TYPES,
   createExpenseRecord,
@@ -19,12 +18,10 @@ export function AX_CreateExpenseModal({ isOpen, onClose, onCreated }) {
 
   const defaultTreasury = useMemo(() => treasuryAccounts.find((t) => t.type === 'cash') || treasuryAccounts[0], [treasuryAccounts])
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10))
-  const [costCenter, setCostCenter] = useState({ entityType: EXPENSE_COST_CENTER_TYPES.WAREHOUSE, entityId: '', entityName: '' })
   const [selectedMainCategoryId, setSelectedMainCategoryId] = useState('')
   const [selectedSubCategoryId, setSelectedSubCategoryId] = useState('')
   const [selectedSecondaryCategoryId, setSelectedSecondaryCategoryId] = useState('')
   const [categoryNames, setCategoryNames] = useState({ mainCategoryName: '', subCategoryName: '', secondaryCategoryName: '' })
-  const [title, setTitle] = useState('')
   const [payeeName, setPayeeName] = useState('')
   const [totalAmount, setTotalAmount] = useState('')
   const [paymentType, setPaymentType] = useState('immediate')
@@ -109,9 +106,7 @@ export function AX_CreateExpenseModal({ isOpen, onClose, onCreated }) {
   const handleSubmit = async (e) => {
     e.preventDefault()
     setErrorMessage('')
-    if (!costCenter.entityType) { setErrorMessage('يرجى تحديد مركز التكلفة'); return }
     if (!selectedMainCategoryId) { setErrorMessage('يرجى اختيار البند الرئيسي للمصروف'); return }
-    if (!title.trim()) { setErrorMessage('يرجى إدخال بيان / وصف المصروف'); return }
     if (parsedTotal <= 0) { setErrorMessage('يرجى إدخال مبلغ صحيح للمصروف'); return }
 
     if (paymentType === 'immediate') {
@@ -125,13 +120,32 @@ export function AX_CreateExpenseModal({ isOpen, onClose, onCreated }) {
       if (Math.abs(instSum - parsedTotal) > 0.1) { setErrorMessage(`مجموع الأقساط (${instSum} ج.م) لا يساوي قيمة المصروف (${parsedTotal} ج.م)`); return }
     }
 
+    const synthesizedTitle = [
+      categoryNames.mainCategoryName,
+      categoryNames.subCategoryName,
+      categoryNames.secondaryCategoryName,
+    ].filter(Boolean).join(' ← ') || 'مصروف تشغيلي'
+
     setIsSubmitting(true)
     try {
       const payload = {
-        date, costCenter, mainCategoryId: selectedMainCategoryId, mainCategoryName: categoryNames.mainCategoryName,
-        subCategoryId: selectedSubCategoryId, subCategoryName: categoryNames.subCategoryName,
-        secondaryCategoryId: selectedSecondaryCategoryId, secondaryCategoryName: categoryNames.secondaryCategoryName,
-        title: title.trim(), description: title.trim(), payeeName: payeeName.trim() || 'جهة الصرف', totalAmount: parsedTotal, paymentType,
+        date,
+        costCenter: {
+          entityType: EXPENSE_COST_CENTER_TYPES.GENERAL,
+          entityId: null,
+          entityName: 'عام',
+        },
+        mainCategoryId: selectedMainCategoryId,
+        mainCategoryName: categoryNames.mainCategoryName,
+        subCategoryId: selectedSubCategoryId,
+        subCategoryName: categoryNames.subCategoryName,
+        secondaryCategoryId: selectedSecondaryCategoryId,
+        secondaryCategoryName: categoryNames.secondaryCategoryName,
+        title: synthesizedTitle,
+        description: synthesizedTitle,
+        payeeName: payeeName.trim() || 'جهة الصرف',
+        totalAmount: parsedTotal,
+        paymentType,
         payments: payments.map((p) => ({ treasuryId: p.treasuryId, treasuryName: p.treasuryName, amount: parseFloat(p.amount) || 0, method: p.method, notes: p.notes })),
         installments: installments.map((inst, idx) => ({ installmentNumber: idx + 1, dueDate: inst.dueDate, amount: parseFloat(inst.amount) || 0, notes: inst.notes || '' })),
         notes: notes.trim(),
@@ -149,7 +163,7 @@ export function AX_CreateExpenseModal({ isOpen, onClose, onCreated }) {
             <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center text-primary border border-primary/20"><Receipt className="w-5 h-5" /></div>
             <div>
               <h2 className="text-base sm:text-lg font-black text-on-surface">تسجيل مصروف تشغيلي جديد</h2>
-              <p className="text-xs font-bold text-on-surface-variant">ربط بمركز التكلفة وتقسيم السداد وجدولة الأقساط</p>
+              <p className="text-xs font-bold text-on-surface-variant">تصنيف وبند المصروف وتقسيم السداد وجدولة الأقساط</p>
             </div>
           </div>
           <button type="button" onClick={onClose} className="w-9 h-9 rounded-full bg-surface-lowest hover:bg-surface-container border border-outline-variant/30 flex items-center justify-center text-on-surface-variant cursor-pointer"><X className="w-5 h-5" /></button>
@@ -164,30 +178,42 @@ export function AX_CreateExpenseModal({ isOpen, onClose, onCreated }) {
               <AX_CompanyDatePicker value={date} onChange={setDate} />
             </div>
             <div>
-              <label className="block text-xs font-bold text-on-surface mb-1">إجمالي قيمة المصروف (ج.م) <span className="text-red-500">*</span></label>
-              <input type="number" step="0.01" min="0" value={totalAmount} onChange={(e) => { setTotalAmount(e.target.value); if (paymentType === 'immediate') setPayments((prev) => prev.length === 1 ? [{ ...prev[0], amount: e.target.value }] : prev) }} placeholder="0.00" className="w-full h-11 px-3.5 bg-surface-lowest border border-outline-variant/40 rounded-2xl text-base font-black text-on-surface focus:outline-none focus:border-primary" />
+              <label className="block text-xs font-bold text-on-surface mb-1">جهة الصرف / المستفيد (اختياري)</label>
+              <input
+                type="text"
+                value={payeeName}
+                onChange={(e) => setPayeeName(e.target.value)}
+                placeholder="اسم المستلم أو الشركة..."
+                className="w-full h-11 px-3.5 bg-surface-lowest border border-outline-variant/40 rounded-2xl text-xs font-bold text-on-surface focus:outline-none focus:border-primary"
+              />
             </div>
           </div>
 
-          <AX_ExpenseCostCenterHierarchySelect costCenter={costCenter} onCostCenterChange={setCostCenter} categories={expenseCategories} selectedMainCategoryId={selectedMainCategoryId} selectedSubCategoryId={selectedSubCategoryId} selectedSecondaryCategoryId={selectedSecondaryCategoryId} onCategoryChange={handleCategoryChange} warehouses={warehouses} distributors={distributors} />
+          <AX_ExpenseCostCenterHierarchySelect
+            hideCostCenter={true}
+            categories={expenseCategories}
+            selectedMainCategoryId={selectedMainCategoryId}
+            selectedSubCategoryId={selectedSubCategoryId}
+            selectedSecondaryCategoryId={selectedSecondaryCategoryId}
+            onCategoryChange={handleCategoryChange}
+            warehouses={warehouses}
+            distributors={distributors}
+          />
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <AX_ExpenseStatementAutocomplete
-                value={title}
-                onChange={setTitle}
-                pastTransactions={storeState.cashTransactions}
-                selectedMainCategoryName={categoryNames.mainCategoryName}
-                selectedSubCategoryName={categoryNames.subCategoryName}
-                placeholder="مثال: فاتورة صيانة غرف تبريد..."
-                disabled={isSubmitting}
-                required={true}
-              />
-            </div>
-            <div className="space-y-1">
-              <label className="block text-xs font-bold text-on-surface">جهة الصرف / المستفيد</label>
-              <input type="text" value={payeeName} onChange={(e) => setPayeeName(e.target.value)} placeholder="اسم المستلم أو الشركة..." className="w-full h-10 px-3 bg-surface-lowest border border-outline-variant/40 rounded-xl text-xs font-bold text-on-surface focus:outline-none focus:border-primary" />
-            </div>
+          <div className="bg-surface-container-low/50 border border-outline-variant/30 rounded-2xl p-3.5 space-y-1">
+            <label className="block text-xs font-black text-on-surface">إجمالي قيمة المصروف (ج.م) <span className="text-red-500">*</span></label>
+            <input
+              type="number"
+              step="0.01"
+              min="0"
+              value={totalAmount}
+              onChange={(e) => {
+                setTotalAmount(e.target.value)
+                if (paymentType === 'immediate') setPayments((prev) => prev.length === 1 ? [{ ...prev[0], amount: e.target.value }] : prev)
+              }}
+              placeholder="0.00"
+              className="w-full h-11 px-3.5 bg-surface-lowest border border-outline-variant/40 rounded-2xl text-base font-black text-on-surface focus:outline-none focus:border-primary"
+            />
           </div>
 
           <div className="space-y-2 pt-2 border-t border-outline-variant/20">
