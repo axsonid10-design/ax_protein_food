@@ -9,6 +9,7 @@ import { AX_TransferPrintModal } from './AX_TransferPrintModal'
 import { AX_DraftsManagerBanner } from '../common/AX_DraftsManagerBanner'
 import { useDrafts } from '../../hooks/useDrafts'
 import { checkTransferAuditDiscrepancy, executeImmediateTransfer } from '../../store/transferHelpers'
+import { getCartonEquivalent } from '../../utils/pricingCalculations'
 import { axToast } from '../../services/axToast'
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock'
 
@@ -144,12 +145,20 @@ export function AX_TransferFormModal({ isOpen, onClose }) {
       .map((itemId) => {
         const sel = selectedQuantities[itemId]
         const it = items.find((i) => i.id === itemId)
+        const unit = sel.unit || it?.unitType || 'كرتونة'
+        const quantity = Number(sel.quantity) || 0
+        const cartonEquivalent = getCartonEquivalent(quantity, unit, it)
         return {
           itemId,
-          quantity: Number(sel.quantity) || 0,
-          unit: sel.unit || it?.unitType || 'كرتونة',
+          quantity,
+          unit,
           itemName: sel.itemName || it?.compositeName || it?.name || 'صنف',
           primaryCategory: sel.primaryCategory || it?.primaryCategory || 'أصناف عامة',
+          piecesPerCarton: it?.piecesPerCarton ?? it?.pieces_per_carton,
+          weightPerCarton: it?.weightPerCarton ?? it?.weight_per_carton,
+          unitType: it?.unitType || it?.unit_type || 'كرتونة',
+          subUnitType: it?.subUnitType || it?.sub_unit_type,
+          cartonEquivalent,
         }
       })
       .filter((it) => it.quantity > 0)
@@ -227,6 +236,7 @@ export function AX_TransferFormModal({ isOpen, onClose }) {
         stockAudits,
         warehouses,
         inventoryStock,
+        items,
       })
 
       if (res?.success) {

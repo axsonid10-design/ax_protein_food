@@ -1,53 +1,37 @@
-Refactor and fix invoice creation timestamp formatting, date range filtering, dynamic stock deduction, FIFO cost and profit calculation, and expense registration forms in AX_PROTEIN_FOOD.
+تصفير أرصدة البضاعة المعلقة لسيارة التوزيع الميداني وتعديل محرك التحويلات المخزنية لمنع تكرار خطأ معادل الكراتين، مع فحص وإعداد تقرير تدقيق مالي لتسوية فرق حساب المندوب أبو محمود (~11,000 ج.م)، وإجراء مراجعة وتدقيق محاسبي شامل لكافة حسابات وشاشات المنظومة.
 
 Working directory: d:\AXONID_PROJECTS\AX_FROZEN_FOODS
 Integrity mode: development
 
 ## Requirements
 
-### R1. Invoice Creation Timestamp & 12-Hour Format
-Display the invoice creation timestamp alongside the invoice number in both Sales and Purchases invoices. Format all time displays using a 12-hour clock (hh:mm AM/PM) instead of 24-hour time across invoice headers, lists, and detail views.
+### R1. تصفير الأرصدة المعلقة لسيارة التوزيع وتصحيح محرك التحويلات المخزنية
+البدء أولاً بتصفير أرصدة الأصناف الستة (كفتة صغير أنس أفندى، خضار مشكل، استربس صلاح وعبدالفتاح، برجر كيلو صلاح وعبدالفتاح، باميه، سمك دراك) في سيارة التوزيع الميداني (معرف المخزن: `b0000000-0000-0000-0000-000000000010`) داخل جدول `ax_inventory_stock` لتطابق الواقع الفعلي (صفر).
+تعديل محرك التحويلات المخزنية في دوال التحويل وواجهة إذن التحويل (`AX_TransferFormModal.jsx` و `src/store/transferAuditHelpers.js` و `src/store/transferHelpers.js`) بحيث يتم تحويل الكميات المدخلة بالقطع إلى معادل كراتين عبر `getCartonEquivalent` قبل الخصم من مخزن المصدر أو الإضافة إلى مخزن الوجهة في `ax_inventory_stock`، لضمان عدم تكرار تراكم الأرصدة الوهمية نهائياً.
 
-### R2. Invoice Date Range & "Today" Filter
-Fix the date filter in both Sales and Purchases invoice modules so that selecting "Today" strictly displays invoices created on the current calendar day. Ensure custom date range filters accurately scope invoices within the selected start and end dates.
+### R2. فحص وتدقيق فرق حساب المندوب أبو محمود وإعداد تقرير التسوية
+فحص حركات مبيعات سيارة التوزيع، الفواتير النقدية والآجلة، تحصيلات الكاش، حركة خزينة عهدة السيارة (`c0000000-0000-0000-0000-000000000005`)، توريدات النقدية (Remittances)، والمصروفات بالاعتماد حصراً على سجلات قاعدة البيانات والـ logs في النظام.
+إعداد تقرير تدقيق مالي مفصل وموثق يحدد مصدر وسبب الفرق البالغ قرابة 11,000 ج.م في حساب المندوب أبو محمود، مع صياغة قيود وتوصيات التسوية المحاسبية المقترحة بدقة للموافقة عليها قبل تعديل الأرصدة المالية.
 
-### R3. Dynamic Available Stock Indicator & Zero-Value Validation in Sales Invoices
-In the Sales Invoice creation interface, dynamically decrement and display the remaining available stock for each product in real-time as item quantities are entered. If the entered quantity exceeds available stock, display the remaining stock as a negative number while continuing to allow the invoice to be saved. Prevent saving the invoice and show a clear alert if any product line has a unit sale price or quantity that is zero or empty.
-
-### R4. Purchase Cost Tracking & Sales Profit Calculation (FIFO)
-Track inventory items with multiple purchase costs across purchase batches. When selling items, calculate profit using First-In, First-Out (FIFO) matching against available purchase batches. If a product's purchase price was not determined at the time of purchase, defer profit calculation safely and display profit as pending/uncalculated.
-
-### R5. Expense Registration Form Simplification
-Refactor the expense registration modal by completely removing the "Cost Center" selection and the "Description/Statement of Expense/Project" field. Retain the hierarchical expense classification structure (Main Category, Sub-category, Secondary Item). Reposition the "Total Expense Amount" field to appear at the bottom, directly above the settlement and payment method section.
+### R3. مراجعة وتدقيق محاسبي شامل لكافة حسابات وشاشات المنظومة
+إجراء تدقيق ومراجعة محاسبية شاملة عبر كافة شاشات وحسابات البرنامج:
+- فواتير المبيعات والمشتريات والمرتجعات وحسابات الضرائب والخصومات.
+- حساب تكلفة البضاعة المباعة وفق آلية الوارد أولاً يصرف أولاً (FIFO) وهوامش مجمل وصافي الأرباح.
+- مديونيات وحسابات العملاء، ومستحقات وأرصدة الموردين.
+- أرصدة وحركات الخزائن النقدية والحسابات البنكية ومطابقة الأرصدة الدفترية والفعلية.
+- تقييم المخزون في المستودعات المركزية وسيارة التوزيع.
+التأكد من سلامة المعادلات الحسابية ومنع أي تضارب أو اختلال رقمي في أي شاشة.
 
 ## Acceptance Criteria
 
-### Invoice Formatting & Filtering
-- [ ] Both Sales and Purchases invoices show creation timestamp formatted in 12-hour clock with AM/PM indicator.
-- [ ] Invoices list filtered by "Today" returns exclusively records created on the current calendar day.
-- [ ] Invoices list filtered by custom date ranges includes all records within the range and excludes records outside of it.
+### ضبط مخزون سيارة التوزيع ومنع تكرار الخطأ
+- [ ] أرصدة الأصناف الستة للسيارة (`b0000000-0000-0000-0000-000000000010`) في `ax_inventory_stock` مسجلة بقيمة 0.00 دون أي كسور أو بقايا معلقة.
+- [ ] تنفيذ حركة تحويل تجريبية لأصناف بالقطع الفرعية يثبت أن الخصم والإضافة في `ax_inventory_stock` يتم بمعادل الكراتين الفعلي الصحيح ويطابق رصيد فواتير البيع.
 
-### Sales Stock & Zero Validation
-- [ ] Entering quantities in sales invoice rows decrements the displayed available stock dynamically in real-time.
-- [ ] If entered quantity exceeds available stock, remaining stock displays as negative and invoice saving remains allowed.
-- [ ] Attempting to save a sales invoice with any item whose unit sale price is 0, empty, or unentered displays an alert and blocks submission.
-- [ ] Attempting to save a sales invoice with any item whose quantity is 0, empty, or unentered displays an alert and blocks submission.
+### تدقيق حساب المندوب أبو محمود
+- [ ] تقديم تقرير تدقيق مالي شامل يوضح بدقة تفاصيل العمليات وأسباب الفرق البالغ ~11,000 ج.م بين المبيعات والمتحصلات والتوريدات ورصيد العهدة.
+- [ ] تضمين قيود التسوية المحاسبية المقترحة لمعالجة الفرق بشكل نظامي دون كسر موازين المراجعة.
 
-### Multi-Price Inventory & FIFO Profit
-- [ ] Multiple purchase invoices for the same product at different prices create distinct cost batches with their respective quantities.
-- [ ] Sales profit calculation depletes purchase batches using FIFO (earliest purchased stock cost first).
-- [ ] Items sold without a defined purchase cost do not cause calculation errors and indicate uncalculated or pending profit.
-
-### Expenses Form Structure
-- [ ] The "Cost Center" field and selection dropdown are absent from the expense registration modal.
-- [ ] The "Description / Statement of Expense / Project" field is absent from the expense registration modal.
-- [ ] The hierarchical expense classification (Main Category, Sub-category, Secondary Item) remains present and functional.
-- [ ] The "Total Expense Amount" input field is positioned directly before the settlement and payment method section.
-
-### Verification & Test Suite
-- [ ] Existing automated tests in `tests/*.test.js` pass, with new/updated tests covering the modified invoice, expense, and calculation workflows.
-- [ ] Browser/E2E test verification confirms UI calculations, form validations, and clean console without runtime errors.
-
-## Verification Resources
-- Existing test suite located in `tests/*.test.js`.
-- Browser/E2E verification tests checking invoice workflows, stock calculations, modal behaviors, and expense submissions.
+### الانضباط المحاسبي العام للمنظومة
+- [ ] مطابقة إجماليات فواتير المبيعات والمشتريات وحركات الخزائن وأرصدة العملاء والموردين بدون أي فروقات أو أخطاء حسابية.
+- [ ] سلامة واحتساب تكلفة FIFO وتقييم المخزون في تقارير الأرباح والمخازن ومطابقتها لحركات الصرف والإضافة.

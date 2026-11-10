@@ -1,6 +1,7 @@
 import { supabase } from './supabaseClient.js'
 import { generateUUID } from '../utils/AX_UUID.js'
 import { AX_RecycleBinService } from './AX_RecycleBinService.js'
+import { getCartonEquivalent } from '../utils/pricingCalculations.js'
 
 export const AX_TransferOperationsService = {
   confirmTransferInDB: async (trf, updatedStock = [], userName = '') => {
@@ -16,16 +17,25 @@ export const AX_TransferOperationsService = {
         const itId = item.itemId || item.item_id
         const itQty = Number(item.quantity) || 0
 
+        let itemMeta = item
+        if (!itemMeta?.pieces_per_carton && !itemMeta?.piecesPerCarton && !itemMeta?.weight_per_carton && !itemMeta?.weightPerCarton) {
+          try {
+            const { data: dbItem } = await supabase.from('ax_items').select('unit_type, sub_unit_type, pieces_per_carton, weight_per_carton').eq('id', itId).maybeSingle()
+            if (dbItem) itemMeta = { ...item, ...dbItem }
+          } catch {}
+        }
+        const cartonQty = getCartonEquivalent(itQty, item.unit, itemMeta)
+
         if (fromTargetId) {
           const fromRow = updatedStock.find((s) => (s.warehouseId === fromTargetId || s.warehouse_id === fromTargetId) && (s.itemId === itId || s.item_id === itId))
           let finalFromQty = fromRow ? Number(fromRow.quantity) : null
           if (finalFromQty === null) {
             const { data: curStock } = await supabase.from('ax_inventory_stock').select('quantity').eq('warehouse_id', fromTargetId).eq('item_id', itId).maybeSingle()
-            if (curStock) finalFromQty = (Number(curStock.quantity) || 0) - itQty
-            else finalFromQty = -itQty
+            if (curStock) finalFromQty = (Number(curStock.quantity) || 0) - cartonQty
+            else finalFromQty = -cartonQty
           }
           if (finalFromQty !== null) {
-            try { await supabase.from('ax_inventory_stock').upsert({ warehouse_id: fromTargetId, item_id: itId, quantity: finalFromQty, unit: item.unit || fromRow?.unit || 'كرتونة', updated_at: new Date().toISOString() }, { onConflict: 'warehouse_id,item_id' }) } catch {}
+            try { await supabase.from('ax_inventory_stock').upsert({ warehouse_id: fromTargetId, item_id: itId, quantity: finalFromQty, unit: 'كرتونة', updated_at: new Date().toISOString() }, { onConflict: 'warehouse_id,item_id' }) } catch {}
           }
         }
         if (toTargetId) {
@@ -33,10 +43,10 @@ export const AX_TransferOperationsService = {
           let finalToQty = toRow ? Number(toRow.quantity) : null
           if (finalToQty === null) {
             const { data: curStock } = await supabase.from('ax_inventory_stock').select('quantity').eq('warehouse_id', toTargetId).eq('item_id', itId).maybeSingle()
-            finalToQty = ((Number(curStock?.quantity) || 0) + itQty)
+            finalToQty = ((Number(curStock?.quantity) || 0) + cartonQty)
           }
           if (finalToQty !== null) {
-            try { await supabase.from('ax_inventory_stock').upsert({ warehouse_id: toTargetId, item_id: itId, quantity: finalToQty, unit: item.unit || toRow?.unit || 'كرتونة', updated_at: new Date().toISOString() }, { onConflict: 'warehouse_id,item_id' }) } catch {}
+            try { await supabase.from('ax_inventory_stock').upsert({ warehouse_id: toTargetId, item_id: itId, quantity: finalToQty, unit: 'كرتونة', updated_at: new Date().toISOString() }, { onConflict: 'warehouse_id,item_id' }) } catch {}
           }
         }
       }
@@ -102,14 +112,23 @@ export const AX_TransferOperationsService = {
           const qty = Number(item.quantity) || 0
           if (!itemId || qty <= 0) continue
 
+          let itemMeta = item
+          if (!itemMeta?.pieces_per_carton && !itemMeta?.piecesPerCarton && !itemMeta?.weight_per_carton && !itemMeta?.weightPerCarton) {
+            try {
+              const { data: dbItem } = await supabase.from('ax_items').select('unit_type, sub_unit_type, pieces_per_carton, weight_per_carton').eq('id', itemId).maybeSingle()
+              if (dbItem) itemMeta = { ...item, ...dbItem }
+            } catch {}
+          }
+          const cartonQty = getCartonEquivalent(qty, item.unit, itemMeta)
+
           if (fromId) {
             const { data: fromStock } = await supabase.from('ax_inventory_stock').select('*').eq('warehouse_id', fromId).eq('item_id', itemId).maybeSingle()
             const curFromQty = Number(fromStock?.quantity || 0)
             await supabase.from('ax_inventory_stock').upsert({
               warehouse_id: fromId,
               item_id: itemId,
-              quantity: curFromQty + qty,
-              unit: item.unit || fromStock?.unit || 'كرتونة',
+              quantity: curFromQty + cartonQty,
+              unit: 'كرتونة',
               updated_at: new Date().toISOString(),
             }, { onConflict: 'warehouse_id,item_id' })
           }
@@ -120,8 +139,8 @@ export const AX_TransferOperationsService = {
             await supabase.from('ax_inventory_stock').upsert({
               warehouse_id: toId,
               item_id: itemId,
-              quantity: curToQty - qty,
-              unit: item.unit || toStock?.unit || 'كرتونة',
+              quantity: curToQty - cartonQty,
+              unit: 'كرتونة',
               updated_at: new Date().toISOString(),
             }, { onConflict: 'warehouse_id,item_id' })
           }

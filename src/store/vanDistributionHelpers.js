@@ -299,10 +299,10 @@ export async function executeVanSettlement(
     }
 
     if (typeof addPendingCashTransfer === 'function') {
-      addPendingCashTransfer(pct)
+      await addPendingCashTransfer(pct)
     }
     if (typeof confirmCashTransfer === 'function') {
-      confirmCashTransfer(pctId)
+      await confirmCashTransfer(pctId)
     }
     recordedPayments.push(pct)
   }

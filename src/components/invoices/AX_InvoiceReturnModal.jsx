@@ -80,11 +80,15 @@ export function AX_InvoiceReturnModal({
     )
   }
 
+  const discountFactor = (invoice?.subtotal && Number(invoice.subtotal) > 0)
+    ? Math.max(0, Math.min(1, 1 - (Number(invoice.discountAmount) || 0) / Number(invoice.subtotal)))
+    : 1
+
   const activeSelectedItems = returnItems.filter((it) => it.selected && it.returnQty > 0)
-  const returnTotal = activeSelectedItems.reduce(
-    (sum, it) => sum + it.returnQty * it.price,
+  const returnTotal = Number(activeSelectedItems.reduce(
+    (sum, it) => sum + it.returnQty * Number((it.price * discountFactor).toFixed(2)),
     0
-  )
+  ).toFixed(2))
 
   const handleSubmit = (e) => {
     e.preventDefault()
@@ -118,14 +122,18 @@ export function AX_InvoiceReturnModal({
       createdAt: new Date().toISOString(),
       created_at: new Date().toISOString(),
       warehouseId: returnWarehouseId,
-      items: activeSelectedItems.map((it) => ({
-        itemId: it.itemId,
-        compositeName: it.name,
-        quantity: it.returnQty,
-        unit: it.unit,
-        price: it.price,
-        total: it.returnQty * it.price,
-      })),
+      items: activeSelectedItems.map((it) => {
+        const effectivePrice = Number((it.price * discountFactor).toFixed(2))
+        return {
+          itemId: it.itemId,
+          compositeName: it.name,
+          quantity: it.returnQty,
+          unit: it.unit,
+          price: effectivePrice,
+          originalPrice: it.price,
+          total: Number((it.returnQty * effectivePrice).toFixed(2)),
+        }
+      }),
       transportCost: 0,
       loadingCost: 0,
       subtotal: returnTotal,
@@ -279,10 +287,10 @@ export function AX_InvoiceReturnModal({
                       />
                     </td>
                     <td className="px-3 text-left font-mono whitespace-nowrap">
-                      {item.price.toLocaleString('en-US')} ج.م
+                      {Number((item.price * discountFactor).toFixed(2)).toLocaleString('en-US')} ج.م
                     </td>
                     <td className="px-3 text-left font-mono font-black text-purple-700 whitespace-nowrap">
-                      {(item.selected ? item.returnQty * item.price : 0).toLocaleString('en-US')} ج.م
+                      {(item.selected ? Number((item.returnQty * Number((item.price * discountFactor).toFixed(2))).toFixed(2)) : 0).toLocaleString('en-US')} ج.م
                     </td>
                   </tr>
                 ))}

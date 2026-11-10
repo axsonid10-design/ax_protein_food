@@ -172,6 +172,57 @@ export function calculateFifoProfits(invoices = [], items = [], inventoryStock =
       return String(a.code || a.id || '').localeCompare(String(b.code || b.id || ''))
     })
 
+  const salesReturns = safeInvoices
+    .filter((inv) => {
+      if (!inv || inv.status === 'cancelled' || inv.isCancelled) return false
+      return inv.type === 'sale_return'
+    })
+    .sort((a, b) => {
+      const dateA = String(a.date || a.operationalDate || a.createdAt || a.created_at || '')
+      const dateB = String(b.date || b.operationalDate || b.createdAt || b.created_at || '')
+      if (dateA !== dateB) return dateA.localeCompare(dateB)
+      const timeA = String(a.createdAt || a.created_at || '')
+      const timeB = String(b.createdAt || b.created_at || '')
+      if (timeA && timeB && timeA !== timeB) return timeA.localeCompare(timeB)
+      return String(a.code || a.id || '').localeCompare(String(b.code || b.id || ''))
+    })
+
+  salesReturns.forEach((ret) => {
+    const retItems = Array.isArray(ret.items) ? ret.items : []
+    const retDate = String(ret.date || ret.operationalDate || ret.createdAt || ret.created_at || '1970-01-01')
+    const retCreated = String(ret.createdAt || ret.created_at || retDate)
+
+    retItems.forEach((row, idx) => {
+      const rowItemId = row.itemId || row.item_id || row.id
+      if (!rowItemId) return
+      const catalogItem = itemsMap.get(rowItemId) || row
+      const qtyInCartons = getCartonEquivalent(row.quantity, row.unit, catalogItem)
+      if (qtyInCartons <= 0) return
+
+      const catalogBuyPrice = Number(catalogItem.buyPrice ?? catalogItem.buy_price) || 0
+      const unitCost = catalogBuyPrice > 0 ? catalogBuyPrice : (Number(row.price) || null)
+
+      const returnBatch = {
+        batchId: `ret-${ret.id || 'ret'}-${rowItemId}-${idx}`,
+        invoiceId: ret.id,
+        invoiceCode: ret.code || 'مردود مبيعات',
+        date: retDate,
+        createdAt: retCreated,
+        itemId: rowItemId,
+        unitCost,
+        initialQty: qtyInCartons,
+        remainingQty: qtyInCartons,
+        isCostUndetermined: unitCost === null,
+        isOpening: false,
+        isReturn: true,
+      }
+      if (!batchesByItem.has(rowItemId)) {
+        batchesByItem.set(rowItemId, [])
+      }
+      batchesByItem.get(rowItemId).unshift(returnBatch)
+    })
+  })
+
   const salesProfits = new Map()
   let totalRevenue = 0
   let totalCogs = 0
@@ -183,6 +234,8 @@ export function calculateFifoProfits(invoices = [], items = [], inventoryStock =
   salesInvoices.forEach((inv) => {
     const invItems = Array.isArray(inv.items) ? inv.items : []
     const subtotal = Number(inv.subtotal) || Number(inv.total) || 0
+    const discountAmount = Number(inv.discountAmount) || 0
+    const netRevenue = Math.max(0, subtotal - discountAmount)
     let invCogs = 0
     let isInvoicePending = false
     const lines = []
@@ -276,7 +329,7 @@ export function calculateFifoProfits(invoices = [], items = [], inventoryStock =
       }
     })
 
-    totalRevenue += subtotal
+    totalRevenue += netRevenue
 
     if (isInvoicePending) {
       hasPendingProfit = true
@@ -287,6 +340,8 @@ export function calculateFifoProfits(invoices = [], items = [], inventoryStock =
         date: inv.date,
         partyName: inv.partyName,
         subtotal,
+        discountAmount,
+        netRevenue,
         cogs: null,
         profit: null,
         profitMargin: null,
@@ -296,8 +351,8 @@ export function calculateFifoProfits(invoices = [], items = [], inventoryStock =
       })
     } else {
       calculatedCount++
-      const profit = Number((subtotal - invCogs).toFixed(2))
-      const profitMargin = subtotal > 0 ? Number(((profit / subtotal) * 100).toFixed(2)) : 0
+      const profit = Number((netRevenue - invCogs).toFixed(2))
+      const profitMargin = netRevenue > 0 ? Number(((profit / netRevenue) * 100).toFixed(2)) : 0
       const cogs = Number(invCogs.toFixed(2))
 
       totalCogs += cogs
@@ -309,6 +364,8 @@ export function calculateFifoProfits(invoices = [], items = [], inventoryStock =
         date: inv.date,
         partyName: inv.partyName,
         subtotal,
+        discountAmount,
+        netRevenue,
         cogs,
         profit,
         profitMargin,
@@ -317,6 +374,46 @@ export function calculateFifoProfits(invoices = [], items = [], inventoryStock =
         lines,
       })
     }
+  })
+
+  salesReturns.forEach((ret) => {
+    const returnAmount = Number(ret.subtotal) || Number(ret.total) || 0
+    const retItems = Array.isArray(ret.items) ? ret.items : []
+    let retCogs = 0
+
+    retItems.forEach((row) => {
+      const rowItemId = row.itemId || row.item_id || row.id
+      if (!rowItemId) return
+      const catalogItem = itemsMap.get(rowItemId) || row
+      const qtyInCartons = getCartonEquivalent(row.quantity, row.unit, catalogItem)
+      const catalogBuyPrice = Number(catalogItem.buyPrice ?? catalogItem.buy_price) || 0
+      const unitCost = catalogBuyPrice > 0 ? catalogBuyPrice : (Number(row.price) || 0)
+      retCogs += qtyInCartons * unitCost
+    })
+
+    const returnCogs = Number(retCogs.toFixed(2))
+    const returnProfit = Number((returnAmount - returnCogs).toFixed(2))
+
+    totalRevenue = Number((totalRevenue - returnAmount).toFixed(2))
+    totalCogs = Number((totalCogs - returnCogs).toFixed(2))
+    totalProfit = Number((totalProfit - returnProfit).toFixed(2))
+
+    salesProfits.set(ret.id, {
+      invoiceId: ret.id,
+      invoiceCode: ret.code,
+      type: 'sale_return',
+      date: ret.date,
+      partyName: ret.partyName,
+      subtotal: -returnAmount,
+      discountAmount: 0,
+      netRevenue: -returnAmount,
+      cogs: -returnCogs,
+      profit: -returnProfit,
+      profitMargin: 0,
+      profitStatus: 'calculated',
+      isProfitPending: false,
+      lines: [],
+    })
   })
 
   totalRevenue = Number(totalRevenue.toFixed(2))
@@ -335,6 +432,9 @@ export function calculateFifoProfits(invoices = [], items = [], inventoryStock =
     calculatedCount,
   }
 }
+
+export const calculateBatchProfits = calculateFifoProfits
+export const calculateBatchMargins = calculateFifoProfits
 
 export function getInvoiceFifoProfit(saleInvoice, invoices = [], items = [], inventoryStock = []) {
   if (!saleInvoice || saleInvoice.type !== 'sale') {

@@ -34,10 +34,16 @@ export function AX_IncomeStatementReport({
     return filterByDateRange(salesOnly, 'date', timeframe, customStart, customEnd)
   }, [invoices, timeframe, customStart, customEnd])
 
+  const filteredReturns = useMemo(() => {
+    const returnsOnly = invoices.filter((inv) => inv.type === 'sale_return')
+    return filterByDateRange(returnsOnly, 'date', timeframe, customStart, customEnd)
+  }, [invoices, timeframe, customStart, customEnd])
+
   const calculations = useMemo(() => {
     const fifoResults = calculateFifoProfits(invoices, items, inventoryStock)
 
     let grossSales = 0
+    let totalDiscount = 0
     let totalTransport = 0
     let totalLoading = 0
     let totalCogs = 0
@@ -48,10 +54,13 @@ export function AX_IncomeStatementReport({
     const rows = filteredSales.map((inv) => {
       const invItems = inv.items || []
       const subtotal = Number(inv.subtotal) || Number(inv.total) || 0
+      const discount = Number(inv.discountAmount) || 0
+      const netSubtotal = Math.max(0, subtotal - discount)
       const transport = Number(inv.transportCost) || 0
       const loading = Number(inv.loadingCost) || 0
 
       grossSales += subtotal
+      totalDiscount += discount
       totalTransport += transport
       totalLoading += loading
 
@@ -66,7 +75,9 @@ export function AX_IncomeStatementReport({
           date: inv.date,
           partyName: inv.partyName,
           itemsCount: invItems.length,
-          subtotal,
+          subtotal: netSubtotal,
+          grossSubtotal: subtotal,
+          discountAmount: discount,
           cogs: null,
           profit: null,
           margin: null,
@@ -79,7 +90,7 @@ export function AX_IncomeStatementReport({
       calculatedCount++
       const cogs = Number(fifoData.cogs) || 0
       const profit = Number(fifoData.profit) || 0
-      const margin = typeof fifoData.profitMargin === 'number' ? fifoData.profitMargin : (subtotal > 0 ? (profit / subtotal) * 100 : 0)
+      const margin = typeof fifoData.profitMargin === 'number' ? fifoData.profitMargin : (netSubtotal > 0 ? (profit / netSubtotal) * 100 : 0)
 
       totalCogs += cogs
       grossProfit += profit
@@ -90,7 +101,9 @@ export function AX_IncomeStatementReport({
         date: inv.date,
         partyName: inv.partyName,
         itemsCount: invItems.length,
-        subtotal,
+        subtotal: netSubtotal,
+        grossSubtotal: subtotal,
+        discountAmount: discount,
         cogs,
         profit,
         margin,
@@ -100,16 +113,35 @@ export function AX_IncomeStatementReport({
       }
     })
 
-    const grossMarginPct = grossSales > 0 ? (grossProfit / grossSales) * 100 : 0
+    const totalReturns = filteredReturns.reduce((sum, inv) => sum + (Number(inv.total) || Number(inv.subtotal) || 0), 0)
+    let returnsCogs = 0
+    let returnsProfit = 0
+    filteredReturns.forEach((ret) => {
+      const fifoRet = fifoResults.salesProfits.get(ret.id)
+      if (fifoRet) {
+        returnsCogs += Math.abs(Number(fifoRet.cogs) || 0)
+        returnsProfit += Math.abs(Number(fifoRet.profit) || 0)
+      } else {
+        const retAmt = Number(ret.total) || Number(ret.subtotal) || 0
+        returnsProfit += retAmt
+      }
+    })
+    const netSales = Math.max(0, grossSales - totalDiscount - totalReturns)
+    const netCogs = Math.max(0, totalCogs - returnsCogs)
+    const adjustedGrossProfit = Math.max(0, grossProfit - returnsProfit)
+    const grossMarginPct = netSales > 0 ? (adjustedGrossProfit / netSales) * 100 : 0
     const operatingExpenses = totalTransport + totalLoading
-    const netOperatingProfit = grossProfit - operatingExpenses
-    const netMarginPct = grossSales > 0 ? (netOperatingProfit / grossSales) * 100 : 0
+    const netOperatingProfit = adjustedGrossProfit - operatingExpenses
+    const netMarginPct = netSales > 0 ? (netOperatingProfit / netSales) * 100 : 0
     const hasPending = pendingCount > 0
 
     return {
       grossSales,
-      totalCogs,
-      grossProfit,
+      totalDiscount,
+      totalReturns,
+      netSales,
+      totalCogs: netCogs,
+      grossProfit: adjustedGrossProfit,
       grossMarginPct,
       operatingExpenses,
       netOperatingProfit,
@@ -119,7 +151,7 @@ export function AX_IncomeStatementReport({
       calculatedCount,
       rows,
     }
-  }, [invoices, items, inventoryStock, filteredSales])
+  }, [invoices, items, inventoryStock, filteredSales, filteredReturns])
 
   const totalPages = Math.ceil(calculations.rows.length / pageSize) || 1
   const paginatedRows = useMemo(() => {
@@ -192,14 +224,16 @@ export function AX_IncomeStatementReport({
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <div className="bg-surface-lowest border border-outline-variant/30 rounded-2xl p-3.5 shadow-xs">
           <div className="flex items-center justify-between text-on-surface-variant text-[11px] font-bold">
-            <span>إيرادات المبيعات</span>
+            <span>صافي إيرادات المبيعات</span>
             <DollarSign className="w-4 h-4 text-primary" />
           </div>
           <div className="text-base sm:text-lg font-black text-on-surface mt-1">
-            {formatCurrency(calculations.grossSales)}
+            {formatCurrency(calculations.netSales)}
           </div>
           <div className="text-[10px] font-bold text-on-surface-variant mt-0.5">
-            عدد {filteredSales.length} فاتورة مبيعات
+            {calculations.totalReturns > 0 || calculations.totalDiscount > 0
+              ? `إجمالي ${formatCurrency(calculations.grossSales)} (خصم ${formatCurrency(calculations.totalDiscount)} • مردود ${formatCurrency(calculations.totalReturns)})`
+              : `عدد ${filteredSales.length} فاتورة مبيعات`}
           </div>
         </div>
 

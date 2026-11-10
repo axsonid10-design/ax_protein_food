@@ -137,6 +137,11 @@ export function AX_TransferReviewModal({
                           <span className="px-2 py-0.5 rounded-full bg-surface-low border border-outline-variant/30 text-on-surface-variant text-[11px] font-bold">
                             {item.unit || 'كرتونة'}
                           </span>
+                          {item.unit && item.unit !== 'كرتونة' && item.cartonEquivalent !== undefined && (
+                            <span className="text-[10px] font-bold text-on-surface-variant">
+                              ({item.cartonEquivalent} كرتونة)
+                            </span>
+                          )}
                         </div>
                       </div>
                     ))}

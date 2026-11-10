@@ -352,7 +352,7 @@ export const useAXStore = create((set, get) => ({
   confirmTransfer: (transferId) => set((state) => {
     const trf = state.transfers.find((t) => t.id === transferId)
     if (!trf || trf.status === 'confirmed') return state
-    const { updatedStock, isAuditDiscrepancy, auditDiscrepancyNote } = calculateTransferStockMovement(trf, state.inventoryStock, state.stockAudits, state.warehouses)
+    const { updatedStock, isAuditDiscrepancy, auditDiscrepancyNote } = calculateTransferStockMovement(trf, state.inventoryStock, state.stockAudits, state.warehouses, state.items)
     const newTransfers = state.transfers.map((t) =>
       t.id === transferId
         ? {
@@ -418,14 +418,15 @@ export const useAXStore = create((set, get) => ({
     AX_OperationsService.deleteManufacturingOrderInDB(orderId, get().profile)
     set((state) => ({ manufacturingOrders: state.manufacturingOrders.filter((m) => m.id !== orderId) }))
   },
-
   addCashTransaction: (tx) => {
     AX_OperationsService.addCashTransactionInDB(tx, get().profile)
     set((state) => {
       const isCashIn = tx.type === 'client_receipt' || tx.type === 'other_income' || tx.type === 'misc_revenue'
+      const isClient = tx.partyType === 'client' || (!tx.partyType && tx.type === 'client_receipt')
+      const isSupplier = tx.partyType === 'supplier' || (!tx.partyType && tx.type === 'supplier_payment')
       const updatedTreasuries = state.treasuryAccounts.map((t) => t.id === tx.treasuryId ? { ...t, balance: (Number(t.balance) || 0) + (isCashIn ? tx.amount : -tx.amount) } : t)
-      const updatedClients = state.clients.map((c) => (tx.partyId === c.id || tx.partyName === c.name) ? { ...c, balance: (Number(c.balance) || 0) - tx.amount } : c)
-      const updatedSuppliers = state.suppliers.map((s) => (tx.partyId === s.id || tx.partyName === s.name) ? { ...s, balance: (Number(s.balance) || 0) - tx.amount } : s)
+      const updatedClients = isClient ? state.clients.map((c) => (tx.partyId === c.id || tx.partyName === c.name) ? { ...c, balance: (Number(c.balance) || 0) - tx.amount } : c) : state.clients
+      const updatedSuppliers = isSupplier ? state.suppliers.map((s) => (tx.partyId === s.id || tx.partyName === s.name) ? { ...s, balance: (Number(s.balance) || 0) - tx.amount } : s) : state.suppliers
       const nextTx = [tx, ...state.cashTransactions]
       updateLocalCachePayload('cashTransactions', nextTx)
       updateLocalCachePayload('treasuryAccounts', updatedTreasuries)
@@ -438,7 +439,7 @@ export const useAXStore = create((set, get) => ({
   confirmCashTransfer: (id) => {
     const list = Array.isArray(get().pendingCashTransfers) ? get().pendingCashTransfers : []
     const pct = list.find((p) => p && p.id === id)
-    if (pct) AX_OperationsService.confirmCashTransferInDB(pct, get().profile)
+    const pPromise = pct ? AX_OperationsService.confirmCashTransferInDB(pct, get().profile) : Promise.resolve()
     set((state) => {
       const currentList = Array.isArray(state.pendingCashTransfers) ? state.pendingCashTransfers : []
       const target = currentList.find((p) => p && p.id === id)
@@ -446,7 +447,7 @@ export const useAXStore = create((set, get) => ({
       const newTransfers = currentList.map((p) => (p && p.id === id ? { ...p, status: 'confirmed', confirmedAt: new Date().toISOString() } : p))
       const updatedTreasuries = (state.treasuryAccounts || []).map((t) => {
         let bal = Number(t.balance) || 0
-        if (t.id === target.fromTreasuryId) bal = Math.max(0, bal - Number(target.amount || 0))
+        if (t.id === target.fromTreasuryId) bal = bal - Number(target.amount || 0)
         if (t.id === target.toTreasuryId) bal = bal + Number(target.amount || 0)
         return { ...t, balance: bal }
       })
@@ -454,16 +455,17 @@ export const useAXStore = create((set, get) => ({
       updateLocalCachePayload('treasuryAccounts', updatedTreasuries)
       return { pendingCashTransfers: newTransfers, treasuryAccounts: updatedTreasuries }
     })
+    return pPromise
   },
 
   addPendingCashTransfer: (pct) => {
-    try { AX_OperationsService.addCashTransferInDB(pct, get().profile) } catch {}
     set((state) => {
       const currentList = Array.isArray(state.pendingCashTransfers) ? state.pendingCashTransfers : []
       const nextP = [pct, ...currentList]
       updateLocalCachePayload('pendingCashTransfers', nextP)
       return { pendingCashTransfers: nextP }
     })
+    try { return AX_OperationsService.addCashTransferInDB(pct, get().profile) } catch { return Promise.resolve() }
   },
 
   addInvoice: async (inv) => {

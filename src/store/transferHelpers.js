@@ -42,6 +42,10 @@ export async function executeImmediateTransfer(
       unit: it.unit || 'كرتونة',
       name: it.name || it.itemName || it.compositeName || '',
       primaryCategory: it.primaryCategory || 'أصناف عامة',
+      piecesPerCarton: it.piecesPerCarton ?? it.pieces_per_carton,
+      weightPerCarton: it.weightPerCarton ?? it.weight_per_carton,
+      unitType: it.unitType || it.unit_type,
+      subUnitType: it.subUnitType || it.sub_unit_type,
     }))
 
   if (validItems.length === 0) {
@@ -85,11 +89,13 @@ export async function executeImmediateTransfer(
     auditDiscrepancyNote: discrepancy.auditDiscrepancyNote,
   }
 
+  const itemsCatalog = currentState.items || []
   const { updatedStock } = calculateTransferStockMovement(
     newTransfer,
     currentState.inventoryStock || [],
     currentState.stockAudits || [],
-    currentState.warehouses || []
+    currentState.warehouses || [],
+    itemsCatalog
   )
 
   if (supabase && typeof supabase.from === 'function') {
@@ -120,7 +126,7 @@ export async function executeImmediateTransfer(
               warehouse_id: fromTargetId,
               item_id: item.itemId,
               quantity: fromRow.quantity,
-              unit: item.unit || fromRow.unit || 'كرتونة',
+              unit: fromRow.unit || 'كرتونة',
               updated_at: nowIso,
             },
             { onConflict: 'warehouse_id,item_id' }
@@ -138,7 +144,7 @@ export async function executeImmediateTransfer(
               warehouse_id: toTargetId,
               item_id: item.itemId,
               quantity: toRow.quantity,
-              unit: item.unit || toRow.unit || 'كرتونة',
+              unit: toRow.unit || 'كرتونة',
               updated_at: nowIso,
             },
             { onConflict: 'warehouse_id,item_id' }

@@ -1,4 +1,5 @@
 import { parseDate, formatDateOnly } from '../utils/dateHelpers.js'
+import { getCartonEquivalent } from '../utils/pricingCalculations.js'
 
 export const getLatestConfirmedAudit = (warehouseId, stockAudits = []) => {
   if (!warehouseId || !Array.isArray(stockAudits) || stockAudits.length === 0) return null
@@ -104,28 +105,75 @@ export const checkTransferAuditDiscrepancy = (transfer, stockAudits = [], wareho
   }
 }
 
-export const calculateTransferStockMovement = (transfer, currentStock = [], stockAudits = [], warehouses = []) => {
-  if (!transfer) return { updatedStock: [...currentStock], discrepancyInfo: {} }
+const resolveBaseStockUnit = (item, itemMeta, existingRow) => {
+  const isSub = (u) => u === 'قطعة' || u === 'كيس' || u === 'طبق' || (itemMeta?.subUnitType && u === itemMeta.subUnitType) || (itemMeta?.sub_unit_type && u === itemMeta.sub_unit_type)
+  if (itemMeta?.unitType && !isSub(itemMeta.unitType)) return itemMeta.unitType
+  if (itemMeta?.unit_type && !isSub(itemMeta.unit_type)) return itemMeta.unit_type
+  if (existingRow?.unit && !isSub(existingRow.unit)) return existingRow.unit
+  if (item?.unit && !isSub(item.unit)) return item.unit
+  return 'كرتونة'
+}
 
-  const discrepancyInfo = checkTransferAuditDiscrepancy(transfer, stockAudits, warehouses)
+export const calculateTransferStockMovement = (transfer, currentStock = [], stockAudits = [], warehouses = [], itemsCatalog = []) => {
+  let effectiveTransfer = transfer
+  let effectiveStock = currentStock
+  let effectiveAudits = stockAudits
+  let effectiveWarehouses = warehouses
+  let effectiveCatalog = itemsCatalog
+  let isAlternativeSignature = false
+
+  if (Array.isArray(transfer)) {
+    isAlternativeSignature = true
+    effectiveStock = transfer
+    effectiveTransfer = {
+      fromWarehouseId: stockAudits,
+      toWarehouseId: warehouses,
+      items: currentStock,
+      status: 'confirmed',
+    }
+    effectiveAudits = []
+    effectiveWarehouses = []
+    effectiveCatalog = itemsCatalog
+  }
+
+  if (!effectiveTransfer) return { updatedStock: [...effectiveStock], discrepancyInfo: {} }
+
+  const discrepancyInfo = checkTransferAuditDiscrepancy(effectiveTransfer, effectiveAudits, effectiveWarehouses)
   const { isFromBackdated, isToBackdated } = discrepancyInfo
 
-  let updatedStock = [...currentStock]
-  const fromTargetId = transfer.fromId || transfer.fromWarehouseId || transfer.from_warehouse_id
-  const toTargetId = transfer.toId || transfer.toWarehouseId || transfer.to_warehouse_id
-  const transferItems = transfer.items && transfer.items.length > 0
-    ? transfer.items
-    : [{ itemId: transfer.itemId || transfer.item_id || transfer.id, quantity: transfer.quantity, unit: transfer.unit }]
+  let updatedStock = [...effectiveStock]
+  const fromTargetId = effectiveTransfer.fromId || effectiveTransfer.fromWarehouseId || effectiveTransfer.from_warehouse_id
+  const toTargetId = effectiveTransfer.toId || effectiveTransfer.toWarehouseId || effectiveTransfer.to_warehouse_id
+  const transferItems = effectiveTransfer.items && effectiveTransfer.items.length > 0
+    ? effectiveTransfer.items
+    : [{ itemId: effectiveTransfer.itemId || effectiveTransfer.item_id || effectiveTransfer.id, quantity: effectiveTransfer.quantity, unit: effectiveTransfer.unit }]
 
-  const isConfirmed = transfer.status === 'confirmed' || transfer.isConfirmed || transfer.forceCredit || transfer.isImmediate
+  const isConfirmed = effectiveTransfer.status === 'confirmed' || effectiveTransfer.isConfirmed || effectiveTransfer.forceCredit || effectiveTransfer.isImmediate
   const shouldCreditDestination = !isToBackdated || isConfirmed
   const shouldDebitSource = !isFromBackdated || isConfirmed
 
   transferItems.forEach((item) => {
     const itId = item?.itemId || item?.item_id || item?.id
     if (!itId || item?.quantity === undefined || item?.quantity === null) return
-    const qty = Number(item.quantity) || 0
-    if (qty <= 0) return
+    const rawQty = Number(item.quantity) || 0
+    if (rawQty <= 0) return
+
+    const catalogItem = (effectiveCatalog || []).find((c) => (c.id === itId || c.itemId === itId))
+    const itemMeta = catalogItem ? { ...item, ...catalogItem } : item
+    const movementQty = getCartonEquivalent(rawQty, item.unit, itemMeta)
+    if (movementQty <= 0) return
+
+    const existingFromRow = updatedStock.find(
+      (s) =>
+        (s.warehouseId === fromTargetId || s.warehouse_id === fromTargetId) &&
+        ((s.itemId || s.item_id) === itId)
+    )
+    const existingToRow = updatedStock.find(
+      (s) =>
+        (s.warehouseId === toTargetId || s.warehouse_id === toTargetId) &&
+        ((s.itemId || s.item_id) === itId)
+    )
+    const baseUnit = resolveBaseStockUnit(item, itemMeta, existingFromRow || existingToRow)
 
     if (shouldDebitSource && fromTargetId) {
       const fromIndex = updatedStock.findIndex(
@@ -136,14 +184,15 @@ export const calculateTransferStockMovement = (transfer, currentStock = [], stoc
       if (fromIndex >= 0) {
         updatedStock[fromIndex] = {
           ...updatedStock[fromIndex],
-          quantity: (Number(updatedStock[fromIndex].quantity) || 0) - qty,
+          quantity: (Number(updatedStock[fromIndex].quantity) || 0) - movementQty,
+          unit: baseUnit,
         }
       } else {
         updatedStock.push({
           warehouseId: fromTargetId,
           itemId: itId,
-          quantity: -qty,
-          unit: item.unit || 'كرتونة',
+          quantity: -movementQty,
+          unit: baseUnit,
         })
       }
     }
@@ -157,18 +206,29 @@ export const calculateTransferStockMovement = (transfer, currentStock = [], stoc
       if (toIndex >= 0) {
         updatedStock[toIndex] = {
           ...updatedStock[toIndex],
-          quantity: (Number(updatedStock[toIndex].quantity) || 0) + qty,
+          quantity: (Number(updatedStock[toIndex].quantity) || 0) + movementQty,
+          unit: baseUnit,
         }
       } else {
         updatedStock.push({
           warehouseId: toTargetId,
           itemId: itId,
-          quantity: qty,
-          unit: item.unit || 'كرتونة',
+          quantity: movementQty,
+          unit: baseUnit,
         })
       }
     }
   })
+
+  if (isAlternativeSignature) {
+    updatedStock.updatedStock = updatedStock
+    updatedStock.isAuditDiscrepancy = discrepancyInfo.isAuditDiscrepancy
+    updatedStock.isFromBackdated = isFromBackdated
+    updatedStock.isToBackdated = isToBackdated
+    updatedStock.auditDiscrepancyNote = discrepancyInfo.auditDiscrepancyNote
+    updatedStock.discrepancyInfo = discrepancyInfo
+    return updatedStock
+  }
 
   return {
     updatedStock,

@@ -30,6 +30,7 @@ export const supabase = isConfigured
           upsert: async () => ({ data: null, error: null }),
           eq: () => query,
           neq: () => query,
+          in: () => query,
           ilike: () => query,
           order: () => query,
           limit: () => query,

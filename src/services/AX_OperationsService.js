@@ -21,9 +21,10 @@ export const AX_OperationsService = {
   addCashTransactionInDB: async (tx, userProfile = null) => {
     if (!supabase || typeof supabase.from !== 'function' || !tx) return { success: false }
     const isPayroll = tx.type === 'payroll' || tx.partyType === 'employee'
+    const isOtherIncome = tx.type === 'other_income' || tx.type === 'misc_revenue' || tx.partyType === 'income'
     const isExpense = tx.type === 'expense' || isPayroll
-    const dbType = isExpense ? 'expense' : (tx.type === 'supplier_payment' ? 'supplier_payment' : 'client_receipt')
-    const dbPartyType = isPayroll ? 'employee' : (tx.partyType || (dbType === 'client_receipt' ? 'client' : (dbType === 'supplier_payment' ? 'supplier' : 'expense')))
+    const dbType = isExpense ? 'expense' : (isOtherIncome ? 'other_income' : (tx.type === 'supplier_payment' ? 'supplier_payment' : 'client_receipt'))
+    const dbPartyType = isPayroll ? 'employee' : (isOtherIncome ? 'income' : (tx.partyType || (dbType === 'client_receipt' ? 'client' : (dbType === 'supplier_payment' ? 'supplier' : 'expense'))))
     const txId = tx.id || generateUUID()
     const txRow = {
       id: txId,
@@ -111,7 +112,7 @@ export const AX_OperationsService = {
 
       if (fromId) {
         const { data: fTr } = await supabase.from('ax_treasuries').select('balance').eq('id', fromId).maybeSingle()
-        if (fTr) await supabase.from('ax_treasuries').update({ balance: Math.max(0, Number(fTr.balance || 0) - amt) }).eq('id', fromId)
+        if (fTr) await supabase.from('ax_treasuries').update({ balance: Number(fTr.balance || 0) - amt }).eq('id', fromId)
       }
       if (toId) {
         const { data: tTr } = await supabase.from('ax_treasuries').select('balance').eq('id', toId).maybeSingle()

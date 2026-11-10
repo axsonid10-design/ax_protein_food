@@ -52,17 +52,30 @@ export function AX_CustomerDetailsModal({ customer, isOpen, onClose }) {
       (inv) => inv && (inv.clientId === customer.id || inv.partyName === customer.name)
     )
 
+    const paidInvoices = customerInvoices.filter(
+      (i) => i.type !== 'sale_return' && (Number(i.paidAmount || i.cashPaid) || 0) > 0
+    )
+    const recordedInvoiceCodes = new Set(
+      paidInvoices.map((i) => i.code).filter(Boolean)
+    )
+    const recordedInvoiceIds = new Set(
+      paidInvoices.map((i) => i.id).filter(Boolean)
+    )
+
     customerInvoices.forEach((inv) => {
+      const isReturn = inv.type === 'sale_return'
       const invTotal = Number(inv.total || inv.totalAmount) || 0
       const paid = Number(inv.paidAmount || inv.cashPaid) || 0
       entries.push({
         id: inv.id,
         date: inv.date || inv.createdAt || new Date().toISOString(),
-        type: 'invoice',
+        type: isReturn ? 'sale_return' : 'invoice',
         reference: inv.code || inv.id.slice(0, 8),
-        description: `فاتورة مبيعات ${inv.code ? `[${inv.code}]` : ''}`,
-        debit: invTotal,
-        credit: paid,
+        description: isReturn
+          ? `مردود مبيعات ${inv.code ? `[${inv.code}]` : ''}`
+          : `فاتورة مبيعات ${inv.code ? `[${inv.code}]` : ''}`,
+        debit: isReturn ? 0 : invTotal,
+        credit: isReturn ? invTotal : paid,
       })
     })
 
@@ -72,6 +85,16 @@ export function AX_CustomerDetailsModal({ customer, isOpen, onClose }) {
     )
 
     customerReceipts.forEach((rc) => {
+      const isLinkedToInvoice =
+        (rc.invoiceId && (recordedInvoiceIds.has(rc.invoiceId) || recordedInvoiceCodes.has(rc.invoiceId))) ||
+        (rc.invoiceCode && recordedInvoiceCodes.has(rc.invoiceCode)) ||
+        (rc.referenceId && (recordedInvoiceIds.has(rc.referenceId) || recordedInvoiceCodes.has(rc.referenceId))) ||
+        (rc.notes && (
+          Array.from(recordedInvoiceCodes).some((code) => rc.notes.includes(code)) ||
+          Array.from(recordedInvoiceIds).some((id) => rc.notes.includes(id))
+        ))
+      if (isLinkedToInvoice) return
+
       entries.push({
         id: rc.id,
         date: rc.date || rc.createdAt || new Date().toISOString(),
