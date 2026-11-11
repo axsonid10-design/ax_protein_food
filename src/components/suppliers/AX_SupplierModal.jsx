@@ -52,9 +52,10 @@ export function AX_SupplierModal({ isOpen, onClose, supplier = null, onSuccess }
       setCategory(supplier.category || 'لحوم حمراء ومصنعات')
       setTaxNumber(supplier.taxNumber || '')
       setCommercialRegistration(supplier.commercialRegistration || supplier.commercialRegister || '')
-      setOpeningBalance(supplier.openingBalance !== undefined ? String(supplier.openingBalance) : '')
-      setOpeningBalanceType(supplier.openingBalanceType || 'payable')
-      setOpeningBalanceDate(supplier.openingBalanceDate || supplier.createdAt?.split('T')[0] || new Date().toISOString().split('T')[0])
+      const rawOp = supplier.openingBalance !== undefined ? supplier.openingBalance : supplier.opening_balance
+      setOpeningBalance(rawOp !== undefined && rawOp !== null ? String(rawOp) : '')
+      setOpeningBalanceType(supplier.openingBalanceType || supplier.opening_balance_type || 'payable')
+      setOpeningBalanceDate(supplier.openingBalanceDate || supplier.opening_balance_date || supplier.createdAt?.split('T')[0] || new Date().toISOString().split('T')[0])
       setCurrentBalance(supplier.balance !== undefined ? String(supplier.balance) : '0')
       setNotes(supplier.notes || '')
     } else {
@@ -91,8 +92,19 @@ export function AX_SupplierModal({ isOpen, onClose, supplier = null, onSuccess }
       const signedOpening = normalizedOpening === 0 ? 0 : (openingBalanceType === 'payable' ? normalizedOpening : -normalizedOpening)
 
       if (isEditMode) {
-        const parsedBal = currentBalance !== '' ? Number(currentBalance) : supplier.balance
-        const finalBal = isNaN(parsedBal) ? 0 : (parsedBal === 0 ? 0 : parsedBal)
+        const previousBal = Number(supplier.balance) || 0
+        const oldRawOp = Number(supplier.openingBalance !== undefined ? supplier.openingBalance : (supplier.opening_balance || 0)) || 0
+        const oldOpType = supplier.openingBalanceType || supplier.opening_balance_type || 'payable'
+        const oldSignedOpening = oldOpType === 'payable' ? oldRawOp : -oldRawOp
+        const openingDelta = signedOpening - oldSignedOpening
+
+        let parsedBal = currentBalance !== '' ? Number(currentBalance) : supplier.balance
+        if (isNaN(parsedBal)) parsedBal = 0
+
+        let finalBal = parsedBal
+        if (Math.abs(openingDelta) > 0.0001 && Math.abs(parsedBal - previousBal) < 0.0001) {
+          finalBal = previousBal + openingDelta
+        }
         const updated = {
           ...supplier,
           companyName: companyName.trim(),

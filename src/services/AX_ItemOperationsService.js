@@ -32,7 +32,7 @@ export const AX_ItemOperationsService = {
       if (itemErr) throw itemErr
 
       if (openingStock && Number(openingStock.quantity) > 0 && openingStock.warehouseId) {
-        try { await supabase.from('ax_inventory_stock').insert({ warehouse_id: openingStock.warehouseId, item_id: item.id, quantity: Number(openingStock.quantity), unit: openingStock.unit || item.unitType }) } catch {}
+        try { await supabase.from('ax_inventory_stock').insert({ warehouse_id: openingStock.warehouseId, item_id: item.id, quantity: Number(openingStock.quantity), opening_balance: Number(openingStock.quantity), unit: openingStock.unit || item.unitType }) } catch {}
       }
 
       const creatorName = userProfile?.name || userProfile?.full_name || 'أحد المستخدمين'
@@ -99,6 +99,7 @@ export const AX_ItemOperationsService = {
             warehouse_id: openingStock.warehouseId,
             item_id: item.id,
             quantity: Number(openingStock.quantity),
+            opening_balance: Number(openingStock.quantity),
             unit: openingStock.unit || item.unitType,
           })
         }

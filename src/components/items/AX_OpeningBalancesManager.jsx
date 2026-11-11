@@ -17,6 +17,7 @@ export function AX_OpeningBalancesManager() {
   const [searchQuery, setSearchQuery] = useState('')
   const [currentPage, setCurrentPage] = useState(1)
   const [itemForOpeningBalance, setItemForOpeningBalance] = useState(null)
+  const [warehouseForOpeningBalance, setWarehouseForOpeningBalance] = useState(null)
   const [showAuditModal, setShowAuditModal] = useState(false)
   const [auditLogs, setAuditLogs] = useState([])
   const [isLoadingLogs, setIsLoadingLogs] = useState(false)
@@ -52,14 +53,22 @@ export function AX_OpeningBalancesManager() {
 
     items.forEach((item) => {
       targetWarehouses.forEach((wh) => {
-        const stock = inventoryStock.find((s) => s.itemId === item.id && s.warehouseId === wh.id)
-        const openingBalance = Number(stock?.openingBalance) || 0
+        const stock = inventoryStock.find(
+          (s) =>
+            ((s.itemId || s.item_id) === item.id) &&
+            ((s.warehouseId || s.warehouse_id) === wh.id)
+        )
+        const openingBalance = Number(
+          stock?.openingBalance !== undefined
+            ? stock.openingBalance
+            : (stock?.opening_balance || 0)
+        ) || 0
         list.push({
           item,
           warehouse: wh,
           openingBalance,
-          currentQty: Number(stock?.quantity) || 0,
-          openingDate: stock?.openingDate || 'غير محدد',
+          currentQty: Number(stock?.quantity !== undefined ? stock.quantity : 0),
+          openingDate: stock?.openingDate || stock?.opening_date || 'غير محدد',
           unit: stock?.unit || item.unitType || 'كرتونة',
           hasOpening: openingBalance > 0,
         })
@@ -233,7 +242,10 @@ export function AX_OpeningBalancesManager() {
                     <td className="px-4 text-center">
                       <button
                         type="button"
-                        onClick={() => setItemForOpeningBalance(row.item)}
+                        onClick={() => {
+                          setItemForOpeningBalance(row.item)
+                          setWarehouseForOpeningBalance(row.warehouse.id)
+                        }}
                         className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-primary/10 hover:bg-primary/20 text-primary text-[11px] font-black transition-all cursor-pointer active:scale-95"
                       >
                         <Edit3 className="w-3 h-3" />
@@ -264,7 +276,10 @@ export function AX_OpeningBalancesManager() {
                   </div>
                   <button
                     type="button"
-                    onClick={() => setItemForOpeningBalance(row.item)}
+                    onClick={() => {
+                      setItemForOpeningBalance(row.item)
+                      setWarehouseForOpeningBalance(row.warehouse.id)
+                    }}
                     className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-primary text-white text-[11px] font-black transition-all cursor-pointer active:scale-95 shrink-0"
                   >
                     <Edit3 className="w-3 h-3" />
@@ -319,9 +334,13 @@ export function AX_OpeningBalancesManager() {
       {itemForOpeningBalance && (
         <AX_ItemOpeningBalanceModal
           isOpen={Boolean(itemForOpeningBalance)}
-          onClose={() => setItemForOpeningBalance(null)}
+          onClose={() => {
+            setItemForOpeningBalance(null)
+            setWarehouseForOpeningBalance(null)
+          }}
           item={itemForOpeningBalance}
           warehouses={warehouses}
+          initialWarehouseId={warehouseForOpeningBalance}
         />
       )}
 

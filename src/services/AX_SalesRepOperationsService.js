@@ -54,12 +54,14 @@ export const AX_SalesRepOperationsService = {
         name: (rep.name || '').trim(),
         phone: (rep.phone || '').trim(),
         balance: Number(rep.currentBalance ?? rep.netBalance ?? rep.balance ?? 0),
+        opening_balance: Number(rep.openingBalance ?? rep.opening_balance ?? 0),
         van_number: (rep.assignedBranch || rep.vanNumber || '').trim(),
         target_amount: Number(rep.targetAmount ?? rep.salesTarget ?? 0),
         commission_model: rep.commissionModel || 'volume_rate',
         step_amount: Number(rep.stepAmount || 1000),
         step_rate: Number(rep.stepRate || 50),
         status: rep.status || 'active',
+        ...(rep.metadata ? { metadata: rep.metadata } : {}),
       }
 
       const { error } = await supabase.from('ax_distributors').update(row).eq('id', rep.id)
@@ -113,10 +115,27 @@ export const AX_SalesRepOperationsService = {
     }
   },
 
-  addSalesRepTransactionInDB: async (tx, userProfile = null) => {
+  addSalesRepTransactionInDB: async (tx, userProfile = null, updatedRep = null, repSpecificLedger = null) => {
     if (!isSupabaseConfigured() || !supabase?.from || !tx) return { success: false }
     try {
       const txId = tx.id || generateUUID()
+      if (updatedRep && tx.repId) {
+        const nextBalance = Number(updatedRep.currentBalance ?? updatedRep.netBalance ?? updatedRep.balance ?? 0)
+        const nextMetadata = {
+          ...(updatedRep.metadata || {}),
+          ...(Array.isArray(repSpecificLedger) ? { ledger: repSpecificLedger } : {}),
+        }
+        const { error: repErr } = await supabase
+          .from('ax_distributors')
+          .update({ balance: nextBalance, metadata: nextMetadata })
+          .eq('id', tx.repId)
+        if (repErr) {
+          try {
+            await offlineDB.enqueue('ax_distributors', 'update', { id: tx.repId, balance: nextBalance, metadata: nextMetadata })
+          } catch {}
+        }
+      }
+
       try {
         await supabase.from('ax_activity_logs').insert({
           id: generateUUID(),

@@ -2,6 +2,8 @@ import { supabase } from '../services/supabaseClient.js'
 import { AX_RecycleBinService } from '../services/AX_RecycleBinService.js'
 import { AX_OperationsService } from '../services/AX_OperationsService.js'
 import { recalculateItemStock } from '../components/warehouses/itemMovementHelpers.js'
+import { getCartonEquivalent } from '../utils/pricingCalculations.js'
+import { processInvoiceStoreState } from './storeCacheHelper.js'
 
 export const recycleBinHelpers = {
   restoreItem: async (state, id, userProfile, set) => {
@@ -13,7 +15,8 @@ export const recycleBinHelpers = {
         const nextRecycle = (s.recycleBin || []).filter((r) => r.id !== id)
         const updates = { recycleBin: nextRecycle }
         if (res.entityType === 'invoice' && res.restoredData) {
-          updates.invoices = [res.restoredData, ...(s.invoices || []).filter((i) => i.id !== res.restoredData.id)]
+          const invUpdates = processInvoiceStoreState({ ...s, invoices: (s.invoices || []).filter((i) => i.id !== res.restoredData.id) }, res.restoredData)
+          Object.assign(updates, invUpdates)
         } else if (res.entityType === 'item' && res.restoredData) {
           updates.items = [res.restoredData, ...(s.items || []).filter((i) => i.id !== res.restoredData.id)]
         } else if (res.entityType === 'client' && res.restoredData) {
@@ -29,8 +32,10 @@ export const recycleBinHelpers = {
           const stockCopy = [...(s.inventoryStock || [])]
           for (const item of (res.restoredData.items || [])) {
             const itId = item.itemId || item.id || item.item_id
-            const qty = Number(item.quantity) || 0
-            if (!itId || qty <= 0) continue
+            const rawQty = Number(item.quantity) || 0
+            if (!itId || rawQty <= 0) continue
+            const itemMeta = (s.items || []).find((x) => x.id === itId)
+            const qty = getCartonEquivalent(rawQty, item.unit, itemMeta || item)
             if (fromId) {
               const idx = stockCopy.findIndex((st) => (st.warehouseId || st.warehouse_id) === fromId && (st.itemId || st.item_id) === itId)
               if (idx >= 0) stockCopy[idx] = { ...stockCopy[idx], quantity: (Number(stockCopy[idx].quantity) || 0) - qty }
@@ -98,11 +103,13 @@ export const recycleBinHelpers = {
         itemId: itId,
         warehouseId: whId,
         inventoryStock: revertedStock,
+        items: s.items || [],
         purchases,
         sales,
         transfers: s.transfers || [],
         stockAudits: nextAudits,
         warehouses: s.warehouses || [],
+        manufacturingOrders: s.manufacturingOrders || [],
       })
       recalculatedStockMap[itId] = nextStock
       const idx = revertedStock.findIndex((st) => (st.warehouseId || st.warehouse_id) === whId && (st.itemId || st.item_id) === itId)
@@ -155,11 +162,13 @@ export const recycleBinHelpers = {
         itemId: itId,
         warehouseId: whId,
         inventoryStock: revertedStock,
+        items: s.items || [],
         purchases,
         sales,
         transfers: s.transfers || [],
         stockAudits: nextAudits,
         warehouses: s.warehouses || [],
+        manufacturingOrders: s.manufacturingOrders || [],
       })
       recalculatedStockMap[itId] = nextStock
       const idx = revertedStock.findIndex((st) => (st.warehouseId || st.warehouse_id) === whId && (st.itemId || st.item_id) === itId)
@@ -223,8 +232,10 @@ export const recycleBinHelpers = {
 
         for (const it of items) {
           const itId = it.itemId || it.id || it.item_id
-          const qty = Number(it.quantity) || 0
-          if (!itId || qty <= 0) continue
+          const rawQty = Number(it.quantity) || 0
+          if (!itId || rawQty <= 0) continue
+          const itemMeta = (s.items || []).find((x) => x.id === itId)
+          const qty = getCartonEquivalent(rawQty, it.unit, itemMeta || it)
 
           if (fromId) {
             const idx = revertedStock.findIndex((st) => (st.warehouseId || st.warehouse_id) === fromId && (st.itemId || st.item_id) === itId)

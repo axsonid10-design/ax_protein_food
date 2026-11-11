@@ -1,6 +1,7 @@
 import { supabase } from './supabaseClient.js'
 import { generateUUID } from '../utils/AX_UUID.js'
 import { AX_InvoiceOperationsService } from './AX_InvoiceOperationsService.js'
+import { getCartonEquivalent } from '../utils/pricingCalculations.js'
 
 export const AX_RecycleBinService = {
   moveToRecycleBin: async ({
@@ -90,14 +91,21 @@ export const AX_RecycleBinService = {
           notes: rawData.notes || null,
         }, { onConflict: 'id' })
       } else if (entityType === 'transfer') {
-        const fromId = rawData.from_warehouse_id || rawData.fromId
-        const toId = rawData.to_warehouse_id || rawData.toId
+        const fromId = rawData.from_warehouse_id || rawData.fromId || rawData.fromWarehouseId
+        const toId = rawData.to_warehouse_id || rawData.toId || rawData.toWarehouseId
         const items = rawData.items || []
 
         for (const item of items) {
           const itemId = item.itemId || item.id || item.item_id
-          const qty = Number(item.quantity) || 0
-          if (!itemId || qty <= 0) continue
+          const rawQty = Number(item.quantity) || 0
+          if (!itemId || rawQty <= 0) continue
+
+          let itemMeta = item
+          try {
+            const { data: dbItem } = await supabase.from('ax_items').select('unit_type, sub_unit_type, pieces_per_carton, weight_per_carton').eq('id', itemId).maybeSingle()
+            if (dbItem) itemMeta = { ...item, ...dbItem }
+          } catch {}
+          const qty = getCartonEquivalent(rawQty, item.unit, itemMeta)
 
           if (fromId) {
             const { data: fromStock } = await supabase.from('ax_inventory_stock').select('*').eq('warehouse_id', fromId).eq('item_id', itemId).maybeSingle()
@@ -124,7 +132,16 @@ export const AX_RecycleBinService = {
           }
         }
 
-        await supabase.from('ax_transfers').update({ status: 'confirmed' }).eq('id', rawData.id)
+        await supabase.from('ax_transfers').upsert({
+          id: rawData.id,
+          code: rawData.code,
+          from_warehouse_id: fromId,
+          to_warehouse_id: toId,
+          items,
+          status: 'confirmed',
+          date: rawData.date || rawData.operationalDate || new Date().toISOString().split('T')[0],
+          notes: rawData.notes || null,
+        }, { onConflict: 'id' })
       } else if (entityType === 'audit') {
         const whId = rawData.warehouse_id || rawData.warehouseId
         for (const it of (rawData.items || [])) {
@@ -140,7 +157,17 @@ export const AX_RecycleBinService = {
             }, { onConflict: 'warehouse_id,item_id' })
           }
         }
-        await supabase.from('ax_stock_audits').update({ status: 'approved' }).eq('id', rawData.id)
+        await supabase.from('ax_stock_audits').upsert({
+          id: rawData.id,
+          code: rawData.code,
+          warehouse_id: whId,
+          warehouse_name: rawData.warehouse_name || rawData.warehouseName,
+          auditor_name: rawData.auditor_name || rawData.auditorName,
+          audit_date: rawData.audit_date || rawData.date,
+          status: 'approved',
+          items: rawData.items || [],
+          notes: rawData.notes || null,
+        }, { onConflict: 'id' })
       } else if (entityType === 'expense') {
         try {
           const rawExpenses = JSON.parse(localStorage.getItem('ax_expenses') || '[]')

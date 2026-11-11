@@ -120,10 +120,20 @@ export function AX_TreasuryTransactionModal({
       finalNotes = `[أجور ومرتبات - ${wageLabel}] ${finalParty}: ${finalNotes || wageLabel}`
     }
 
+    let resolvedPartyId = null
+    if (txType === 'client_receipt') {
+      resolvedPartyId = clients.find((c) => (c.name || '').trim() === finalParty)?.id || null
+    } else if (txType === 'supplier_payment') {
+      resolvedPartyId = suppliers.find((s) => (s.name || '').trim() === finalParty || (s.companyName || '').trim() === finalParty)?.id || null
+    } else if (txType === 'payroll') {
+      resolvedPartyId = employees.find((emp) => (emp.name || '').trim() === finalParty)?.id || null
+    }
+
     const newTx = {
       id: generateUUID(),
       code: `${prefix}-${Date.now().toString().slice(-4)}`,
       type: txType,
+      partyId: resolvedPartyId,
       partyType: finalPartyType,
       partyName: finalParty,
       amount: numAmount,

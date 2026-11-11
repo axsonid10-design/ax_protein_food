@@ -144,11 +144,11 @@ export function AX_Dashboard() {
     }
   }, [invoices, period, purchasesTotal])
 
-  const totalStockQuantity = inventoryStock.reduce((acc, s) => acc + (Number(s.quantity) || 0), 0)
+  const totalStockQuantity = inventoryStock.reduce((acc, s) => acc + Math.max(0, Number(s.quantity) || 0), 0)
   const totalStockValue = inventoryStock.reduce((acc, s) => {
-    const it = getItem(s.itemId)
+    const it = getItem(s.itemId || s.item_id)
     const price = Number(it?.sellPrice ?? it?.buyPrice ?? 0)
-    return acc + (Number(s.quantity) || 0) * price
+    return acc + Math.max(0, Number(s.quantity) || 0) * price
   }, 0)
 
   const totalCashBalance = treasuryAccounts.reduce(

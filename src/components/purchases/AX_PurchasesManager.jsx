@@ -41,6 +41,9 @@ export function AX_PurchasesManager() {
   const [specificDate, setSpecificDate] = useState('')
   const [customStart, setCustomStart] = useState('')
   const [customEnd, setCustomEnd] = useState('')
+  const [searchQuery, setSearchQuery] = useState('')
+  const [statusFilter, setStatusFilter] = useState('all')
+  const [warehouseFilter, setWarehouseFilter] = useState('all')
 
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [selectedInvoiceForModal, setSelectedInvoiceForModal] = useState(null)
@@ -60,9 +63,11 @@ export function AX_PurchasesManager() {
       if (purchaseTab === 'purchases_only' && inv.type !== 'purchase') return false
       if (purchaseTab === 'returns_only' && inv.type !== 'purchase_return') return false
 
-      return matchesInvoiceTimeframe(inv, { timeframe, specificDate, customStart, customEnd })
+      return matchesInvoiceTimeframe(inv, {
+        timeframe, specificDate, customStart, customEnd, searchQuery, statusFilter, warehouseFilter,
+      })
     })
-  }, [purchaseInvoices, purchaseTab, timeframe, specificDate, customStart, customEnd])
+  }, [purchaseInvoices, purchaseTab, timeframe, specificDate, customStart, customEnd, searchQuery, statusFilter, warehouseFilter])
 
   const totalGrossPurchases = useMemo(() => {
     return filteredPurchases
@@ -188,6 +193,12 @@ export function AX_PurchasesManager() {
             setCustomStart={(s) => { setCustomStart(s); setPage(1); }}
             customEnd={customEnd}
             setCustomEnd={(e) => { setCustomEnd(e); setPage(1); }}
+            searchQuery={searchQuery}
+            setSearchQuery={(q) => { setSearchQuery(q); setPage(1); }}
+            statusFilter={statusFilter}
+            setStatusFilter={(st) => { setStatusFilter(st); setPage(1); }}
+            warehouseFilter={warehouseFilter}
+            setWarehouseFilter={(wh) => { setWarehouseFilter(wh); setPage(1); }}
           />
         </div>
 

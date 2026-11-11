@@ -225,7 +225,7 @@ export function AX_ManufacturingDisassembly() {
                     className="w-full h-10 px-3 rounded-2xl bg-surface-lowest border border-outline-variant/40 text-xs font-mono font-bold text-on-surface outline-none focus:border-primary"
                   />
                   <div className="flex gap-1 shrink-0">
-                    {['كرتونة', 'كيلو'].map((u) => (
+                    {['كرتونة', 'كيلو', 'طبق', 'كيس', 'قطعة'].map((u) => (
                       <button
                         key={u}
                         type="button"
@@ -293,7 +293,7 @@ export function AX_ManufacturingDisassembly() {
                         className="w-full px-2.5 py-2.5 rounded-2xl bg-surface-low text-xs font-bold text-on-surface border border-outline-variant/30 font-mono"
                       />
                       <div className="flex gap-1 shrink-0">
-                        {['كيلو', 'كرتونة', 'قطعة'].map((u) => (
+                        {['كيلو', 'كرتونة', 'طبق', 'كيس', 'قطعة'].map((u) => (
                           <button
                             key={u}
                             type="button"

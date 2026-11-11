@@ -64,14 +64,15 @@ export function AX_SupplierDetailsModal({ supplier, isOpen, onClose }) {
   const ledgerEntries = useMemo(() => {
     if (!supplier?.id) return []
     const entries = []
-    const opBal = Number(supplier.openingBalance) || 0
-    const opType = supplier.openingBalanceType || 'payable'
+    const opBal = Number(supplier.openingBalance !== undefined ? supplier.openingBalance : (supplier.opening_balance || 0)) || 0
+    const opType = supplier.openingBalanceType || supplier.opening_balance_type || 'payable'
+    const opDate = supplier.openingBalanceDate || supplier.opening_balance_date || supplier.createdAt || new Date().toISOString()
     const opSigned = opType === 'payable' ? opBal : -opBal
 
     if (opBal > 0) {
       entries.push({
         id: 'op-bal',
-        date: supplier.createdAt || new Date().toISOString(),
+        date: opDate,
         type: 'opening',
         description: `رصيد أول المدة (${opType === 'payable' ? 'دائن / مستحق له' : 'مدين / مقدم له'})`,
         credit: opType === 'payable' ? opBal : 0,

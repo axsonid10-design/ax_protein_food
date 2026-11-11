@@ -36,7 +36,9 @@ export function AX_AgingDebtsReport({
 
     const rows = list.map((party) => {
       const balance = Number(party.balance) || 0
-      totalAll += balance
+      if (balance > 0) {
+        totalAll += balance
+      }
 
       const partyInvoices = invoices.filter(
         (inv) => inv.partyName === party.name && inv.type === targetType && Number(inv.remainingAmount) > 0

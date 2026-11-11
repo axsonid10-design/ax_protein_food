@@ -1,5 +1,5 @@
-import React, { useState, useMemo, useEffect, useRef } from 'react'
-import { X, Layers, Warehouse, AlertCircle, ArrowLeft, Package, Boxes, Scale } from 'lucide-react'
+import React, { useState, useMemo, useEffect } from 'react'
+import { X, Layers, Warehouse, AlertCircle, ArrowLeft, Boxes } from 'lucide-react'
 import { AX_SearchableSelect } from '../common/AX_SearchableSelect'
 import { AX_CompanyDatePicker } from '../common/AX_CompanyDatePicker'
 import { AX_ConfirmModal } from '../common/AX_ConfirmModal'
@@ -7,24 +7,28 @@ import { useBodyScrollLock } from '../../hooks/useBodyScrollLock'
 import { useAXStore } from '../../store/useAXStore'
 import { axToast } from '../common/AX_Toast'
 
-export function AX_ItemOpeningBalanceModal({ isOpen, onClose, item, warehouses = [] }) {
+export function AX_ItemOpeningBalanceModal({
+  isOpen,
+  onClose,
+  item,
+  warehouses = [],
+  initialWarehouseId = null,
+}) {
   useBodyScrollLock(isOpen, onClose)
 
   const inventoryStock = useAXStore((s) => s.inventoryStock) || []
   const saveItemOpeningBalance = useAXStore((s) => s.saveItemOpeningBalance)
 
-  const [workflowStep, setWorkflowStep] = useState('confirm_start')
-  const [selectedWarehouseId, setSelectedWarehouseId] = useState(() => warehouses[0]?.id || '')
-  const [openingQty, setOpeningQty] = useState('')
+  const [workflowStep, setWorkflowStep] = useState('warehouse_form')
+  const [selectedWarehouseId, setSelectedWarehouseId] = useState(() => initialWarehouseId || warehouses[0]?.id || '')
+  const [openingQty, setOpeningQty] = useState('0')
   const [openingDate, setOpeningDate] = useState(() => new Date().toISOString().split('T')[0])
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [entryMode, setEntryMode] = useState('dual')
-  const [cartonsPart, setCartonsPart] = useState('')
-  const [piecesPart, setPiecesPart] = useState('')
-  const prevIsOpenRef = useRef(false)
+  const [cartonsPart, setCartonsPart] = useState('0')
+  const [piecesPart, setPiecesPart] = useState('0')
 
   const piecesPerCarton = Number(item?.piecesPerCarton || item?.pieces_per_carton || 0)
-  const weightPerCarton = Number(item?.weightPerCarton || item?.weight_per_carton || 0)
   const subUnitName = item?.subUnitType || item?.sub_unit_type || 'قطعة'
   const baseUnit = item?.unitType || 'كرتونة'
   const isCarton = baseUnit === 'كرتونة'
@@ -32,13 +36,13 @@ export function AX_ItemOpeningBalanceModal({ isOpen, onClose, item, warehouses =
 
   const syncBreakdown = (val) => {
     const num = Number(val)
-    if (!isNaN(num) && num > 0 && hasPieces) {
+    if (!isNaN(num) && hasPieces) {
       const c = Math.floor(num)
       const p = Math.round((num - c) * piecesPerCarton)
-      setCartonsPart(c > 0 ? String(c) : '')
-      setPiecesPart(p > 0 ? String(p) : '')
+      setCartonsPart(String(c))
+      setPiecesPart(String(p))
     } else {
-      setCartonsPart('')
+      setCartonsPart(val !== '' && !isNaN(Number(val)) ? String(val) : '')
       setPiecesPart('')
     }
   }
@@ -49,7 +53,7 @@ export function AX_ItemOpeningBalanceModal({ isOpen, onClose, item, warehouses =
     const p = Number(piecesPart) || 0
     const total = piecesPerCarton > 0 ? c + (p / piecesPerCarton) : c
     const rounded = Number.isInteger(total) ? total : Number(total.toFixed(4))
-    setOpeningQty(total > 0 ? String(rounded) : (cVal === '' && piecesPart === '' ? '' : '0'))
+    setOpeningQty(cVal === '' && piecesPart === '' ? '' : String(rounded))
   }
 
   const handlePiecesChange = (pVal) => {
@@ -58,44 +62,68 @@ export function AX_ItemOpeningBalanceModal({ isOpen, onClose, item, warehouses =
     const p = Number(pVal) || 0
     const total = piecesPerCarton > 0 ? c + (p / piecesPerCarton) : c
     const rounded = Number.isInteger(total) ? total : Number(total.toFixed(4))
-    setOpeningQty(total > 0 ? String(rounded) : (cartonsPart === '' && pVal === '' ? '' : '0'))
+    setOpeningQty(cartonsPart === '' && pVal === '' ? '' : String(rounded))
+  }
+
+  const loadWarehouseStockData = (whId) => {
+    const match = (inventoryStock || []).find(
+      (s) =>
+        ((s.itemId || s.item_id) === item?.id) &&
+        ((s.warehouseId || s.warehouse_id) === whId)
+    )
+    const rawVal = match?.openingBalance !== undefined
+      ? match.openingBalance
+      : (match?.opening_balance !== undefined ? match.opening_balance : null)
+
+    if (rawVal !== null && rawVal !== undefined && !isNaN(Number(rawVal))) {
+      const num = Number(rawVal)
+      setOpeningQty(String(num))
+      syncBreakdown(num)
+      const d = match.openingDate || match.opening_date
+      if (d && d !== 'غير محدد') {
+        setOpeningDate(d)
+      } else {
+        setOpeningDate(new Date().toISOString().split('T')[0])
+      }
+    } else {
+      setOpeningQty('0')
+      setCartonsPart('0')
+      setPiecesPart('0')
+      setOpeningDate(new Date().toISOString().split('T')[0])
+    }
   }
 
   useEffect(() => {
-    if (isOpen && !prevIsOpenRef.current) {
-      setWorkflowStep('confirm_start')
+    if (isOpen && item) {
+      setWorkflowStep('warehouse_form')
       setIsSubmitting(false)
-      const initialWhId = warehouses[0]?.id || ''
-      setSelectedWarehouseId(initialWhId)
-      const match = (inventoryStock || []).find((s) => s.itemId === item?.id && s.warehouseId === initialWhId)
-      if (match && match.openingBalance !== undefined) {
-        setOpeningQty(String(match.openingBalance))
-        syncBreakdown(match.openingBalance)
-        if (match.openingDate && match.openingDate !== 'غير محدد') {
-          setOpeningDate(match.openingDate)
-        } else {
-          setOpeningDate(new Date().toISOString().split('T')[0])
-        }
-      } else {
-        setOpeningQty('')
-        setCartonsPart('')
-        setPiecesPart('')
-        setOpeningDate(new Date().toISOString().split('T')[0])
-      }
+      const targetWhId = (initialWarehouseId && warehouses.some((w) => w.id === initialWarehouseId))
+        ? initialWarehouseId
+        : (warehouses[0]?.id || '')
+      setSelectedWarehouseId(targetWhId)
+      loadWarehouseStockData(targetWhId)
     }
-    prevIsOpenRef.current = isOpen
-  }, [isOpen, item?.id, warehouses, inventoryStock])
+  }, [isOpen, item?.id, initialWarehouseId])
 
   const stockRows = useMemo(() => {
     if (!item?.id) return []
     return warehouses.map((wh) => {
-      const match = (inventoryStock || []).find((s) => s.itemId === item.id && s.warehouseId === wh.id)
+      const match = (inventoryStock || []).find(
+        (s) =>
+          ((s.itemId || s.item_id) === item.id) &&
+          ((s.warehouseId || s.warehouse_id) === wh.id)
+      )
+      const op = Number(
+        match?.openingBalance !== undefined
+          ? match.openingBalance
+          : (match?.opening_balance !== undefined ? match.opening_balance : 0)
+      ) || 0
       return {
         warehouseId: wh.id,
         warehouseName: wh.name,
-        openingBalance: Number(match?.openingBalance) || 0,
-        openingDate: match?.openingDate || 'غير محدد',
-        currentStock: Number(match?.quantity) || 0,
+        openingBalance: op,
+        openingDate: match?.openingDate || match?.opening_date || 'غير محدد',
+        currentStock: Number(match?.quantity !== undefined ? match.quantity : 0),
         unit: match?.unit || item.unitType || 'كرتونة',
       }
     })
@@ -111,18 +139,7 @@ export function AX_ItemOpeningBalanceModal({ isOpen, onClose, item, warehouses =
 
   const handleSelectWarehouse = (whId) => {
     setSelectedWarehouseId(whId)
-    const row = stockRows.find((r) => r.warehouseId === whId)
-    if (row && row.openingBalance !== undefined) {
-      setOpeningQty(String(row.openingBalance))
-      syncBreakdown(row.openingBalance)
-      if (row.openingDate && row.openingDate !== 'غير محدد') {
-        setOpeningDate(row.openingDate)
-      }
-    } else {
-      setOpeningQty('')
-      setCartonsPart('')
-      setPiecesPart('')
-    }
+    loadWarehouseStockData(whId)
   }
 
   const handleStage2Submit = (e) => {
@@ -132,8 +149,8 @@ export function AX_ItemOpeningBalanceModal({ isOpen, onClose, item, warehouses =
       return
     }
     const parsedQty = Number(openingQty)
-    if (isNaN(parsedQty) || openingQty === '') {
-      axToast.error('يرجى إدخال كمية صحيحة')
+    if (isNaN(parsedQty) || openingQty === '' || parsedQty < 0) {
+      axToast.error('يرجى إدخال كمية صحيحة (0 أو أكبر)')
       return
     }
     setWorkflowStep('confirm_final')
@@ -141,7 +158,7 @@ export function AX_ItemOpeningBalanceModal({ isOpen, onClose, item, warehouses =
 
   const handleFinalExecution = async () => {
     const parsedQty = Number(openingQty)
-    if (!selectedWarehouseId || isNaN(parsedQty)) {
+    if (!selectedWarehouseId || isNaN(parsedQty) || parsedQty < 0) {
       axToast.error('يرجى التأكد من صحة البيانات')
       setWorkflowStep('warehouse_form')
       return
@@ -176,20 +193,6 @@ export function AX_ItemOpeningBalanceModal({ isOpen, onClose, item, warehouses =
   const activeUnit = selectedStockRow?.unit || item.unitType || 'كرتونة'
   const activeWarehouseName = targetWarehouse?.name || 'المخزن المحدد'
 
-  if (workflowStep === 'confirm_start') {
-    return (
-      <AX_ConfirmModal
-        isOpen={isOpen && workflowStep === 'confirm_start'}
-        title="تأكيد تعديل رصيد أول المدة"
-        message={`هل أنت متأكد؟ هل ترغب في تغيير رصيد أول المدة للصنف "${item.compositeName || item.name}"؟`}
-        confirmText="نعم، متأكد"
-        cancelText="إلغاء"
-        onConfirm={() => setWorkflowStep('warehouse_form')}
-        onCancel={onClose}
-      />
-    )
-  }
-
   return (
     <>
       <div className="fixed inset-0 z-40 flex items-center justify-center p-2 sm:p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-150">
@@ -222,7 +225,7 @@ export function AX_ItemOpeningBalanceModal({ isOpen, onClose, item, warehouses =
             <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-2xl flex items-start gap-2.5 text-xs text-amber-900 font-bold">
               <AlertCircle className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
               <p>
-                يحدد رصيد أول المدة كمية البداية للصنف في المخزن وتاريخها الافتتاحي. في حال وجود محضر جرد معتمد لاحق، يظل الرصيد الفعلي الحالي مثبتاً على العد الفعلي للجرد.
+                يحدد رصيد أول المدة كمية البداية للصنف في المخزن. يتم احتساب الرصيد الفعلي الحالي تلقائياً بإضافة الوارد وخصم المنصرف والتحويلات.
               </p>
             </div>
 
@@ -339,6 +342,7 @@ export function AX_ItemOpeningBalanceModal({ isOpen, onClose, item, warehouses =
                   <input
                     type="number"
                     step="any"
+                    min="0"
                     value={openingQty}
                     onChange={(e) => {
                       setOpeningQty(e.target.value)
@@ -375,11 +379,16 @@ export function AX_ItemOpeningBalanceModal({ isOpen, onClose, item, warehouses =
                     {stockRows.map((r) => (
                       <tr
                         key={r.warehouseId}
-                        className={`h-10 hover:bg-surface-container-low/40 ${
-                          r.warehouseId === selectedWarehouseId ? 'bg-primary/5' : ''
+                        className={`h-10 hover:bg-surface-container-low/40 transition-colors ${
+                          r.warehouseId === selectedWarehouseId ? 'bg-primary/5 font-black' : ''
                         }`}
                       >
-                        <td className="px-3 font-black text-on-surface">{r.warehouseName}</td>
+                        <td className="px-3 font-black text-on-surface flex items-center gap-1.5 pt-2">
+                          {r.warehouseId === selectedWarehouseId && (
+                            <span className="w-2 h-2 rounded-full bg-primary inline-block shrink-0" />
+                          )}
+                          <span>{r.warehouseName}</span>
+                        </td>
                         <td className="px-3 text-center font-mono text-amber-800 font-black">
                           {r.openingBalance} {r.unit}
                         </td>
@@ -395,9 +404,13 @@ export function AX_ItemOpeningBalanceModal({ isOpen, onClose, item, warehouses =
                           <button
                             type="button"
                             onClick={() => handleSelectWarehouse(r.warehouseId)}
-                            className="px-2.5 py-1 rounded-full text-[11px] font-black bg-surface-container hover:bg-surface-container-high text-on-surface transition-colors cursor-pointer"
+                            className={`px-3 py-1 rounded-full text-[11px] font-black transition-colors cursor-pointer ${
+                              r.warehouseId === selectedWarehouseId
+                                ? 'bg-primary text-white'
+                                : 'bg-surface-container hover:bg-surface-container-high text-on-surface'
+                            }`}
                           >
-                            تعديل
+                            {r.warehouseId === selectedWarehouseId ? 'المحدد حالياً' : 'تعديل هذا المخزن'}
                           </button>
                         </td>
                       </tr>
@@ -424,7 +437,7 @@ export function AX_ItemOpeningBalanceModal({ isOpen, onClose, item, warehouses =
               className="px-6 py-2.5 rounded-full bg-primary hover:bg-primary-dark text-white text-xs font-black flex items-center gap-1.5 shadow-md transition-all active:scale-95 disabled:opacity-50 cursor-pointer"
             >
               <ArrowLeft className="w-4 h-4" />
-              <span>متابعة التعديل</span>
+              <span>متابعة الاعتماد</span>
             </button>
           </div>
         </div>

@@ -34,7 +34,9 @@ export function AX_SalesRepLedgerModal({ rep, isOpen, onClose }) {
   }, [rep, salesRepLedger])
 
   const { netBalance, history } = useMemo(() => {
-    const opening = Number(rep?.openingBalance) || 0
+    const rawOpening = Number(rep?.openingBalance) || 0
+    const fallbackBal = Number(rep?.currentBalance ?? rep?.netBalance ?? rep?.balance ?? 0)
+    const opening = rawOpening !== 0 || repTransactions.length > 0 ? rawOpening : fallbackBal
     return computeRepLedgerBalance(opening, repTransactions)
   }, [rep, repTransactions])
 
@@ -59,7 +61,6 @@ export function AX_SalesRepLedgerModal({ rep, isOpen, onClose }) {
     }
 
     addSalesRepTransaction(rep.id, tx)
-    AX_SalesRepOperationsService.addSalesRepTransactionInDB(tx, profile)
     showToast('تم تسجيل صرف الدفعة بنجاح', 'success')
     setPayoutAmount('')
     setPayoutDescription('')

@@ -23,36 +23,20 @@ export function isStrictlyBefore(opDate, baseDate, opTimestamp = null, baseTimes
   return false
 }
 
-export function recalculateItemStock({
-  itemId,
-  warehouseId,
-  inventoryStock = [],
-  items = [],
-  purchases = [],
-  sales = [],
-  transfers = [],
-  stockAudits = [],
-  warehouses = [],
-}) {
+export function recalculateItemStock({ itemId, warehouseId, inventoryStock = [], items = [], purchases = [], sales = [], transfers = [], stockAudits = [], warehouses = [], manufacturingOrders = [] }) {
   if (!itemId || !warehouseId) return 0
 
-  const stockRow = (inventoryStock || []).find(
-    (s) =>
-      (s.itemId || s.item_id) === itemId &&
-      (s.warehouseId || s.warehouse_id) === warehouseId
-  )
-  const openingBalance = Number(
-    stockRow?.openingBalance !== undefined
-      ? stockRow.openingBalance
-      : (stockRow?.opening_balance || 0)
-  )
-  const openingDate = stockRow?.openingDate || stockRow?.opening_date || ''
+  const stockRow = (inventoryStock || []).find((s) => (s.itemId || s.item_id) === itemId && (s.warehouseId || s.warehouse_id) === warehouseId)
+  const targetItemForOpening = (items || []).find((i) => i.id === itemId)
+  const rawOpeningBalance = Number(stockRow?.openingBalance !== undefined ? stockRow.openingBalance : (stockRow?.opening_balance || 0))
+  const openingBalance = stockRow?.unit && targetItemForOpening && stockRow.unit !== (targetItemForOpening.unitType || targetItemForOpening.unit_type)
+    ? getCartonEquivalent(rawOpeningBalance, stockRow.unit, targetItemForOpening)
+    : rawOpeningBalance
 
   const activeAudits = (stockAudits || []).filter((a) => {
     if (!a) return false
     const wId = a.warehouseId || a.warehouse_id
-    const isCancelled = a.status === 'cancelled' || a.status === 'deleted'
-    return !isCancelled && wId === warehouseId
+    return a.status !== 'cancelled' && a.status !== 'deleted' && wId === warehouseId
   })
 
   let latestAudit = null
@@ -60,30 +44,21 @@ export function recalculateItemStock({
   let latestAuditDate = ''
 
   activeAudits.forEach((aud) => {
-    const aDate =
-      aud.operationalDate || aud.auditDate || aud.date || aud.createdAt || aud.created_at || ''
-    const found = (aud.items || []).find(
-      (it) => (it.itemId || it.item_id || it.id) === itemId
-    )
-    if (found) {
-      if (!latestAuditDate || new Date(aDate) >= new Date(latestAuditDate)) {
-        latestAudit = aud
-        auditItem = found
-        latestAuditDate = aDate
-      }
+    const aDate = aud.operationalDate || aud.auditDate || aud.date || aud.createdAt || aud.created_at || ''
+    const found = (aud.items || []).find((it) => (it.itemId || it.item_id || it.id) === itemId)
+    if (found && (!latestAuditDate || new Date(aDate) >= new Date(latestAuditDate))) {
+      latestAudit = aud
+      auditItem = found
+      latestAuditDate = aDate
     }
   })
 
   let baseQty = openingBalance
-  let baseDate = openingDate
+  let auditCutoffDate = ''
 
   if (latestAudit && auditItem) {
-    baseQty = Number(
-      auditItem.actualQty !== undefined
-        ? auditItem.actualQty
-        : (auditItem.actualQtyNum !== undefined ? auditItem.actualQtyNum : (auditItem.quantity || 0))
-    )
-    baseDate = latestAuditDate
+    baseQty = Number(auditItem.actualQty !== undefined ? auditItem.actualQty : (auditItem.actualQtyNum !== undefined ? auditItem.actualQtyNum : (auditItem.quantity || 0)))
+    auditCutoffDate = latestAuditDate
   }
 
   let postIn = 0
@@ -96,7 +71,7 @@ export function recalculateItemStock({
     if (invWhId !== warehouseId) return
     if (inv.status === 'cancelled' || inv.status === 'deleted') return
     const invDate = inv.operationalDate || inv.date || inv.createdAt || inv.created_at || ''
-    if (baseDate && isStrictlyBefore(invDate, baseDate, inv.createdAt, latestAudit?.createdAt)) {
+    if (auditCutoffDate && isStrictlyBefore(invDate, auditCutoffDate, inv.createdAt, latestAudit?.createdAt)) {
       return
     }
     const isReturn = inv.type === 'purchase_return'
@@ -117,7 +92,7 @@ export function recalculateItemStock({
     if (invWhId !== warehouseId) return
     if (inv.status === 'cancelled' || inv.status === 'deleted') return
     const invDate = inv.operationalDate || inv.date || inv.createdAt || inv.created_at || ''
-    if (baseDate && isStrictlyBefore(invDate, baseDate, inv.createdAt, latestAudit?.createdAt)) {
+    if (auditCutoffDate && isStrictlyBefore(invDate, auditCutoffDate, inv.createdAt, latestAudit?.createdAt)) {
       return
     }
     const isReturn = inv.type === 'sale_return'
@@ -153,10 +128,10 @@ export function recalculateItemStock({
     const trfDate =
       trf.operationalDate || trf.date || trf.requestedAt || trf.created_at || trf.createdAt || ''
     if (
-      baseDate &&
+      auditCutoffDate &&
       isStrictlyBefore(
         trfDate,
-        baseDate,
+        auditCutoffDate,
         trf.createdAt || trf.requestedAt,
         latestAudit?.createdAt
       )
@@ -180,7 +155,33 @@ export function recalculateItemStock({
     })
   })
 
-  return baseQty + postIn - postOut
+  ;(manufacturingOrders || []).forEach((mo) => {
+    if (!mo || mo.status === 'cancelled' || mo.status === 'deleted') return
+    const moDate = mo.operationalDate || mo.date || mo.createdAt || mo.created_at || ''
+    if (auditCutoffDate && isStrictlyBefore(moDate, auditCutoffDate, mo.createdAt, latestAudit?.createdAt)) {
+      return
+    }
+    const rawWhId = mo.rawWarehouseId || mo.raw_warehouse_id
+    const rawItId = mo.rawItemId || mo.raw_item_id
+    if (rawWhId === warehouseId && rawItId === itemId) {
+      const targetItem = (items || []).find((i) => i.id === itemId)
+      const qty = getCartonEquivalent(mo.consumedQuantity || mo.consumed_quantity || 0, mo.consumedUnit || mo.unit, targetItem)
+      postOut += qty
+    }
+    const produced = mo.producedItems || mo.produced_items || []
+    produced.forEach((p) => {
+      const pWhId = p.targetWarehouseId || p.target_warehouse_id
+      const pItId = p.itemId || p.item_id || p.id
+      if (pWhId === warehouseId && pItId === itemId) {
+        const targetItem = (items || []).find((i) => i.id === itemId)
+        const qty = getCartonEquivalent(p.quantity, p.unit, targetItem || p)
+        postIn += qty
+      }
+    })
+  })
+
+  const calculated = baseQty + postIn - postOut
+  return Number.isInteger(calculated) ? calculated : Number(calculated.toFixed(4))
 }
 
 export function calculateItemMovements({
@@ -191,6 +192,7 @@ export function calculateItemMovements({
   sales = [],
   transfers = [],
   stockAudits = [],
+  manufacturingOrders = [],
   currentStock = 0,
   warehouses = [],
   inventoryStock = [],
@@ -380,14 +382,43 @@ export function calculateItemMovements({
     })
   })
 
+  const targetItemRef = (items || []).find((i) => i.id === itemId)
+  ;(manufacturingOrders || []).forEach((mo) => {
+    if (!mo || mo.status === 'cancelled' || mo.status === 'deleted') return
+    const moDate = mo.operationalDate || mo.date || mo.createdAt || mo.created_at || ''
+    const rawWhId = mo.rawWarehouseId || mo.raw_warehouse_id
+    const rawItId = mo.rawItemId || mo.raw_item_id
+    if (rawItId === itemId && (selectedWhId === 'ALL' || rawWhId === selectedWhId)) {
+      const rawQty = Number(mo.consumedQuantity || mo.consumed_quantity || 0)
+      const cartonQty = getCartonEquivalent(rawQty, mo.consumedUnit || mo.unit, targetItemRef)
+      raw.push({ id: `mo-out-${mo.id}-${itemId}`, type: 'manufacturing_out', date: moDate, title: `صرف للتصنيع [${mo.code || 'أمر'}]`, party: 'عنبر التصنيع', unit: mo.consumedUnit || mo.unit || 'كرتونة', rawQty, inQty: 0, outQty: cartonQty })
+    }
+    ;(mo.producedItems || mo.produced_items || []).forEach((p) => {
+      const pWhId = p.targetWarehouseId || p.target_warehouse_id
+      const pItId = p.itemId || p.item_id || p.id
+      if (pItId === itemId && (selectedWhId === 'ALL' || pWhId === selectedWhId)) {
+        const rawQty = Number(p.quantity) || 0
+        const cartonQty = getCartonEquivalent(rawQty, p.unit, targetItemRef || p)
+        raw.push({ id: `mo-in-${mo.id}-${itemId}`, type: 'manufacturing_in', date: moDate, title: `إنتاج تام [${mo.code || 'أمر'}]`, party: 'عنبر التصنيع', unit: p.unit || 'كرتونة', rawQty, inQty: cartonQty, outQty: 0 })
+      }
+    })
+  })
+
   raw.sort((a, b) => {
     const da = new Date(a.date || 0).getTime()
     const db = new Date(b.date || 0).getTime()
     if (da !== db) return da - db
-    const aPriority = a.type === 'purchase' || a.type === 'transfer_in' ? 1 : 2
-    const bPriority = b.type === 'purchase' || b.type === 'transfer_in' ? 1 : 2
+    const aPriority = a.type === 'purchase' || a.type === 'transfer_in' || a.type === 'manufacturing_in' ? 1 : 2
+    const bPriority = b.type === 'purchase' || b.type === 'transfer_in' || b.type === 'manufacturing_in' ? 1 : 2
     return aPriority - bPriority
   })
+
+  const normalizeOpeningRow = (s) => {
+    const val = Number(s.openingBalance !== undefined ? s.openingBalance : (s.opening_balance || 0))
+    return s.unit && targetItemRef && s.unit !== (targetItemRef.unitType || targetItemRef.unit_type)
+      ? getCartonEquivalent(val, s.unit, targetItemRef)
+      : val
+  }
 
   let registeredOpening = 0
   let hasRegisteredOpening = false
@@ -395,32 +426,13 @@ export function calculateItemMovements({
     if (selectedWhId === 'ALL') {
       const rows = inventoryStock.filter((s) => (s.itemId || s.item_id) === itemId)
       if (rows.length > 0) {
-        registeredOpening = rows.reduce(
-          (sum, s) =>
-            sum +
-            Number(
-              s.openingBalance !== undefined
-                ? s.openingBalance
-                : (s.opening_balance || 0)
-            ),
-          0
-        )
-        hasRegisteredOpening = rows.some(
-          (s) => s.openingBalance !== undefined || s.opening_balance !== undefined
-        )
+        registeredOpening = rows.reduce((sum, s) => sum + normalizeOpeningRow(s), 0)
+        hasRegisteredOpening = rows.some((s) => s.openingBalance !== undefined || s.opening_balance !== undefined)
       }
     } else {
-      const match = inventoryStock.find(
-        (s) =>
-          (s.itemId || s.item_id) === itemId &&
-          (s.warehouseId || s.warehouse_id) === selectedWhId
-      )
+      const match = inventoryStock.find((s) => (s.itemId || s.item_id) === itemId && (s.warehouseId || s.warehouse_id) === selectedWhId)
       if (match && (match.openingBalance !== undefined || match.opening_balance !== undefined)) {
-        registeredOpening = Number(
-          match.openingBalance !== undefined
-            ? match.openingBalance
-            : (match.opening_balance || 0)
-        )
+        registeredOpening = normalizeOpeningRow(match)
         hasRegisteredOpening = true
       }
     }
@@ -434,21 +446,23 @@ export function calculateItemMovements({
       netOut += m.outQty || 0
     }
   })
+  netIn = Number(netIn.toFixed(4))
+  netOut = Number(netOut.toFixed(4))
 
-  const opening = hasRegisteredOpening ? registeredOpening : (currentStock - netIn + netOut)
+  const opening = Number((hasRegisteredOpening ? registeredOpening : (currentStock - netIn + netOut)).toFixed(4))
 
   let running = opening
   const withRunning = raw.map((m) => {
     if (m.isAudit) {
-      const diff = m.actualQty - running
+      const diff = Number((m.actualQty - running).toFixed(4))
       m.inQty = diff > 0 ? diff : 0
       m.outQty = diff < 0 ? Math.abs(diff) : 0
       m.title = `محضر جرد (${diff >= 0 ? 'مطابق/فائض' : 'عجز'}) [${m.id.split('-')[1] || 'محضر'}]`
-      running = m.actualQty
+      running = Number(m.actualQty.toFixed(4))
       return { ...m, balanceAfter: running }
     }
     if (!(selectedWhId === 'ALL' && m.isInternal)) {
-      running = running + (m.inQty || 0) - (m.outQty || 0)
+      running = Number((running + (m.inQty || 0) - (m.outQty || 0)).toFixed(4))
     }
     return { ...m, balanceAfter: running }
   })

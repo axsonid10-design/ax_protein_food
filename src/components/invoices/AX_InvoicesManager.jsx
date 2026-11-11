@@ -46,6 +46,9 @@ export function AX_InvoicesManager() {
   const [specificDate, setSpecificDate] = useState('')
   const [customStart, setCustomStart] = useState('')
   const [customEnd, setCustomEnd] = useState('')
+  const [searchQuery, setSearchQuery] = useState('')
+  const [statusFilter, setStatusFilter] = useState('all')
+  const [warehouseFilter, setWarehouseFilter] = useState('all')
 
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [selectedInvoiceForModal, setSelectedInvoiceForModal] = useState(null)
@@ -68,7 +71,9 @@ export function AX_InvoicesManager() {
 
   const filteredInvoices = (invoices || []).filter((inv) => {
     if (typeFilter !== 'all' && inv.type !== typeFilter) return false
-    return matchesInvoiceTimeframe(inv, { timeframe, specificDate, customStart, customEnd })
+    return matchesInvoiceTimeframe(inv, {
+      timeframe, specificDate, customStart, customEnd, searchQuery, statusFilter, warehouseFilter,
+    })
   })
 
   const totalInvoices = filteredInvoices.length
@@ -151,6 +156,12 @@ export function AX_InvoicesManager() {
               setCustomStart={(s) => { setCustomStart(s); setInvoicePage(1); }}
               customEnd={customEnd}
               setCustomEnd={(e) => { setCustomEnd(e); setInvoicePage(1); }}
+              searchQuery={searchQuery}
+              setSearchQuery={(q) => { setSearchQuery(q); setInvoicePage(1); }}
+              statusFilter={statusFilter}
+              setStatusFilter={(st) => { setStatusFilter(st); setInvoicePage(1); }}
+              warehouseFilter={warehouseFilter}
+              setWarehouseFilter={(wh) => { setWarehouseFilter(wh); setInvoicePage(1); }}
             />
           </div>
 

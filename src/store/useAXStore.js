@@ -10,7 +10,7 @@ import { generateUUID } from '../utils/AX_UUID.js'
 import { categoryHelpers } from './categoryHelpers.js'
 import { recycleBinHelpers } from './recycleBinHelpers.js'
 import { expenseCategoryHelpers, initialExpenseCategories } from './expenseCategoryHelpers.js'
-import { updateLocalCachePayload, processInvoiceStoreState, saveSalesRepState, updateSalesRepState, deleteSalesRepState, updateInvoiceStoreState, deleteInvoiceStoreState, saveItemOpeningBalanceState } from './storeCacheHelper.js'
+import { updateLocalCachePayload, processInvoiceStoreState, saveSalesRepState, updateSalesRepState, deleteSalesRepState, updateInvoiceStoreState, deleteInvoiceStoreState, saveItemOpeningBalanceState, applyManufacturingOrderState, updateManufacturingOrderState, deleteManufacturingOrderState, editItemStoreState } from './storeCacheHelper.js'
 import { checkTransferAuditDiscrepancy, calculateTransferStockMovement } from './transferAuditHelpers.js'
 import {
   initialCategories, initialSubCategories, initialSecondaryCategories, initialItems, initialWarehouses, initialDistributors, initialInventoryStock, initialTransfers, initialStockAudits, initialTreasuryAccounts, initialCashTransactions, initialPendingCashTransfers, initialManufacturingOrders, initialInvoices, initialClients, initialSuppliers, initialSalesReps, initialSalesRepLedger, initialNotifications,
@@ -56,7 +56,7 @@ export const useAXStore = create((set, get) => ({
     let c = null
     try {
       const cachedVer = localStorage.getItem('ax_cached_payload_version')
-      const currentVer = import.meta.env.VITE_APP_VERSION || '1.8.39'
+      const currentVer = import.meta.env.VITE_APP_VERSION || '2.3.0'
       if (cachedVer === currentVer) {
         const s = localStorage.getItem('ax_cached_db_payload')
         if (s) c = JSON.parse(s)
@@ -83,9 +83,15 @@ export const useAXStore = create((set, get) => ({
   },
 
   hydrateFromSupabase: (payload) => set((state) => {
-    const dbInvIds = new Set((payload.invoices || []).map((i) => i.id))
-    const localOnly = (state.invoices || []).filter((i) => !dbInvIds.has(i.id))
-    return { ...state, ...payload, invoices: [...(payload.invoices || []), ...localOnly], ...(payload?.cashTransfers && !payload?.pendingCashTransfers ? { pendingCashTransfers: payload.cashTransfers } : {}) }
+    const nextState = {
+      ...state,
+      ...payload,
+      invoices: Array.isArray(payload?.invoices) ? payload.invoices : state.invoices,
+      salesRepLedger: Array.isArray(payload?.salesRepLedger) ? payload.salesRepLedger : state.salesRepLedger,
+      ...(payload?.cashTransfers && !payload?.pendingCashTransfers ? { pendingCashTransfers: payload.cashTransfers } : {}),
+    }
+    try { localStorage.setItem('ax_cached_db_payload', JSON.stringify(payload)) } catch {}
+    return nextState
   }),
 
   markAllNotificationsRead: () => {
@@ -137,12 +143,15 @@ export const useAXStore = create((set, get) => ({
       if (openingStock && Number(openingStock.quantity) > 0 && openingStock.warehouseId) {
         const existIdx = updatedStock.findIndex((s) => s.warehouseId === openingStock.warehouseId && s.itemId === item.id)
         if (existIdx !== -1) {
-          updatedStock[existIdx] = { ...updatedStock[existIdx], quantity: Number(openingStock.quantity), unit: openingStock.unit || item.unitType }
+          updatedStock[existIdx] = { ...updatedStock[existIdx], quantity: Number(openingStock.quantity), openingBalance: Number(openingStock.quantity), unit: openingStock.unit || item.unitType }
         } else {
-          updatedStock.push({ warehouseId: openingStock.warehouseId, itemId: item.id, quantity: Number(openingStock.quantity), unit: openingStock.unit || item.unitType })
+          updatedStock.push({ warehouseId: openingStock.warehouseId, itemId: item.id, quantity: Number(openingStock.quantity), openingBalance: Number(openingStock.quantity), unit: openingStock.unit || item.unitType })
         }
       }
-      return { items: [item, ...state.items], inventoryStock: updatedStock }
+      const nextItems = [item, ...state.items]
+      updateLocalCachePayload('items', nextItems)
+      updateLocalCachePayload('inventoryStock', updatedStock)
+      return { items: nextItems, inventoryStock: updatedStock }
     })
   },
 
@@ -156,13 +165,16 @@ export const useAXStore = create((set, get) => ({
         if (openingStock && Number(openingStock.quantity) > 0 && openingStock.warehouseId) {
           const existIdx = updatedStock.findIndex((s) => s.warehouseId === openingStock.warehouseId && s.itemId === item.id)
           if (existIdx !== -1) {
-            updatedStock[existIdx] = { ...updatedStock[existIdx], quantity: Number(openingStock.quantity), unit: openingStock.unit || item.unitType }
+            updatedStock[existIdx] = { ...updatedStock[existIdx], quantity: Number(openingStock.quantity), openingBalance: Number(openingStock.quantity), unit: openingStock.unit || item.unitType }
           } else {
-            updatedStock.push({ warehouseId: openingStock.warehouseId, itemId: item.id, quantity: Number(openingStock.quantity), unit: openingStock.unit || item.unitType })
+            updatedStock.push({ warehouseId: openingStock.warehouseId, itemId: item.id, quantity: Number(openingStock.quantity), openingBalance: Number(openingStock.quantity), unit: openingStock.unit || item.unitType })
           }
         }
       })
-      return { items: [...newItems, ...state.items], inventoryStock: updatedStock }
+      const nextItems = [...newItems, ...state.items]
+      updateLocalCachePayload('items', nextItems)
+      updateLocalCachePayload('inventoryStock', updatedStock)
+      return { items: nextItems, inventoryStock: updatedStock }
     })
   },
 
@@ -175,25 +187,27 @@ export const useAXStore = create((set, get) => ({
 
       let updatedInventory = [...state.inventoryStock]
       adjustedStocks.forEach((adj) => {
-        const idx = updatedInventory.findIndex((s) => s.warehouseId === adj.warehouseId && s.itemId === adj.itemId)
+        const idx = updatedInventory.findIndex((s) => (s.warehouseId || s.warehouse_id) === adj.warehouseId && (s.itemId || s.item_id) === adj.itemId)
         if (idx !== -1) updatedInventory[idx] = { ...updatedInventory[idx], quantity: Number(adj.actualQty), unit: adj.unit || updatedInventory[idx].unit }
         else updatedInventory.push({ warehouseId: adj.warehouseId, itemId: adj.itemId, quantity: Number(adj.actualQty), unit: adj.unit || 'كرتونة' })
       })
+      updateLocalCachePayload('stockAudits', newAudits)
+      updateLocalCachePayload('inventoryStock', updatedInventory)
       return { stockAudits: newAudits, inventoryStock: updatedInventory }
     })
   },
 
-  editItem: (item) => { AX_OperationsService.editItemInDB(item, get().profile); set((state) => ({ items: state.items.map((i) => (i.id === item.id ? { ...i, ...item } : i)) })) },
-  deleteItem: (id) => { const it = (get().items || []).find((i) => i.id === id); AX_OperationsService.deleteItemInDB(id, get().profile); set((state) => ({ items: state.items.filter((i) => i.id !== id), inventoryStock: state.inventoryStock.filter((s) => s.itemId !== id), recycleBin: it ? [{ id: generateUUID(), entityType: 'item', entityId: id, entityCode: it.code, entityTitle: `صنف: ${it.compositeName || it.code}`, originalData: it, deletedAt: new Date().toISOString() }, ...(state.recycleBin || [])] : state.recycleBin })) },
-  saveItemOpeningBalance: (payload) => {
+  editItem: (item) => { AX_OperationsService.editItemInDB(item, get().profile); set((state) => editItemStoreState(state, item)) },
+  deleteItem: (id) => { const it = (get().items || []).find((i) => i.id === id); AX_OperationsService.deleteItemInDB(id, get().profile); set((state) => { const nextItems = state.items.filter((i) => i.id !== id); const nextStock = state.inventoryStock.filter((s) => (s.itemId || s.item_id) !== id); updateLocalCachePayload('items', nextItems); updateLocalCachePayload('inventoryStock', nextStock); return { items: nextItems, inventoryStock: nextStock, recycleBin: it ? [{ id: generateUUID(), entityType: 'item', entityId: id, entityCode: it.code, entityTitle: `صنف: ${it.compositeName || it.code}`, originalData: it, deletedAt: new Date().toISOString() }, ...(state.recycleBin || [])] : state.recycleBin } }) },
+  saveItemOpeningBalance: async (payload) => {
     const item = (get().items || []).find((i) => i.id === payload.itemId), warehouse = (get().warehouses || []).find((w) => w.id === payload.warehouseId)
-    const existingStock = (get().inventoryStock || []).find((s) => s.itemId === payload.itemId && s.warehouseId === payload.warehouseId)
-    const oldOpeningBalance = existingStock?.openingBalance !== undefined ? Number(existingStock.openingBalance) : 0
+    const existingStock = (get().inventoryStock || []).find((s) => (s.itemId || s.item_id) === payload.itemId && (s.warehouseId || s.warehouse_id) === payload.warehouseId)
+    const oldOpeningBalance = existingStock?.openingBalance !== undefined ? Number(existingStock.openingBalance) : Number(existingStock?.opening_balance || 0)
     const { inventoryStock, newStock, finalStockRow } = saveItemOpeningBalanceState(get(), payload)
-    AX_OperationsService.saveOpeningBalanceInDB({ ...payload, quantity: !isNaN(Number(payload.quantity)) ? Number(payload.quantity) : 0, unit: finalStockRow?.unit, newStock, itemName: item?.compositeName || item?.name || '', warehouseName: warehouse?.name || '', oldOpeningBalance }, get().profile)
-    set({ inventoryStock }); return { success: true, newStock, updatedStock: finalStockRow }
+    set({ inventoryStock })
+    try { await AX_OperationsService.saveOpeningBalanceInDB({ ...payload, quantity: !isNaN(Number(payload.quantity)) ? Number(payload.quantity) : 0, unit: finalStockRow?.unit, newStock, itemName: item?.compositeName || item?.name || '', warehouseName: warehouse?.name || '', oldOpeningBalance }, get().profile) } catch {}
+    return { success: true, newStock, updatedStock: finalStockRow }
   },
-
   addCategory: (name) => { AX_OperationsService.addCategoryInDB({ name, level: 'primary' }, get().profile); set((state) => categoryHelpers.addCategory(state, name)) },
   editCategory: (oldName, newName) => { AX_OperationsService.editCategoryInDB({ oldName, newName, level: 'primary' }, get().profile); set((state) => categoryHelpers.editCategory(state, oldName, newName)) },
   deleteCategory: (name) => { AX_OperationsService.deleteCategoryInDB({ name, level: 'primary' }, get().profile); set((state) => categoryHelpers.deleteCategory(state, name)) },
@@ -203,35 +217,18 @@ export const useAXStore = create((set, get) => ({
   addSecondaryCategory: (name) => { AX_OperationsService.addCategoryInDB({ name, level: 'secondary' }, get().profile); set((state) => categoryHelpers.addSecondaryCategory(state, name)) },
   editSecondaryCategory: (o, n) => { AX_OperationsService.editCategoryInDB({ oldName: o, newName: n, level: 'secondary' }, get().profile); set((state) => categoryHelpers.editSecondaryCategory(state, o, n)) },
   deleteSecondaryCategory: (name) => { AX_OperationsService.deleteCategoryInDB({ name, level: 'secondary' }, get().profile); set((state) => categoryHelpers.deleteSecondaryCategory(state, name)) },
+  addExpenseCategory: (cat) => set((state) => { const next = expenseCategoryHelpers.addExpenseCategory(state.expenseCategories, cat); try { localStorage.setItem('ax_expense_categories', JSON.stringify(next)) } catch {}; return { expenseCategories: next } }),
+  editExpenseCategory: (id, updates) => set((state) => { const next = expenseCategoryHelpers.editExpenseCategory(state.expenseCategories, id, updates); try { localStorage.setItem('ax_expense_categories', JSON.stringify(next)) } catch {}; return { expenseCategories: next } }),
+  deleteExpenseCategory: (id) => set((state) => { const next = expenseCategoryHelpers.deleteExpenseCategory(state.expenseCategories, id); try { localStorage.setItem('ax_expense_categories', JSON.stringify(next)) } catch {}; return { expenseCategories: next } }),
+  resetExpenseCategories: () => set(() => { const init = expenseCategoryHelpers.getInitialExpenseCategories(); try { localStorage.setItem('ax_expense_categories', JSON.stringify(init)) } catch {}; return { expenseCategories: init } }),
 
-  addExpenseCategory: (cat) => set((state) => {
-    const next = expenseCategoryHelpers.addExpenseCategory(state.expenseCategories, cat)
-    try { localStorage.setItem('ax_expense_categories', JSON.stringify(next)) } catch {}
-    return { expenseCategories: next }
-  }),
-  editExpenseCategory: (id, updates) => set((state) => {
-    const next = expenseCategoryHelpers.editExpenseCategory(state.expenseCategories, id, updates)
-    try { localStorage.setItem('ax_expense_categories', JSON.stringify(next)) } catch {}
-    return { expenseCategories: next }
-  }),
-  deleteExpenseCategory: (id) => set((state) => {
-    const next = expenseCategoryHelpers.deleteExpenseCategory(state.expenseCategories, id)
-    try { localStorage.setItem('ax_expense_categories', JSON.stringify(next)) } catch {}
-    return { expenseCategories: next }
-  }),
-  resetExpenseCategories: () => set(() => {
-    const init = expenseCategoryHelpers.getInitialExpenseCategories()
-    try { localStorage.setItem('ax_expense_categories', JSON.stringify(init)) } catch {}
-    return { expenseCategories: init }
-  }),
+  addClient: (client) => { AX_CustomerOperationsService.addCustomerInDB(client, get().profile); set((state) => { const next = [client, ...state.clients.filter((c) => c.id !== client.id)]; updateLocalCachePayload('clients', next); return { clients: next } }) },
+  updateClient: (id, updates) => { AX_CustomerOperationsService.updateCustomerInDB({ id, ...updates }, get().profile); set((state) => { const next = state.clients.map((c) => (c.id === id ? { ...c, ...updates } : c)); updateLocalCachePayload('clients', next); return { clients: next } }) },
+  deleteClient: (id) => { AX_CustomerOperationsService.deleteCustomerInDB(id, get().profile); set((state) => { const next = state.clients.filter((c) => c.id !== id); updateLocalCachePayload('clients', next); return { clients: next } }) },
 
-  addClient: (client) => { AX_CustomerOperationsService.addCustomerInDB(client, get().profile); set((state) => ({ clients: [client, ...state.clients.filter((c) => c.id !== client.id)] })) },
-  updateClient: (id, updates) => { AX_CustomerOperationsService.updateCustomerInDB({ id, ...updates }, get().profile); set((state) => ({ clients: state.clients.map((c) => (c.id === id ? { ...c, ...updates } : c)) })) },
-  deleteClient: (id) => { AX_CustomerOperationsService.deleteCustomerInDB(id, get().profile); set((state) => ({ clients: state.clients.filter((c) => c.id !== id) })) },
-
-  addSupplier: (supplier) => { AX_SupplierOperationsService.addSupplierInDB(supplier, get().profile); set((state) => ({ suppliers: [supplier, ...state.suppliers.filter((s) => s.id !== supplier.id)] })) },
-  updateSupplier: (id, updates) => { AX_SupplierOperationsService.updateSupplierInDB({ id, ...updates }, get().profile); set((state) => ({ suppliers: state.suppliers.map((s) => (s.id === id ? { ...s, ...updates } : s)) })) },
-  deleteSupplier: (id) => { AX_SupplierOperationsService.deleteSupplierInDB(id, get().profile); set((state) => ({ suppliers: state.suppliers.filter((s) => s.id !== id) })) },
+  addSupplier: (supplier) => { AX_SupplierOperationsService.addSupplierInDB(supplier, get().profile); set((state) => { const next = [supplier, ...state.suppliers.filter((s) => s.id !== supplier.id)]; updateLocalCachePayload('suppliers', next); return { suppliers: next } }) },
+  updateSupplier: (id, updates) => { AX_SupplierOperationsService.updateSupplierInDB({ id, ...updates }, get().profile); set((state) => { const next = state.suppliers.map((s) => (s.id === id ? { ...s, ...updates } : s)); updateLocalCachePayload('suppliers', next); return { suppliers: next } }) },
+  deleteSupplier: (id) => { AX_SupplierOperationsService.deleteSupplierInDB(id, get().profile); set((state) => { const next = state.suppliers.filter((s) => s.id !== id); updateLocalCachePayload('suppliers', next); return { suppliers: next } }) },
 
   addSalesRep: (rep) => { AX_SalesRepOperationsService.addSalesRepInDB(rep, get().profile); set((state) => saveSalesRepState(state, rep)) },
   updateSalesRep: (id, updates) => { AX_SalesRepOperationsService.updateSalesRepInDB({ id, ...updates }, get().profile); set((state) => updateSalesRepState(state, id, updates)) },
@@ -254,12 +251,16 @@ export const useAXStore = create((set, get) => ({
     }
     const currentLedger = Array.isArray(state.salesRepLedger) ? state.salesRepLedger : []
     const updatedLedger = [newTx, ...currentLedger]
+    let updatedRepObj = null
+    const repSpecificLedger = updatedLedger.filter((t) => t.repId === newTx.repId)
     const updatedReps = (state.salesReps || []).map((r) => {
       if (r.id !== newTx.repId) return r
       const cur = Number(r.currentBalance ?? r.netBalance ?? r.balance ?? 0)
       const nextBal = cur + delta
-      return { ...r, currentBalance: nextBal, netBalance: nextBal, balance: nextBal }
+      updatedRepObj = { ...r, currentBalance: nextBal, netBalance: nextBal, balance: nextBal, metadata: { ...(r.metadata || {}), ledger: repSpecificLedger } }
+      return updatedRepObj
     })
+    AX_SalesRepOperationsService.addSalesRepTransactionInDB(newTx, state.profile, updatedRepObj, repSpecificLedger)
     updateLocalCachePayload('salesReps', updatedReps); updateLocalCachePayload('salesRepLedger', updatedLedger); return { salesRepLedger: updatedLedger, salesReps: updatedReps }
   }),
 
@@ -270,21 +271,12 @@ export const useAXStore = create((set, get) => ({
   }),
 
   addWarehouse: (newWh) => {
-    const wh = { ...newWh, id: newWh.id || generateUUID() }
-    AX_OperationsService.addWarehouseInDB(wh, get().profile)
-    set((state) => {
-      const nextWh = [...state.warehouses, wh]
-      updateLocalCachePayload('warehouses', nextWh)
-      return { warehouses: nextWh }
-    })
+    const wh = { ...newWh, id: newWh.id || generateUUID() }; AX_OperationsService.addWarehouseInDB(wh, get().profile)
+    set((state) => { const nextWh = [...state.warehouses, wh]; updateLocalCachePayload('warehouses', nextWh); return { warehouses: nextWh } })
   },
   editWarehouse: (updatedWh) => {
     AX_OperationsService.editWarehouseInDB(updatedWh, get().profile)
-    set((state) => {
-      const nextWh = state.warehouses.map((w) => (w.id === updatedWh.id ? { ...w, ...updatedWh } : w))
-      updateLocalCachePayload('warehouses', nextWh)
-      return { warehouses: nextWh }
-    })
+    set((state) => { const nextWh = state.warehouses.map((w) => (w.id === updatedWh.id ? { ...w, ...updatedWh } : w)); updateLocalCachePayload('warehouses', nextWh); return { warehouses: nextWh } })
   },
   deleteWarehouse: (id) => {
     AX_OperationsService.deleteWarehouseInDB(id, get().profile)
@@ -355,16 +347,11 @@ export const useAXStore = create((set, get) => ({
     const { updatedStock, isAuditDiscrepancy, auditDiscrepancyNote } = calculateTransferStockMovement(trf, state.inventoryStock, state.stockAudits, state.warehouses, state.items)
     const newTransfers = state.transfers.map((t) =>
       t.id === transferId
-        ? {
-            ...t,
-            status: 'confirmed',
-            confirmedAt: new Date().toISOString(),
-            isAuditDiscrepancy: t.isAuditDiscrepancy ?? isAuditDiscrepancy,
-            auditDiscrepancyNote: t.auditDiscrepancyNote || auditDiscrepancyNote,
-          }
+        ? { ...t, status: 'confirmed', confirmedAt: new Date().toISOString(), isAuditDiscrepancy: t.isAuditDiscrepancy ?? isAuditDiscrepancy, auditDiscrepancyNote: t.auditDiscrepancyNote || auditDiscrepancyNote }
         : t
     )
     AX_OperationsService.confirmTransferInDB(trf, updatedStock, state.profile?.name)
+    updateLocalCachePayload('transfers', newTransfers); updateLocalCachePayload('inventoryStock', updatedStock)
     return { transfers: newTransfers, inventoryStock: updatedStock }
   }),
 
@@ -376,47 +363,24 @@ export const useAXStore = create((set, get) => ({
       auditDiscrepancyNote: newTrf.auditDiscrepancyNote || discrepancy.auditDiscrepancyNote,
     }
     AX_OperationsService.addTransferInDB(enriched)
-    set((state) => ({ transfers: [enriched, ...state.transfers] }))
+    set((state) => { const next = [enriched, ...state.transfers]; updateLocalCachePayload('transfers', next); return { transfers: next } })
   },
 
-  cancelTransfer: (transferId) => {
-    AX_OperationsService.cancelTransferInDB(transferId, get().profile)
-    set((state) => ({
-      transfers: state.transfers.map((t) => (t.id === transferId ? { ...t, status: 'cancelled' } : t)),
-    }))
-  },
+  cancelTransfer: (transferId) => recycleBinHelpers.rollbackTransfer(transferId, get().profile, set, get()),
 
   addManufacturingOrder: (order) => {
     AX_OperationsService.addManufacturingOrderInDB(order, get().profile)
-    set((state) => {
-      let updatedStock = [...state.inventoryStock]
-      const rawIdx = updatedStock.findIndex((s) => s.warehouseId === order.rawWarehouseId && s.itemId === order.rawItemId)
-      if (rawIdx >= 0) {
-        updatedStock[rawIdx] = { ...updatedStock[rawIdx], quantity: Math.max(0, updatedStock[rawIdx].quantity - order.consumedQuantity) }
-      }
-      order.producedItems?.forEach((prod) => {
-        const pIdx = updatedStock.findIndex((s) => s.warehouseId === prod.targetWarehouseId && s.itemId === prod.itemId)
-        if (pIdx >= 0) {
-          updatedStock[pIdx] = { ...updatedStock[pIdx], quantity: updatedStock[pIdx].quantity + prod.quantity }
-        } else {
-          updatedStock.push({ warehouseId: prod.targetWarehouseId, itemId: prod.itemId, quantity: prod.quantity, unit: prod.unit || 'كرتونة' })
-        }
-      })
-      return {
-        manufacturingOrders: [order, ...state.manufacturingOrders],
-        inventoryStock: updatedStock,
-      }
-    })
+    set((state) => applyManufacturingOrderState(state, order))
   },
-
   updateManufacturingOrder: (order) => {
-    AX_OperationsService.updateManufacturingOrderInDB(order, get().profile)
-    set((state) => ({ manufacturingOrders: state.manufacturingOrders.map((m) => (m.id === order.id ? { ...m, ...order } : m)) }))
+    const oldOrder = (get().manufacturingOrders || []).find((m) => m.id === order.id)
+    AX_OperationsService.updateManufacturingOrderInDB(order, get().profile, oldOrder)
+    set((state) => updateManufacturingOrderState(state, order))
   },
-
   deleteManufacturingOrder: (orderId) => {
-    AX_OperationsService.deleteManufacturingOrderInDB(orderId, get().profile)
-    set((state) => ({ manufacturingOrders: state.manufacturingOrders.filter((m) => m.id !== orderId) }))
+    const order = (get().manufacturingOrders || []).find((m) => m.id === orderId)
+    AX_OperationsService.deleteManufacturingOrderInDB(orderId, get().profile, order)
+    set((state) => deleteManufacturingOrderState(state, orderId))
   },
   addCashTransaction: (tx) => {
     AX_OperationsService.addCashTransactionInDB(tx, get().profile)
@@ -424,14 +388,32 @@ export const useAXStore = create((set, get) => ({
       const isCashIn = tx.type === 'client_receipt' || tx.type === 'other_income' || tx.type === 'misc_revenue'
       const isClient = tx.partyType === 'client' || (!tx.partyType && tx.type === 'client_receipt')
       const isSupplier = tx.partyType === 'supplier' || (!tx.partyType && tx.type === 'supplier_payment')
+      const pId = tx.partyId || tx.party_id || null
       const updatedTreasuries = state.treasuryAccounts.map((t) => t.id === tx.treasuryId ? { ...t, balance: (Number(t.balance) || 0) + (isCashIn ? tx.amount : -tx.amount) } : t)
-      const updatedClients = isClient ? state.clients.map((c) => (tx.partyId === c.id || tx.partyName === c.name) ? { ...c, balance: (Number(c.balance) || 0) - tx.amount } : c) : state.clients
-      const updatedSuppliers = isSupplier ? state.suppliers.map((s) => (tx.partyId === s.id || tx.partyName === s.name) ? { ...s, balance: (Number(s.balance) || 0) - tx.amount } : s) : state.suppliers
+      const updatedClients = isClient ? state.clients.map((c) => ((pId && c.id === pId) || (!pId && tx.partyName === c.name)) ? { ...c, balance: (Number(c.balance) || 0) - tx.amount } : c) : state.clients
+      const updatedSuppliers = isSupplier ? state.suppliers.map((s) => ((pId && s.id === pId) || (!pId && tx.partyName === s.name)) ? { ...s, balance: (Number(s.balance) || 0) - tx.amount } : s) : state.suppliers
       const nextTx = [tx, ...state.cashTransactions]
-      updateLocalCachePayload('cashTransactions', nextTx)
-      updateLocalCachePayload('treasuryAccounts', updatedTreasuries)
-      updateLocalCachePayload('clients', updatedClients)
-      updateLocalCachePayload('suppliers', updatedSuppliers)
+      updateLocalCachePayload('cashTransactions', nextTx); updateLocalCachePayload('treasuryAccounts', updatedTreasuries)
+      updateLocalCachePayload('clients', updatedClients); updateLocalCachePayload('suppliers', updatedSuppliers)
+      return { cashTransactions: nextTx, treasuryAccounts: updatedTreasuries, clients: updatedClients, suppliers: updatedSuppliers }
+    })
+  },
+  deleteCashTransaction: (txId) => {
+    const tx = (get().cashTransactions || []).find((t) => t.id === txId)
+    if (!tx) return
+    AX_OperationsService.deleteCashTransactionInDB(tx, get().profile)
+    set((state) => {
+      const isCashIn = tx.type === 'client_receipt' || tx.type === 'other_income' || tx.type === 'misc_revenue'
+      const isClient = tx.partyType === 'client' || (!tx.partyType && tx.type === 'client_receipt')
+      const isSupplier = tx.partyType === 'supplier' || (!tx.partyType && tx.type === 'supplier_payment')
+      const amt = Number(tx.amount) || 0
+      const pId = tx.partyId || tx.party_id || null
+      const updatedTreasuries = state.treasuryAccounts.map((t) => t.id === (tx.treasuryId || tx.treasury_id) ? { ...t, balance: (Number(t.balance) || 0) + (isCashIn ? -amt : amt) } : t)
+      const updatedClients = isClient ? state.clients.map((c) => ((pId && c.id === pId) || (!pId && tx.partyName === c.name)) ? { ...c, balance: (Number(c.balance) || 0) + amt } : c) : state.clients
+      const updatedSuppliers = isSupplier ? state.suppliers.map((s) => ((pId && s.id === pId) || (!pId && tx.partyName === s.name)) ? { ...s, balance: (Number(s.balance) || 0) + amt } : s) : state.suppliers
+      const nextTx = state.cashTransactions.filter((t) => t.id !== txId)
+      updateLocalCachePayload('cashTransactions', nextTx); updateLocalCachePayload('treasuryAccounts', updatedTreasuries)
+      updateLocalCachePayload('clients', updatedClients); updateLocalCachePayload('suppliers', updatedSuppliers)
       return { cashTransactions: nextTx, treasuryAccounts: updatedTreasuries, clients: updatedClients, suppliers: updatedSuppliers }
     })
   },
@@ -451,8 +433,7 @@ export const useAXStore = create((set, get) => ({
         if (t.id === target.toTreasuryId) bal = bal + Number(target.amount || 0)
         return { ...t, balance: bal }
       })
-      updateLocalCachePayload('pendingCashTransfers', newTransfers)
-      updateLocalCachePayload('treasuryAccounts', updatedTreasuries)
+      updateLocalCachePayload('pendingCashTransfers', newTransfers); updateLocalCachePayload('treasuryAccounts', updatedTreasuries)
       return { pendingCashTransfers: newTransfers, treasuryAccounts: updatedTreasuries }
     })
     return pPromise
@@ -479,7 +460,7 @@ export const useAXStore = create((set, get) => ({
   purgeFromRecycleBin: (id) => recycleBinHelpers.purgeItem(id, set),
   rollbackStockAudit: (auditId) => recycleBinHelpers.rollbackAudit(auditId, get().profile, set, get()),
   deleteStockAudit: (auditId) => recycleBinHelpers.deleteAudit(auditId, get().profile, set, get()),
-  updateTransfer: (id, updates) => { AX_OperationsService.updateTransferInDB(id, updates, get().profile); set((state) => ({ transfers: (state.transfers || []).map((t) => t.id === id ? { ...t, ...updates } : t) })) },
+  updateTransfer: (id, updates) => { AX_OperationsService.updateTransferInDB(id, updates, get().profile); set((state) => { const next = (state.transfers || []).map((t) => t.id === id ? { ...t, ...updates } : t); updateLocalCachePayload('transfers', next); return { transfers: next } }) },
   rollbackTransfer: (id) => recycleBinHelpers.rollbackTransfer(id, get().profile, set, get()),
   deleteTransfer: (id) => recycleBinHelpers.deleteTransfer(id, get().profile, set, get()),
 

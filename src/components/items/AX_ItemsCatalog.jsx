@@ -44,7 +44,7 @@ export function AX_ItemsCatalog() {
   const salesInvoices = useMemo(() => (invoices || []).filter((i) => i.type === 'sale' || i.type === 'sale_return'), [invoices])
 
   const getItemStock = (itemId) => {
-    return (inventoryStock || []).filter((s) => s.itemId === itemId).reduce((sum, s) => sum + Number(s.quantity || 0), 0)
+    return (inventoryStock || []).filter((s) => (s.itemId || s.item_id) === itemId).reduce((sum, s) => sum + Number(s.quantity || 0), 0)
   }
 
   const categoryHandlers = {

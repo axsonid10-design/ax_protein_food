@@ -1,4 +1,5 @@
 import { generateUUID } from '../../utils/AX_UUID.js'
+import { supabase } from '../../services/supabaseClient.js'
 
 const ADJUSTMENTS_STORAGE_KEY = 'ax_customer_balance_adjustments'
 
@@ -62,12 +63,21 @@ export const saveCustomerAdjustment = (adjustment) => {
   if (!adjustment || !adjustment.id) return
   try {
     const all = loadAllCustomerAdjustments()
-    const updated = [...all, adjustment]
+    const updated = [...all.filter((x) => x?.id !== adjustment.id), adjustment]
     if (typeof window !== 'undefined') {
       window.localStorage.setItem(ADJUSTMENTS_STORAGE_KEY, JSON.stringify(updated))
       window.dispatchEvent(
         new CustomEvent('ax_customer_adjustments_updated', { detail: adjustment })
       )
+    }
+    if (supabase && typeof supabase.from === 'function') {
+      supabase.from('ax_activity_logs').insert({
+        id: generateUUID(),
+        table_name: 'ax_clients',
+        action: 'BALANCE_ADJUSTMENT',
+        record_id: adjustment.customerId || adjustment.partyId || null,
+        new_data: adjustment,
+      }).catch(() => {})
     }
   } catch {}
 }

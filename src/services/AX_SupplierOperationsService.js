@@ -10,8 +10,16 @@ export const AX_SupplierOperationsService = {
         id: supId,
         name: (supplier.companyName || supplier.name || '').trim(),
         phone: (supplier.phone || '').trim(),
-        address: (supplier.address || '').trim(),
+        phone2: (supplier.phone2 || '').trim() || null,
+        contact_person: (supplier.contactPerson || supplier.contact_person || '').trim() || null,
+        address: (supplier.address || '').trim() || null,
+        tax_number: (supplier.taxNumber || supplier.tax_number || '').trim() || null,
+        commercial_registration: (supplier.commercialRegistration || supplier.commercialRegister || supplier.commercial_registration || '').trim() || null,
         balance: Number(supplier.balance || 0),
+        opening_balance: Number(supplier.openingBalance !== undefined ? supplier.openingBalance : (supplier.opening_balance || 0)),
+        opening_balance_type: supplier.openingBalanceType || supplier.opening_balance_type || 'payable',
+        opening_balance_date: supplier.openingBalanceDate || supplier.opening_balance_date || null,
+        notes: (supplier.notes || '').trim() || null,
         created_at: supplier.createdAt || new Date().toISOString(),
       }
       const { error } = await supabase.from('ax_suppliers').insert(row)
@@ -40,8 +48,16 @@ export const AX_SupplierOperationsService = {
       const row = {
         name: (supplier.companyName || supplier.name || '').trim(),
         phone: (supplier.phone || '').trim(),
-        address: (supplier.address || '').trim(),
+        phone2: (supplier.phone2 || '').trim() || null,
+        contact_person: (supplier.contactPerson || supplier.contact_person || '').trim() || null,
+        address: (supplier.address || '').trim() || null,
+        tax_number: (supplier.taxNumber || supplier.tax_number || '').trim() || null,
+        commercial_registration: (supplier.commercialRegistration || supplier.commercialRegister || supplier.commercial_registration || '').trim() || null,
         balance: Number(supplier.balance || 0),
+        opening_balance: Number(supplier.openingBalance !== undefined ? supplier.openingBalance : (supplier.opening_balance || 0)),
+        opening_balance_type: supplier.openingBalanceType || supplier.opening_balance_type || 'payable',
+        opening_balance_date: supplier.openingBalanceDate || supplier.opening_balance_date || null,
+        notes: (supplier.notes || '').trim() || null,
       }
       const { error } = await supabase.from('ax_suppliers').update(row).eq('id', supplier.id)
       if (error) throw error

@@ -18,17 +18,47 @@ import { AX_SalesRepOperationsService } from '../../services/AX_SalesRepOperatio
 
 export function AX_SalesRepCommissionModal({ rep, isOpen, onClose }) {
   useBodyScrollLock(isOpen)
-  const { profile, invoices = [], addSalesRepTransaction } = useAXStore()
+  const { invoices = [], clients = [], warehouses = [], addSalesRepTransaction } = useAXStore()
 
   const [simulatedSales, setSimulatedSales] = useState('')
   const [useRealInvoices, setUseRealInvoices] = useState(true)
 
   const repInvoices = useMemo(() => {
     if (!rep?.id) return []
-    return (invoices || []).filter(
-      (inv) => inv && (inv.salesRepId === rep.id || inv.repName === rep.name)
+    const norm = (s) =>
+      String(s || '')
+        .trim()
+        .replace(/[أإآ]/g, 'ا')
+        .replace(/ى/g, 'ي')
+        .replace(/ة/g, 'ه')
+        .replace(/\s+/g, ' ')
+    const repNameNorm = norm(rep.name)
+    const repBranchNorm = norm(rep.assignedBranch || rep.vanNumber)
+
+    const assignedClientNames = new Set(
+      (clients || [])
+        .filter((c) => norm(c?.salesRepName || c?.sales_rep_name) === repNameNorm && repNameNorm)
+        .map((c) => norm(c.name))
     )
-  }, [rep, invoices])
+
+    const assignedVanIds = new Set(
+      (warehouses || [])
+        .filter(
+          (w) =>
+            (repNameNorm && norm(w?.manager) === repNameNorm) ||
+            (w?.type === 'van' && repBranchNorm && norm(w?.name) === repBranchNorm)
+        )
+        .map((w) => w.id)
+    )
+
+    return (invoices || []).filter((inv) => {
+      if (!inv || inv.type !== 'sale') return false
+      if (inv.salesRepId === rep.id || norm(inv.repName) === repNameNorm) return true
+      if (assignedClientNames.has(norm(inv.partyName))) return true
+      if (assignedVanIds.has(inv.warehouseId || inv.warehouse_id)) return true
+      return false
+    })
+  }, [rep, invoices, clients, warehouses])
 
   const realSalesTotal = useMemo(() => {
     return repInvoices.reduce((sum, inv) => sum + (Number(inv.totalAmount || inv.total) || 0), 0)
@@ -71,7 +101,6 @@ export function AX_SalesRepCommissionModal({ rep, isOpen, onClose }) {
     }
 
     addSalesRepTransaction(rep.id, tx)
-    AX_SalesRepOperationsService.addSalesRepTransactionInDB(tx, profile)
     showToast('تم ترحيل العمولة لحساب المندوب بنجاح', 'success')
     onClose()
   }

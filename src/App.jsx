@@ -54,10 +54,15 @@ export default function App() {
   })
 
   useEffect(() => {
+    let syncTimer = null
     const syncDatabase = () => {
       AX_DatabaseSync.fetchFullDatabase().then((data) => {
         if (data) hydrateFromSupabase(data)
       })
+    }
+    const debouncedSync = () => {
+      if (syncTimer) clearTimeout(syncTimer)
+      syncTimer = setTimeout(syncDatabase, 800)
     }
 
     syncDatabase()
@@ -73,6 +78,7 @@ export default function App() {
 
     if (!isSupabaseConfigured() || !supabase?.channel) {
       return () => {
+        if (syncTimer) clearTimeout(syncTimer)
         window.removeEventListener('focus', syncDatabase)
         window.removeEventListener('online', syncDatabase)
         window.removeEventListener('ax-force-sync-db', syncDatabase)
@@ -82,26 +88,28 @@ export default function App() {
 
     const dataChannel = supabase
       .channel('realtime:app_data_sync')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'ax_items' }, syncDatabase)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'ax_warehouses' }, syncDatabase)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'ax_clients' }, syncDatabase)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'ax_suppliers' }, syncDatabase)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'ax_invoices' }, syncDatabase)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'ax_inventory_stock' }, syncDatabase)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'ax_transfers' }, syncDatabase)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'ax_stock_audits' }, syncDatabase)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'ax_manufacturing_orders' }, syncDatabase)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'ax_categories' }, syncDatabase)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'ax_treasuries' }, syncDatabase)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'ax_cash_transactions' }, syncDatabase)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'ax_cash_transfers' }, syncDatabase)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'ax_notifications' }, syncDatabase)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'ax_company_employees' }, syncDatabase)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'ax_employee_attendance' }, syncDatabase)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'ax_recycle_bin' }, syncDatabase)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'ax_items' }, debouncedSync)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'ax_warehouses' }, debouncedSync)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'ax_clients' }, debouncedSync)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'ax_suppliers' }, debouncedSync)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'ax_distributors' }, debouncedSync)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'ax_invoices' }, debouncedSync)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'ax_inventory_stock' }, debouncedSync)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'ax_transfers' }, debouncedSync)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'ax_stock_audits' }, debouncedSync)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'ax_manufacturing_orders' }, debouncedSync)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'ax_categories' }, debouncedSync)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'ax_treasuries' }, debouncedSync)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'ax_cash_transactions' }, debouncedSync)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'ax_cash_transfers' }, debouncedSync)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'ax_notifications' }, debouncedSync)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'ax_company_employees' }, debouncedSync)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'ax_employee_attendance' }, debouncedSync)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'ax_recycle_bin' }, debouncedSync)
       .subscribe()
 
     return () => {
+      if (syncTimer) clearTimeout(syncTimer)
       window.removeEventListener('focus', syncDatabase)
       window.removeEventListener('online', syncDatabase)
       window.removeEventListener('ax-force-sync-db', syncDatabase)

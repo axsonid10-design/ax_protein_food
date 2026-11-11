@@ -54,12 +54,12 @@ export function AX_InventoryValuationReport({
     let totalStockUnits = 0
 
     filteredByWh.forEach((s) => {
-      const it = itemsMap[s.itemId]
+      const it = itemsMap[s.itemId || s.item_id]
       if (!it) return
 
-      const qty = Number(s.quantity) || 0
-      const buyPrice = Number(it.buyPrice) || 0
+      const qty = Math.max(0, Number(s.quantity) || 0)
       const sellPrice = Number(it.sellPrice) || 0
+      const buyPrice = Number(it.buyPrice) || sellPrice
       const totalCost = qty * buyPrice
       const totalSell = qty * sellPrice
       const profitPotential = totalSell - totalCost

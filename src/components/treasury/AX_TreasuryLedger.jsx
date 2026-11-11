@@ -35,6 +35,7 @@ export function AX_TreasuryLedger() {
     activeModal,
     closeModal,
     addCashTransaction,
+    deleteCashTransaction,
     addPendingCashTransfer,
     confirmCashTransfer,
     addTreasuryAccount,
@@ -381,12 +382,17 @@ export function AX_TreasuryLedger() {
       )}
 
       <AX_TreasuryTransactionsTable
+        transactions={cashTransactions}
         paginatedTransactions={paginatedTransactions}
+        treasuryAccounts={treasuryAccounts}
+        clients={clients}
+        suppliers={suppliers}
         getTreasuryName={getTreasuryName}
         totalPages={totalPages}
         currentPage={currentPage}
         totalTx={totalTx}
         onPageChange={setCurrentPage}
+        onDeleteTransaction={deleteCashTransaction}
       />
 
       <button

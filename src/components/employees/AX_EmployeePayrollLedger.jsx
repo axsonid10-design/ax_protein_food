@@ -103,7 +103,7 @@ export function AX_EmployeePayrollLedger({
 
     payrollRows.forEach((r) => {
       totalEarned += r.stats.earnedSalary
-      totalDeductions += r.stats.deductionAmount
+      totalDeductions += r.stats.totalDeductionAmount
       totalAdvances += r.stats.advancesPaid
       totalNet += Math.max(0, r.stats.netPayable)
     })
@@ -264,7 +264,7 @@ export function AX_EmployeePayrollLedger({
                     {stats.earnedSalary.toLocaleString('en-US')}
                   </td>
                   <td className="px-3 text-left font-mono font-black text-rose-800">
-                    {stats.deductionAmount > 0 ? `-${stats.deductionAmount.toLocaleString('en-US')}` : '—'}
+                    {stats.totalDeductionAmount > 0 ? `-${stats.totalDeductionAmount.toLocaleString('en-US')}` : '—'}
                   </td>
                   <td className="px-3 text-left font-mono font-black text-amber-800">
                     {stats.advancesPaid > 0 ? stats.advancesPaid.toLocaleString('en-US') : '—'}

@@ -127,19 +127,33 @@ export function AX_Ledger360Report({
     unifiedList.sort((a, b) => new Date(a.date) - new Date(b.date))
     const filtered = filterByDateRange(unifiedList, 'date', timeframe, customStart, customEnd)
 
-    let running = 0
     let totalDebit = 0
     let totalCredit = 0
-
-    const transactions = filtered.map((item) => {
+    filtered.forEach((item) => {
       totalDebit += item.debit
       totalCredit += item.credit
-      running += item.debit - item.credit
+    })
+
+    const netMovement = partyType === 'client' ? (totalDebit - totalCredit) : (totalCredit - totalDebit)
+    const rawOp = Number(currentParty.openingBalance !== undefined ? currentParty.openingBalance : (currentParty.opening_balance || 0)) || 0
+    const opType = currentParty.openingBalanceType || currentParty.opening_balance_type || (partyType === 'client' ? 'debit' : 'payable')
+    const hasExplicitOp = currentParty.openingBalance !== undefined || currentParty.opening_balance !== undefined
+    const signedOp = partyType === 'client'
+      ? (opType === 'debit' ? rawOp : -rawOp)
+      : (opType === 'payable' ? rawOp : -rawOp)
+
+    const initialBalance = hasExplicitOp && rawOp > 0
+      ? signedOp
+      : ((Number(currentParty.balance) || 0) - netMovement)
+
+    let running = initialBalance
+    const transactions = filtered.map((item) => {
+      const delta = partyType === 'client' ? (item.debit - item.credit) : (item.credit - item.debit)
+      running += delta
       return { ...item, balance: running }
     })
 
-    const initialBalance = Math.max(0, (Number(currentParty.balance) || 0) - running)
-    const finalBalance = initialBalance + running
+    const finalBalance = running
 
     return {
       initialBalance,

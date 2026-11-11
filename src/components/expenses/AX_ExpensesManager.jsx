@@ -14,12 +14,14 @@ import { AX_CompanyDatePicker } from '../common/AX_CompanyDatePicker.jsx'
 import { AX_SearchableSelect } from '../common/AX_SearchableSelect.jsx'
 import { axToast } from '../common/AX_Toast.jsx'
 import { AX_RecycleBinService } from '../../services/AX_RecycleBinService.js'
+import { supabase } from '../../services/supabaseClient.js'
+import { updateLocalCachePayload } from '../../store/storeCacheHelper.js'
 
 export function AX_ExpensesManager() {
   const storeState = useAXStore()
-  const { treasuryAccounts = [], profile } = storeState
+  const { treasuryAccounts = [], cashTransactions = [], profile } = storeState
 
-  const [expenses, setExpenses] = useState(() => getStoredExpenses())
+  const [expenses, setExpenses] = useState(() => getStoredExpenses(cashTransactions))
   const [timeframe, setTimeframe] = useState('month')
   const [customRange, setCustomRange] = useState({ start: '', end: '' })
   const [costCenterType, setCostCenterType] = useState('all')
@@ -45,7 +47,8 @@ export function AX_ExpensesManager() {
     }))
   ), [treasuryAccounts])
 
-  const refreshExpenses = () => setExpenses(getStoredExpenses())
+  const refreshExpenses = () => setExpenses(getStoredExpenses(useAXStore.getState().cashTransactions || []))
+  useEffect(() => { setExpenses(getStoredExpenses(cashTransactions)) }, [cashTransactions])
   const kpis = useMemo(() => calculateExpenseKPIs(expenses, timeframe, customRange), [expenses, timeframe, customRange])
   const filteredExpenses = useMemo(() => filterExpenses(expenses, { timeframe, customRange, costCenterType, paymentStatus, search }), [expenses, timeframe, customRange, costCenterType, paymentStatus, search])
 
@@ -77,10 +80,16 @@ export function AX_ExpensesManager() {
                   await supabase.from('ax_treasuries').update({ balance: Number(tr.balance || 0) + Number(p.amount) }).eq('id', p.treasuryId)
                 }
               }
-              useAXStore.setState((s) => ({
-                treasuryAccounts: (s.treasuryAccounts || []).map((t) => t.id === p.treasuryId ? { ...t, balance: (Number(t.balance) || 0) + Number(p.amount) } : t),
-                cashTransactions: (s.cashTransactions || []).filter((tx) => tx.partyId !== targetExpense.id && !tx.notes?.includes(`[${targetExpense.code}]`)),
-              }))
+              useAXStore.setState((s) => {
+                const nextTreasuries = (s.treasuryAccounts || []).map((t) => t.id === p.treasuryId ? { ...t, balance: (Number(t.balance) || 0) + Number(p.amount) } : t)
+                const nextCashTx = (s.cashTransactions || []).filter((tx) => tx.partyId !== targetExpense.id && !tx.notes?.includes(`[${targetExpense.code}]`))
+                updateLocalCachePayload('treasuryAccounts', nextTreasuries)
+                updateLocalCachePayload('cashTransactions', nextCashTx)
+                return {
+                  treasuryAccounts: nextTreasuries,
+                  cashTransactions: nextCashTx,
+                }
+              })
             } catch {}
           }
         }

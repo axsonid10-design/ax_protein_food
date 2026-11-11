@@ -14,11 +14,14 @@ export const AX_InvoiceOperationsService = {
       const dbType = (isSaleReturn || inv.type === 'sale') ? 'sale' : 'purchase'
       const defaultTerms = isSaleReturn ? 'مردود مبيعات' : isPurchaseReturn ? 'مردود مشتريات' : (Number(inv.remainingAmount || 0) > 0 ? 'مدفوع جزئي' : 'مدفوع كلي')
 
+      const partyKind = inv.partyKind || inv.partyType || inv.party_type || (dbType === 'sale' ? 'customer' : 'supplier')
+      const isCustomerParty = partyKind === 'customer' || partyKind === 'client'
+      const targetPartyTable = isCustomerParty ? 'ax_clients' : 'ax_suppliers'
+
       let resolvedPartyId = inv.partyId || inv.party_id || null
       if (!resolvedPartyId && (inv.partyName || inv.party_name)) {
         try {
-          const targetTable = (isSaleReturn || dbType === 'sale') ? 'ax_clients' : 'ax_suppliers'
-          const { data: matchedParty } = await supabase.from(targetTable).select('id').eq('name', (inv.partyName || inv.party_name).trim()).maybeSingle()
+          const { data: matchedParty } = await supabase.from(targetPartyTable).select('id').eq('name', (inv.partyName || inv.party_name).trim()).maybeSingle()
           if (matchedParty?.id) resolvedPartyId = matchedParty.id
         } catch {}
       }
@@ -66,10 +69,11 @@ export const AX_InvoiceOperationsService = {
             await supabase.from('ax_inventory_stock').insert({ id: generateUUID(), warehouse_id: invoiceRow.warehouse_id, item_id: itemId, quantity: delta, unit: stockRow?.unit || itemMeta?.unit_type || 'كرتونة' })
           }
 
-          if (dbType === 'purchase' && !isPurchaseReturn && Number(item.price) > 0) {
+          if (dbType === 'purchase' && !isPurchaseReturn && Number(item.price) > 0 && cartonQty > 0) {
+            const cartonCost = Number(((qty * Number(item.price)) / cartonQty).toFixed(2))
             try {
               await supabase.from('ax_items').update({
-                buy_price: Number(item.price),
+                buy_price: cartonCost,
                 updated_at: new Date().toISOString(),
               }).eq('id', itemId)
             } catch {}
@@ -97,8 +101,8 @@ export const AX_InvoiceOperationsService = {
           id: generateUUID(),
           code: txCode,
           type: isCashOut ? 'supplier_payment' : 'client_receipt',
-          party_type: isSaleReturn || dbType === 'sale' ? 'client' : 'supplier',
-          party_id: null,
+          party_type: isCustomerParty ? 'client' : 'supplier',
+          party_id: resolvedPartyId,
           party_name: invoiceRow.party_name,
           amount: invoiceRow.paid_amount,
           treasury_id: tId,
@@ -116,15 +120,25 @@ export const AX_InvoiceOperationsService = {
       }
 
       const rem = Number(invoiceRow.remaining_amount || 0)
-      if (rem > 0 && invoiceRow.party_name) {
-        const targetTable = (isSaleReturn || dbType === 'sale') ? 'ax_clients' : 'ax_suppliers'
-        const { data: party } = await supabase.from(targetTable).select('*').eq('name', invoiceRow.party_name).maybeSingle()
+      if (rem > 0 && (resolvedPartyId || invoiceRow.party_name)) {
+        let party = null
+        if (resolvedPartyId) {
+          const { data: pById } = await supabase.from(targetPartyTable).select('*').eq('id', resolvedPartyId).maybeSingle()
+          party = pById
+        }
+        if (!party && invoiceRow.party_name) {
+          const { data: pByName } = await supabase.from(targetPartyTable).select('*').eq('name', invoiceRow.party_name).maybeSingle()
+          party = pByName
+        }
+        const isSupplierBuying = !isCustomerParty && (inv.type === 'sale' || isSaleReturn)
+        const partyDelta = isCustomerParty
+          ? (isSaleReturn ? -rem : rem)
+          : (isSupplierBuying ? (isSaleReturn ? rem : -rem) : (isPurchaseReturn ? -rem : rem))
         if (party) {
-          const partyDelta = (isSaleReturn || isPurchaseReturn) ? -rem : rem
-          await supabase.from(targetTable).update({ balance: Number(party.balance || 0) + partyDelta }).eq('id', party.id)
-        } else {
-          const initialBal = (isSaleReturn || isPurchaseReturn) ? -rem : rem
-          await supabase.from(targetTable).insert({ id: generateUUID(), name: invoiceRow.party_name, phone: '', address: 'بيانات ناقصة', balance: initialBal })
+          await supabase.from(targetPartyTable).update({ balance: Number(party.balance || 0) + partyDelta }).eq('id', party.id)
+        } else if (invoiceRow.party_name) {
+          const newPartyId = resolvedPartyId || generateUUID()
+          await supabase.from(targetPartyTable).insert({ id: newPartyId, name: invoiceRow.party_name, phone: '', address: 'بيانات ناقصة', balance: partyDelta })
         }
       }
 
@@ -135,7 +149,7 @@ export const AX_InvoiceOperationsService = {
     }
   },
 
-  deleteInvoiceInDB: async (inv, userProfile = null) => {
+  deleteInvoiceInDB: async (inv, userProfile = null, options = {}) => {
     if (!supabase || typeof supabase.from !== 'function' || !inv) return { success: false }
     try {
       const invId = inv.id
@@ -179,24 +193,40 @@ export const AX_InvoiceOperationsService = {
       }
 
       const rem = Number(inv.remainingAmount ?? inv.remaining_amount ?? 0)
+      const pId = inv.partyId || inv.party_id || null
       const partyName = inv.partyName || inv.party_name
-      if (rem > 0 && partyName) {
-        const targetTable = (isSaleReturn || dbType === 'sale') ? 'ax_clients' : 'ax_suppliers'
-        const { data: party } = await supabase.from(targetTable).select('*').eq('name', partyName).maybeSingle()
+      const partyKind = inv.partyKind || inv.partyType || inv.party_type || ((isSaleReturn || dbType === 'sale') ? 'customer' : 'supplier')
+      const isCustomerParty = partyKind === 'customer' || partyKind === 'client'
+      const targetPartyTable = isCustomerParty ? 'ax_clients' : 'ax_suppliers'
+      if (rem > 0 && (pId || partyName)) {
+        let party = null
+        if (pId) {
+          const { data: pById } = await supabase.from(targetPartyTable).select('*').eq('id', pId).maybeSingle()
+          party = pById
+        }
+        if (!party && partyName) {
+          const { data: pByName } = await supabase.from(targetPartyTable).select('*').eq('name', partyName).maybeSingle()
+          party = pByName
+        }
         if (party) {
-          const reversePartyDelta = (isSaleReturn || isPurchaseReturn) ? rem : -rem
-          await supabase.from(targetTable).update({ balance: Number(party.balance || 0) + reversePartyDelta }).eq('id', party.id)
+          const isSupplierBuying = !isCustomerParty && (inv.type === 'sale' || isSaleReturn)
+          const reversePartyDelta = isCustomerParty
+            ? (isSaleReturn ? rem : -rem)
+            : (isSupplierBuying ? (isSaleReturn ? -rem : rem) : (isPurchaseReturn ? rem : -rem))
+          await supabase.from(targetPartyTable).update({ balance: Number(party.balance || 0) + reversePartyDelta }).eq('id', party.id)
         }
       }
 
-      await AX_RecycleBinService.moveToRecycleBin({
-        entityType: 'invoice',
-        entityId: invId,
-        entityCode: inv.code,
-        entityTitle: `فاتورة ${inv.code || ''} - ${inv.partyName || inv.party_name || ''}`,
-        originalData: inv,
-        userProfile,
-      })
+      if (!options?.skipRecycleBin) {
+        await AX_RecycleBinService.moveToRecycleBin({
+          entityType: 'invoice',
+          entityId: invId,
+          entityCode: inv.code,
+          entityTitle: `فاتورة ${inv.code || ''} - ${inv.partyName || inv.party_name || ''}`,
+          originalData: inv,
+          userProfile,
+        })
+      }
 
       await supabase.from('ax_invoices').delete().eq('id', invId)
       try { await supabase.from('ax_activity_logs').insert({ id: generateUUID(), table_name: 'ax_invoices', action: 'DELETE', record_id: invId, new_data: { id: invId, code: inv.code }, user_id: userProfile?.id || null }) } catch {}
@@ -210,7 +240,7 @@ export const AX_InvoiceOperationsService = {
     if (!supabase || typeof supabase.from !== 'function') return { success: false }
     try {
       if (oldInv) {
-        await AX_InvoiceOperationsService.deleteInvoiceInDB(oldInv, userProfile)
+        await AX_InvoiceOperationsService.deleteInvoiceInDB(oldInv, userProfile, { skipRecycleBin: true })
       }
       return await AX_InvoiceOperationsService.addInvoiceInDB(newInv, userProfile)
     } catch (err) {

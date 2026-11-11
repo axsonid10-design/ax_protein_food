@@ -128,7 +128,7 @@ export function AX_IncomeStatementReport({
     })
     const netSales = Math.max(0, grossSales - totalDiscount - totalReturns)
     const netCogs = Math.max(0, totalCogs - returnsCogs)
-    const adjustedGrossProfit = Math.max(0, grossProfit - returnsProfit)
+    const adjustedGrossProfit = grossProfit - returnsProfit
     const grossMarginPct = netSales > 0 ? (adjustedGrossProfit / netSales) * 100 : 0
     const operatingExpenses = totalTransport + totalLoading
     const netOperatingProfit = adjustedGrossProfit - operatingExpenses

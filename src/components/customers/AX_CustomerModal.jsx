@@ -58,9 +58,10 @@ export function AX_CustomerModal({ isOpen, onClose, customer = null, onSuccess }
       setDistrict(customer.district || '')
       setAddress(customer.address || '')
       setPrimaryCategory(customer.primaryCategory || 'مطاعم وفنادق (HORECA)')
-      setOpeningBalance(customer.openingBalance !== undefined ? String(customer.openingBalance) : '')
-      setOpeningBalanceType(customer.openingBalanceType || 'debit')
-      setOpeningBalanceDate(customer.openingBalanceDate || customer.createdAt?.split('T')[0] || new Date().toISOString().split('T')[0])
+      const rawOp = customer.openingBalance !== undefined ? customer.openingBalance : customer.opening_balance
+      setOpeningBalance(rawOp !== undefined && rawOp !== null ? String(rawOp) : '')
+      setOpeningBalanceType(customer.openingBalanceType || customer.opening_balance_type || 'debit')
+      setOpeningBalanceDate(customer.openingBalanceDate || customer.opening_balance_date || customer.createdAt?.split('T')[0] || new Date().toISOString().split('T')[0])
       setCurrentBalance(customer.balance !== undefined ? String(customer.balance) : '0')
       setNotes(customer.notes || '')
       setAttachments(customer.attachments || [])
@@ -128,10 +129,21 @@ export function AX_CustomerModal({ isOpen, onClose, customer = null, onSuccess }
 
       if (isEditMode) {
         const previousBal = Number(customer.balance) || 0
-        const parsedBal = currentBalance !== '' ? Number(currentBalance) : customer.balance
-        const finalBal = isNaN(parsedBal) ? 0 : (parsedBal === 0 ? 0 : parsedBal)
+        const oldRawOp = Number(customer.openingBalance !== undefined ? customer.openingBalance : (customer.opening_balance || 0)) || 0
+        const oldOpType = customer.openingBalanceType || customer.opening_balance_type || 'debit'
+        const oldSignedOpening = oldOpType === 'debit' ? oldRawOp : -oldRawOp
+        const openingDelta = signedOpening - oldSignedOpening
 
-        if (Math.abs(finalBal - previousBal) > 0.0001) {
+        let parsedBal = currentBalance !== '' ? Number(currentBalance) : customer.balance
+        if (isNaN(parsedBal)) parsedBal = 0
+
+        let finalBal = parsedBal
+        if (Math.abs(openingDelta) > 0.0001 && Math.abs(parsedBal - previousBal) < 0.0001) {
+          finalBal = previousBal + openingDelta
+        }
+
+        const balanceDelta = finalBal - previousBal
+        if (Math.abs(balanceDelta) > 0.0001) {
           const adj = createCustomerBalanceAdjustment({
             customer,
             previousBalance: previousBal,
@@ -162,13 +174,13 @@ export function AX_CustomerModal({ isOpen, onClose, customer = null, onSuccess }
           openingBalanceType,
           openingBalanceDate,
           balance: finalBal,
+          balanceDelta,
           notes: notes.trim(),
           attachments,
           isIncomplete,
           updatedAt: new Date().toISOString(),
         }
         updateClient(customer.id, updated)
-        AX_CustomerOperationsService.updateCustomerInDB(updated, profile)
         showToast('تم تحديث بيانات العميل بنجاح', 'success')
       } else {
         const newCust = {

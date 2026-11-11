@@ -1,6 +1,7 @@
 import { generateUUID } from '../utils/AX_UUID.js'
 import { getCartonEquivalent } from '../utils/pricingCalculations.js'
 import { executeImmediateTransfer } from './transferHelpers.js'
+import { updateLocalCachePayload } from './storeCacheHelper.js'
 
 export function getVanWarehouses(warehouses = [], distributors = []) {
   const fromWarehouses = (warehouses || []).filter((w) => w.type === 'van')
@@ -186,7 +187,7 @@ export async function executeVanStockLoading(
       itemId: entry.itemId,
       quantity: cartonQty,
       rawQuantity: rawQty,
-      unit: 'كرتونة',
+      unit: itObj.unitType || itObj.unit_type || unit || 'كرتونة',
       selectedUnit: unit,
       name: itObj.compositeName || itObj.name || entry.name || '',
       primaryCategory: itObj.primaryCategory || 'أصناف عامة',
@@ -216,14 +217,20 @@ export async function executeVanStockLoading(
     stockAudits: storeState.stockAudits || [],
     warehouses: storeState.warehouses || [],
     inventoryStock: storeState.inventoryStock || [],
+    items: storeState.items || [],
   })
 
   if (res?.success) {
     if (typeof setStoreState === 'function') {
-      setStoreState((state) => ({
-        transfers: [res.transfer, ...(state.transfers || [])],
-        inventoryStock: res.updatedStock,
-      }))
+      setStoreState((state) => {
+        const nextTransfers = [res.transfer, ...(state.transfers || [])]
+        updateLocalCachePayload('transfers', nextTransfers)
+        updateLocalCachePayload('inventoryStock', res.updatedStock)
+        return {
+          transfers: nextTransfers,
+          inventoryStock: res.updatedStock,
+        }
+      })
     }
     return {
       success: true,
@@ -349,15 +356,21 @@ export async function executeVanSettlement(
         stockAudits: storeState.stockAudits || [],
         warehouses: storeState.warehouses || [],
         inventoryStock: storeState.inventoryStock || [],
+        items: storeState.items || [],
       })
 
       if (res?.success) {
         stockTransferResult = res.transfer
         if (typeof setStoreState === 'function') {
-          setStoreState((state) => ({
-            transfers: [res.transfer, ...(state.transfers || [])],
-            inventoryStock: res.updatedStock,
-          }))
+          setStoreState((state) => {
+            const nextTransfers = [res.transfer, ...(state.transfers || [])]
+            updateLocalCachePayload('transfers', nextTransfers)
+            updateLocalCachePayload('inventoryStock', res.updatedStock)
+            return {
+              transfers: nextTransfers,
+              inventoryStock: res.updatedStock,
+            }
+          })
         }
       }
     }

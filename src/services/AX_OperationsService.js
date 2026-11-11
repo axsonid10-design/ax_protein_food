@@ -7,6 +7,7 @@ import { AX_ItemOperationsService } from './AX_ItemOperationsService.js'
 import { AX_InvoiceOperationsService } from './AX_InvoiceOperationsService.js'
 import { AX_TransferOperationsService } from './AX_TransferOperationsService.js'
 import { AX_EmployeesOperationsService } from './AX_EmployeesOperationsService.js'
+import { AX_ManufacturingOperationsService } from './AX_ManufacturingOperationsService.js'
 import { AX_RecycleBinService } from './AX_RecycleBinService.js'
 import { recoverUnappliedTransfers, executeImmediateTransfer } from '../store/transferHelpers.js'
 
@@ -17,6 +18,7 @@ export const AX_OperationsService = {
   ...AX_InvoiceOperationsService,
   ...AX_TransferOperationsService,
   ...AX_EmployeesOperationsService,
+  ...AX_ManufacturingOperationsService,
 
   addCashTransactionInDB: async (tx, userProfile = null) => {
     if (!supabase || typeof supabase.from !== 'function' || !tx) return { success: false }
@@ -39,6 +41,22 @@ export const AX_OperationsService = {
       notes: tx.notes || (isPayroll ? `[أجور ومرتبات] ${tx.partyName || ''}` : null),
     }
     try {
+      let resolvedParty = null
+      if ((dbType === 'client_receipt' || dbType === 'supplier_payment') && (txRow.party_id || txRow.party_name)) {
+        const targetTable = dbType === 'client_receipt' ? 'ax_clients' : 'ax_suppliers'
+        if (txRow.party_id) {
+          const { data: pById } = await supabase.from(targetTable).select('*').eq('id', txRow.party_id).maybeSingle()
+          resolvedParty = pById
+        }
+        if (!resolvedParty && txRow.party_name) {
+          const { data: pByName } = await supabase.from(targetTable).select('*').eq('name', txRow.party_name).maybeSingle()
+          resolvedParty = pByName
+        }
+        if (resolvedParty?.id && !txRow.party_id) {
+          txRow.party_id = resolvedParty.id
+        }
+      }
+
       const { error } = await supabase.from('ax_cash_transactions').insert(txRow)
       if (error) throw error
 
@@ -51,13 +69,10 @@ export const AX_OperationsService = {
         }
       }
 
-      if (txRow.party_name && txRow.amount > 0 && (dbType === 'client_receipt' || dbType === 'supplier_payment')) {
+      if (resolvedParty && txRow.amount > 0 && (dbType === 'client_receipt' || dbType === 'supplier_payment')) {
         const targetTable = dbType === 'client_receipt' ? 'ax_clients' : 'ax_suppliers'
-        const { data: party } = await supabase.from(targetTable).select('*').eq('name', txRow.party_name).maybeSingle()
-        if (party) {
-          const newBal = Number(party.balance || 0) - txRow.amount
-          await supabase.from(targetTable).update({ balance: newBal }).eq('id', party.id)
-        }
+        const newBal = Number(resolvedParty.balance || 0) - txRow.amount
+        await supabase.from(targetTable).update({ balance: newBal }).eq('id', resolvedParty.id)
       }
 
       try { await supabase.from('ax_activity_logs').insert({ id: generateUUID(), table_name: 'ax_cash_transactions', action: 'INSERT', record_id: txId, new_data: txRow, user_id: userProfile?.id || null }) } catch {}
@@ -66,6 +81,44 @@ export const AX_OperationsService = {
       try { await offlineDB.enqueue('ax_cash_transactions', 'insert', txRow) } catch {}
       return { success: false, error: err.message, enqueued: true }
     }
+  },
+
+  deleteCashTransactionInDB: async (tx, userProfile = null) => {
+    if (!supabase || typeof supabase.from !== 'function' || !tx?.id) return { success: false }
+    try {
+      const amt = Number(tx.amount || 0)
+      const trId = tx.treasuryId || tx.treasury_id
+      const isCashIn = tx.type === 'client_receipt' || tx.type === 'other_income' || tx.type === 'misc_revenue'
+      if (trId && amt > 0) {
+        const { data: tr } = await supabase.from('ax_treasuries').select('*').eq('id', trId).maybeSingle()
+        if (tr) {
+          const delta = isCashIn ? -amt : amt
+          await supabase.from('ax_treasuries').update({ balance: Number(tr.balance || 0) + delta }).eq('id', tr.id)
+        }
+      }
+      const pId = tx.partyId || tx.party_id || null
+      const pName = tx.partyName || tx.party_name
+      const isClient = tx.partyType === 'client' || (!tx.partyType && tx.type === 'client_receipt')
+      const isSupplier = tx.partyType === 'supplier' || (!tx.partyType && tx.type === 'supplier_payment')
+      if ((pId || pName) && amt > 0 && (isClient || isSupplier)) {
+        const targetTable = isClient ? 'ax_clients' : 'ax_suppliers'
+        let party = null
+        if (pId) {
+          const { data: pById } = await supabase.from(targetTable).select('*').eq('id', pId).maybeSingle()
+          party = pById
+        }
+        if (!party && pName) {
+          const { data: pByName } = await supabase.from(targetTable).select('*').eq('name', pName).maybeSingle()
+          party = pByName
+        }
+        if (party) {
+          await supabase.from(targetTable).update({ balance: Number(party.balance || 0) + amt }).eq('id', party.id)
+        }
+      }
+      await supabase.from('ax_cash_transactions').delete().eq('id', tx.id)
+      try { await supabase.from('ax_activity_logs').insert({ id: generateUUID(), table_name: 'ax_cash_transactions', action: 'DELETE', record_id: tx.id, user_id: userProfile?.id || null }) } catch {}
+      return { success: true }
+    } catch (err) { return { success: false, error: err.message } }
   },
 
   addCashTransferInDB: async (transfer, userProfile = null) => {
@@ -237,89 +290,8 @@ export const AX_OperationsService = {
     }
   },
 
-  addManufacturingOrderInDB: async (order, userProfile = null) => {
-    if (!supabase || typeof supabase.from !== 'function' || !order) return { success: false }
-    try {
-      const mfgId = order.id || generateUUID()
-      const row = {
-        id: mfgId, code: order.code || `MFG-${Date.now().toString().slice(-5)}`,
-        date: order.date || new Date().toISOString().split('T')[0],
-        raw_item_id: order.rawItemId || order.raw_item_id || null,
-        raw_warehouse_id: order.rawWarehouseId || order.raw_warehouse_id || null,
-        consumed_quantity: Number(order.consumedQuantity || order.consumed_quantity || 0),
-        consumed_unit: order.consumedUnit || order.consumed_unit || 'كرتونة',
-        produced_items: order.producedItems || order.produced_items || [],
-        waste_percentage: Number(order.wastePercentage || order.waste_percentage || 0),
-        operator: order.operator || null, notes: order.notes || null,
-      }
-      const { error } = await supabase.from('ax_manufacturing_orders').insert(row)
-      if (error) throw error
-
-      if (row.raw_warehouse_id && row.raw_item_id && row.consumed_quantity > 0) {
-        const { data: rawStock } = await supabase.from('ax_inventory_stock').select('*').eq('warehouse_id', row.raw_warehouse_id).eq('item_id', row.raw_item_id).maybeSingle()
-        if (rawStock) {
-          const newQty = Math.max(0, Number(rawStock.quantity || 0) - row.consumed_quantity)
-          await supabase.from('ax_inventory_stock').update({ quantity: newQty, updated_at: new Date().toISOString() }).eq('id', rawStock.id)
-        }
-      }
-
-      if (row.produced_items && row.produced_items.length > 0) {
-        for (const prod of row.produced_items) {
-          const targetWh = prod.targetWarehouseId || row.raw_warehouse_id
-          const qty = Number(prod.quantity || 0)
-          if (!prod.itemId || qty <= 0 || !targetWh) continue
-          const { data: pStock } = await supabase.from('ax_inventory_stock').select('*').eq('warehouse_id', targetWh).eq('item_id', prod.itemId).maybeSingle()
-          if (pStock) {
-            await supabase.from('ax_inventory_stock').update({ quantity: Number(pStock.quantity || 0) + qty, updated_at: new Date().toISOString() }).eq('id', pStock.id)
-          } else {
-            await supabase.from('ax_inventory_stock').insert({ id: generateUUID(), warehouse_id: targetWh, item_id: prod.itemId, quantity: qty, unit: prod.unit || 'كرتونة' })
-          }
-        }
-      }
-
-      try { await supabase.from('ax_activity_logs').insert({ id: generateUUID(), table_name: 'ax_manufacturing_orders', action: 'INSERT', record_id: mfgId, new_data: row, user_id: userProfile?.id || null }) } catch {}
-      return { success: true }
-    } catch (err) {
-      return { success: false, error: err.message }
-    }
-  },
-
-  updateManufacturingOrderInDB: async (order, userProfile = null) => {
-    if (!supabase || typeof supabase.from !== 'function' || !order?.id) return { success: false }
-    const row = {
-      raw_item_id: order.rawItemId || order.raw_item_id || null,
-      raw_warehouse_id: order.rawWarehouseId || order.raw_warehouse_id || null,
-      consumed_quantity: Number(order.consumedQuantity || order.consumed_quantity || 0),
-      consumed_unit: order.consumedUnit || order.consumed_unit || 'كرتونة',
-      produced_items: order.producedItems || order.produced_items || [],
-      operator: order.operator || null, notes: order.notes || null,
-    }
-    try {
-      await supabase.from('ax_manufacturing_orders').update(row).eq('id', order.id)
-      try { await supabase.from('ax_activity_logs').insert({ id: generateUUID(), table_name: 'ax_manufacturing_orders', action: 'UPDATE', record_id: order.id, new_data: row, user_id: userProfile?.id || null }) } catch {}
-      return { success: true }
-    } catch (err) { return { success: false, error: err.message } }
-  },
-
-  deleteManufacturingOrderInDB: async (orderId, userProfile = null) => {
-    if (!supabase || typeof supabase.from !== 'function' || !orderId) return { success: false }
-    try {
-      await supabase.from('ax_manufacturing_orders').delete().eq('id', orderId)
-      try { await supabase.from('ax_activity_logs').insert({ id: generateUUID(), table_name: 'ax_manufacturing_orders', action: 'DELETE', record_id: orderId, user_id: userProfile?.id || null }) } catch {}
-      return { success: true }
-    } catch (err) { return { success: false, error: err.message } }
-  },
-
-  markNotificationReadInDB: async (id) => {
-    try {
-      if (supabase?.from) await supabase.from('ax_notifications').update({ read: true }).eq('id', id)
-    } catch {}
-  },
-  markAllNotificationsReadInDB: async () => {
-    try {
-      if (supabase?.from) await supabase.from('ax_notifications').update({ read: true }).neq('read', true)
-    } catch {}
-  },
+  markNotificationReadInDB: async (id) => { try { if (supabase?.from) await supabase.from('ax_notifications').update({ read: true }).eq('id', id) } catch {} },
+  markAllNotificationsReadInDB: async () => { try { if (supabase?.from) await supabase.from('ax_notifications').update({ read: true }).neq('read', true) } catch {} },
   addNotificationInDB: async (notif) => {
     if (!supabase?.from || !notif) return
     try {

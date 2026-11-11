@@ -128,17 +128,52 @@ export function matchesInvoiceTimeframe(inv, timeframeOrOptions = 'all', specifi
   let specDate = ''
   let cStart = ''
   let cEnd = ''
+  let searchQuery = ''
+  let statusFilter = 'all'
+  let warehouseFilter = 'all'
   if (typeof timeframeOrOptions === 'object' && timeframeOrOptions !== null) {
     timeframe = timeframeOrOptions.timeframe || 'all'
     specDate = timeframeOrOptions.specificDate || ''
     cStart = timeframeOrOptions.customStart || ''
     cEnd = timeframeOrOptions.customEnd || ''
+    searchQuery = timeframeOrOptions.searchQuery || ''
+    statusFilter = timeframeOrOptions.statusFilter || 'all'
+    warehouseFilter = timeframeOrOptions.warehouseFilter || 'all'
   } else {
     timeframe = timeframeOrOptions || 'all'
     specDate = specificDate || ''
     cStart = customStart || ''
     cEnd = customEnd || ''
   }
+
+  if (warehouseFilter && warehouseFilter !== 'all' && warehouseFilter !== 'ALL') {
+    const invWh = inv.warehouseId || inv.warehouse_id || ''
+    if (invWh !== warehouseFilter) return false
+  }
+
+  if (statusFilter && statusFilter !== 'all') {
+    const rem = Number(inv.remainingAmount ?? inv.remaining_amount ?? 0)
+    const paid = Number(inv.paidAmount ?? inv.paid_amount ?? 0)
+    const computedStatus = rem <= 0 ? 'paid' : paid > 0 ? 'partial' : 'unpaid'
+    if (computedStatus !== statusFilter) return false
+  }
+
+  if (searchQuery && String(searchQuery).trim()) {
+    const norm = (s) =>
+      String(s || '')
+        .trim()
+        .toLowerCase()
+        .replace(/[أإآ]/g, 'ا')
+        .replace(/ى/g, 'ي')
+        .replace(/ة/g, 'ه')
+    const q = norm(searchQuery)
+    const matchCode = norm(inv.code).includes(q)
+    const matchParty = norm(inv.partyName || inv.party_name).includes(q)
+    const matchNotes = norm(inv.notes).includes(q)
+    const matchItems = Array.isArray(inv.items) && inv.items.some((it) => norm(it.compositeName || it.name).includes(q))
+    if (!matchCode && !matchParty && !matchNotes && !matchItems) return false
+  }
+
   if (timeframe === 'all') return true
   const createdRaw = inv.createdAt || inv.created_at
   const createdDate = createdRaw ? toLocalDateString(createdRaw) : ''
@@ -149,8 +184,7 @@ export function matchesInvoiceTimeframe(inv, timeframeOrOptions = 'all', specifi
 
   const todayStr = getLocalTodayStr()
   if (timeframe === 'today' || timeframe === 'day') {
-    const targetDate = createdDate || primaryDate
-    return targetDate === todayStr
+    return primaryDate === todayStr || createdDate === todayStr
   }
   if (timeframe === 'week') {
     const d = new Date()
@@ -168,9 +202,9 @@ export function matchesInvoiceTimeframe(inv, timeframeOrOptions = 'all', specifi
     return primaryDate >= startOfYear && primaryDate <= todayStr
   }
   if (timeframe === 'specific_day') {
-    return specDate ? primaryDate === specDate : true
+    return specDate ? (primaryDate === specDate || createdDate === specDate) : true
   }
-  if (timeframe === 'custom') {
+  if (timeframe === 'custom' || timeframe === 'custom_range') {
     if (cStart && cEnd) {
       if (cStart > cEnd) return false
       return primaryDate >= cStart && primaryDate <= cEnd

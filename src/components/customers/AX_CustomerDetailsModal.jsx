@@ -32,14 +32,15 @@ export function AX_CustomerDetailsModal({ customer, isOpen, onClose }) {
     if (!customer?.id) return []
 
     const entries = []
-    const opBal = Number(customer.openingBalance) || 0
-    const opType = customer.openingBalanceType || 'debit'
+    const opBal = Number(customer.openingBalance !== undefined ? customer.openingBalance : (customer.opening_balance || 0)) || 0
+    const opType = customer.openingBalanceType || customer.opening_balance_type || 'debit'
+    const opDate = customer.openingBalanceDate || customer.opening_balance_date || customer.createdAt || new Date().toISOString()
     const opSigned = opType === 'debit' ? opBal : -opBal
 
     if (opBal > 0) {
       entries.push({
         id: 'op-bal',
-        date: customer.createdAt || new Date().toISOString(),
+        date: opDate,
         type: 'opening',
         description: `رصيد أول المدة (${opType === 'debit' ? 'مدين / مستحق عليه' : 'دائن / دفعة مقدمة'})`,
         debit: opType === 'debit' ? opBal : 0,
@@ -244,10 +245,10 @@ export function AX_CustomerDetailsModal({ customer, isOpen, onClose }) {
               <div className="bg-surface-low/70 border border-outline-variant/20 rounded-2xl p-3">
                 <span className="text-[11px] font-bold text-on-surface-variant block">رصيد أول المدة</span>
                 <span className="text-sm font-black font-mono text-on-surface">
-                  {Number(customer.openingBalance || 0).toLocaleString('en-US')} ج.م
+                  {Number(customer.openingBalance !== undefined ? customer.openingBalance : (customer.opening_balance || 0)).toLocaleString('en-US')} ج.م
                 </span>
                 <span className="text-[10px] text-on-surface-variant block">
-                  {customer.openingBalanceType === 'debit' ? 'مدين / مستحق عليه' : 'دائن / رصيد مقدم'}
+                  {(customer.openingBalanceType || customer.opening_balance_type) === 'debit' ? 'مدين / مستحق عليه' : 'دائن / رصيد مقدم'}
                 </span>
               </div>
               <div className="bg-surface-low/70 border border-outline-variant/20 rounded-2xl p-3">

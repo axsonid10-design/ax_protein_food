@@ -62,6 +62,9 @@ export function AX_EditSalesRepModal({ rep, isOpen, onClose }) {
     try {
       const numTarget = Number(targetAmount) || 0
       const numBal = Number(balance) || 0
+      const oldBal = Number(rep.currentBalance ?? rep.netBalance ?? rep.balance ?? 0)
+      const oldOpening = Number(rep.openingBalance || 0)
+      const nextOpening = oldOpening + (numBal - oldBal)
 
       const updates = {
         name: name.trim(),
@@ -72,6 +75,7 @@ export function AX_EditSalesRepModal({ rep, isOpen, onClose }) {
         commissionModel,
         stepAmount: Number(stepAmount) || 1000,
         stepRate: Number(stepRate) || 50,
+        openingBalance: nextOpening,
         netBalance: numBal,
         currentBalance: numBal,
         balance: numBal,
@@ -79,7 +83,6 @@ export function AX_EditSalesRepModal({ rep, isOpen, onClose }) {
       }
 
       updateSalesRep(rep.id, updates)
-      AX_SalesRepOperationsService.updateSalesRepInDB({ id: rep.id, ...updates }, profile)
       showToast('تم تحديث بيانات المندوب بنجاح', 'success')
       onClose()
     } catch {

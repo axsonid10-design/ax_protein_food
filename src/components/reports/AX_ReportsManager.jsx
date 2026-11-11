@@ -32,8 +32,9 @@ export function AX_ReportsManager() {
     cashTransactions = [],
     inventoryStock = [],
     warehouses = [],
-    disassemblyOrders = [],
+    manufacturingOrders = [],
   } = useAXStore()
+  const disassemblyOrders = manufacturingOrders
 
   const [activeReportTab, setActiveReportTab] = useState('pnl')
   const [timeframe, setTimeframe] = useState('this_month')
@@ -58,28 +59,40 @@ export function AX_ReportsManager() {
       }
     })
     const totalCash = treasuryAccounts.reduce((sum, acc) => sum + (Number(acc.balance) || 0), 0)
-    const totalClientDebts = clients.reduce((sum, c) => sum + (Number(c.balance) || 0), 0)
-    const totalSupplierLiabilities = suppliers.reduce((sum, s) => sum + (Number(s.balance) || 0), 0)
+    const totalClientDebts = clients.reduce((sum, c) => {
+      const bal = Number(c.balance) || 0
+      return bal > 0 ? sum + bal : sum
+    }, 0)
+    const totalSupplierLiabilities = suppliers.reduce((sum, s) => {
+      const bal = Number(s.balance) || 0
+      return bal > 0 ? sum + bal : sum
+    }, 0)
 
     let inventoryValuation = 0
     ;(inventoryStock || []).forEach((stock) => {
-      const it = items.find((i) => i.id === stock.itemId)
-      const cost = Number(it?.buyPrice) || 0
-      inventoryValuation += (Number(stock.quantity) || 0) * cost
+      const it = items.find((i) => i.id === (stock.itemId || stock.item_id))
+      const cost = Number(it?.buyPrice) || Number(it?.sellPrice) || 0
+      const qty = Math.max(0, Number(stock.quantity) || 0)
+      inventoryValuation += qty * cost
     })
 
     const filteredOrders = filterByDateRange(disassemblyOrders, 'date', timeframe, customStart, customEnd)
     let totalInputWeight = 0
     let totalOutputWeight = 0
+    let sumWastePct = 0
     filteredOrders.forEach((o) => {
-      totalInputWeight += Number(o.inputQuantity || o.inputWeight || o.sourceWeight) || 0
-      const outputs = o.outputs || o.items || []
+      const rawQty = Number(o.consumedQuantity ?? o.inputQuantity ?? o.inputWeight ?? o.sourceWeight) || 0
+      totalInputWeight += rawQty
+      const outputs = o.producedItems || o.outputs || o.items || []
       outputs.forEach((out) => {
         totalOutputWeight += Number(out.quantity || out.weight) || 0
       })
+      sumWastePct += Number(o.wastePercentage) || 0
     })
     const totalWasteWeight = Math.max(0, totalInputWeight - totalOutputWeight)
-    const wasteRate = totalInputWeight > 0 ? ((totalWasteWeight / totalInputWeight) * 100).toFixed(1) : 0
+    const wasteRate = filteredOrders.length > 0
+      ? (sumWastePct > 0 ? (sumWastePct / filteredOrders.length).toFixed(1) : (totalInputWeight > 0 ? ((totalWasteWeight / totalInputWeight) * 100).toFixed(1) : 0))
+      : 0
 
     const filteredInvoices = filterByDateRange(invoices, 'date', timeframe, customStart, customEnd)
     const totalOperationsCount = filteredInvoices.length + filteredOrders.length

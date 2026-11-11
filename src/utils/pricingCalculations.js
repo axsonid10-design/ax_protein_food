@@ -128,15 +128,30 @@ export const resolveItemUnitPrice = resolveInvoiceUnitPrice
 export function getCartonEquivalent(quantity, unit = 'كرتونة', item = {}) {
   const qty = Number(quantity) || 0
   if (qty <= 0) return 0
-  const u = String(unit || item?.unitType || item?.unit_type || 'كرتونة').trim()
+  const baseUnit = String(item?.unitType || item?.unit_type || 'كرتونة').trim()
+  const u = String(unit || baseUnit).trim()
+  if (u === baseUnit) return qty
+
   const pieces = Number(item?.piecesPerCarton ?? item?.pieces_per_carton ?? 0)
   const weight = Number(item?.weightPerCarton ?? item?.weight_per_carton ?? 0)
-  const isSub = u === 'قطعة' || u === 'كيس' || u === 'طبق' || (item?.subUnitType && u === item.subUnitType) || (item?.sub_unit_type && u === item.sub_unit_type)
-  if (isSub && pieces > 0) {
-    return Number((qty / pieces).toFixed(4))
+
+  if (baseUnit === 'كرتونة') {
+    if (u === 'كيلو' && weight > 0) {
+      return Number((qty / weight).toFixed(4))
+    }
+    const isSub = u === 'قطعة' || u === 'كيس' || u === 'طبق' || (item?.subUnitType && u === item.subUnitType) || (item?.sub_unit_type && u === item.sub_unit_type)
+    if (isSub && pieces > 0) {
+      return Number((qty / pieces).toFixed(4))
+    }
   }
-  if (u === 'كيلو' && weight > 0 && item?.unitType !== 'كيلو' && item?.unit_type !== 'كيلو') {
-    return Number((qty / weight).toFixed(4))
+
+  if (baseUnit === 'كيلو' && u === 'كرتونة' && weight > 0) {
+    return Number((qty * weight).toFixed(4))
   }
+
+  if ((baseUnit === 'قطعة' || baseUnit === 'طبق' || baseUnit === 'كيس') && u === 'كرتونة' && pieces > 0) {
+    return Number((qty * pieces).toFixed(4))
+  }
+
   return qty
 }

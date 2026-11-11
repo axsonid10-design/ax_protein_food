@@ -1,6 +1,7 @@
 import { generateUUID } from '../utils/AX_UUID.js'
 import { getVanWarehouses } from './vanDistributionHelpers.js'
 import { AX_OperationsService } from '../services/AX_OperationsService.js'
+import { updateLocalCachePayload } from './storeCacheHelper.js'
 
 export const EXPENSE_PAYMENT_STATUSES = {
   PAID: 'paid',
@@ -30,17 +31,47 @@ export const EXPENSE_COST_CENTER_LABELS = {
 
 let inMemoryExpenses = []
 
-export function getStoredExpenses() {
+export function getStoredExpenses(cashTransactions = []) {
+  let list = inMemoryExpenses
   try {
     if (typeof localStorage !== 'undefined' && localStorage.getItem) {
       const stored = localStorage.getItem('ax_expenses')
       if (stored) {
         const parsed = JSON.parse(stored)
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed
+        if (Array.isArray(parsed) && parsed.length > 0) list = parsed
       }
     }
   } catch {}
-  return inMemoryExpenses
+
+  if (Array.isArray(cashTransactions) && cashTransactions.length > 0) {
+    const existingIds = new Set(list.map((e) => e?.id).filter(Boolean))
+    const existingCodes = new Set(list.map((e) => e?.code).filter(Boolean))
+    const syncedFromTx = []
+    cashTransactions.forEach((tx) => {
+      if (!tx || tx.type !== 'expense' || tx.partyType === 'employee' || tx.notes?.startsWith('[أجور ومرتبات]')) return
+      const expId = tx.partyId || tx.party_id || tx.id
+      if (existingIds.has(expId) || existingCodes.has(tx.code)) return
+      existingIds.add(expId)
+      const amt = Number(tx.amount) || 0
+      syncedFromTx.push({
+        id: expId, code: tx.code || `EXP-${String(expId).slice(-5)}`, title: tx.notes || tx.partyName || 'مصروف تشغيلي',
+        description: tx.notes || tx.partyName || '', date: tx.date || new Date().toISOString().slice(0, 10),
+        operationalDate: tx.date || new Date().toISOString().slice(0, 10),
+        costCenter: { entityType: EXPENSE_COST_CENTER_TYPES.GENERAL, entityId: null, entityName: 'عام / الإدارة العامة' },
+        mainCategoryId: tx.expenseMainCategoryId || '', mainCategoryName: tx.expenseMainCategoryName || tx.partyName || 'مصروفات عامة',
+        subCategoryId: tx.expenseSubCategoryId || null, subCategoryName: tx.expenseSubCategoryName || '',
+        secondaryCategoryId: tx.expenseSecondaryCategoryId || null, secondaryCategoryName: tx.expenseSecondaryCategoryName || '',
+        payeeName: tx.partyName || 'جهة الصرف', totalAmount: amt, paidAmount: amt, remainingAmount: 0,
+        paymentType: 'immediate', paymentStatus: EXPENSE_PAYMENT_STATUSES.PAID,
+        payments: [{ id: tx.id, treasuryId: tx.treasuryId || tx.treasury_id, amount: amt, method: 'cash', date: tx.date, transactionCode: tx.code }],
+        installments: [], notes: tx.notes || '', createdAt: tx.createdAt || tx.created_at || new Date().toISOString(),
+      })
+    })
+    if (syncedFromTx.length > 0) {
+      list = [...list, ...syncedFromTx]
+    }
+  }
+  return list
 }
 
 export function saveStoredExpenses(expenses = []) {
@@ -56,34 +87,18 @@ export function getCostCenterEntities(type, { warehouses = [], distributors = []
   if (type === EXPENSE_COST_CENTER_TYPES.WAREHOUSE) {
     const list = (warehouses || []).filter((w) => w && w.type !== 'van')
     const finalWarehouses = list.length > 0 ? list : (warehouses || [])
-    return finalWarehouses.map((w) => ({
-      id: w.id,
-      name: w.name,
-      type: 'warehouse',
-      code: w.code || '',
-    }))
+    return finalWarehouses.map((w) => ({ id: w.id, name: w.name, type: 'warehouse', code: w.code || '' }))
   }
-
   if (type === EXPENSE_COST_CENTER_TYPES.VEHICLE) {
     const vans = getVanWarehouses(warehouses, distributors)
-    return vans.map((v) => ({
-      id: v.id,
-      name: v.name,
-      type: 'vehicle',
-      plateNumber: v.plateNumber || '',
-      driverName: v.driverName || v.manager || '',
-      treasuryId: v.treasuryId || '',
-    }))
+    return vans.map((v) => ({ id: v.id, name: v.name, type: 'vehicle', plateNumber: v.plateNumber || '', driverName: v.driverName || v.manager || '', treasuryId: v.treasuryId || '' }))
   }
-
   if (type === EXPENSE_COST_CENTER_TYPES.FACTORY) {
     return [{ id: 'factory-main', name: 'المصنع الرئيسي / خطوط التشفية والتجهيز', type: 'factory' }]
   }
-
   if (type === EXPENSE_COST_CENTER_TYPES.GENERAL) {
     return [{ id: 'general-hq', name: 'الإدارة العامة والمقر الرئيسي', type: 'general' }]
   }
-
   return []
 }
 
@@ -111,18 +126,10 @@ export function generateExpenseInstallments(totalRemaining, installmentCount = 1
     accumulated += amount
 
     installments.push({
-      id: generateUUID(),
-      installmentNumber: i + 1,
-      dueDate: dueDateStr,
-      amount,
-      status: 'pending',
-      paidDate: null,
-      treasuryId: null,
-      treasuryName: null,
-      notes: '',
+      id: generateUUID(), installmentNumber: i + 1, dueDate: dueDateStr, amount,
+      status: 'pending', paidDate: null, treasuryId: null, treasuryName: null, notes: '',
     })
   }
-
   return installments
 }
 
@@ -133,11 +140,8 @@ export async function createExpenseRecord(payload = {}, options = {}) {
   const validPayments = rawPayments
     .filter((p) => p && Number(p.amount) > 0 && p.treasuryId)
     .map((p) => ({
-      id: p.id || generateUUID(),
-      treasuryId: p.treasuryId,
-      treasuryName: p.treasuryName || '',
-      amount: Number(p.amount) || 0,
-      method: p.method || 'cash',
+      id: p.id || generateUUID(), treasuryId: p.treasuryId, treasuryName: p.treasuryName || '',
+      amount: Number(p.amount) || 0, method: p.method || 'cash',
       date: p.date || payload.date || new Date().toISOString().slice(0, 10),
       transactionCode: `TX-EXP-${Date.now().toString().slice(-6)}-${Math.floor(Math.random() * 900 + 100)}`,
       notes: p.notes || '',
@@ -156,34 +160,20 @@ export async function createExpenseRecord(payload = {}, options = {}) {
   let installments = []
   if (Array.isArray(payload.installments) && payload.installments.length > 0) {
     installments = payload.installments.map((inst, idx) => ({
-      id: inst.id || generateUUID(),
-      installmentNumber: inst.installmentNumber || idx + 1,
+      id: inst.id || generateUUID(), installmentNumber: inst.installmentNumber || idx + 1,
       dueDate: inst.dueDate || payload.date || new Date().toISOString().slice(0, 10),
-      amount: Number(inst.amount) || 0,
-      status: inst.status || 'pending',
-      paidDate: inst.paidDate || null,
-      treasuryId: inst.treasuryId || null,
-      treasuryName: inst.treasuryName || null,
-      notes: inst.notes || '',
+      amount: Number(inst.amount) || 0, status: inst.status || 'pending',
+      paidDate: inst.paidDate || null, treasuryId: inst.treasuryId || null, treasuryName: inst.treasuryName || null, notes: inst.notes || '',
     }))
   } else if (Array.isArray(payload.deferredSchedule?.installments) && payload.deferredSchedule.installments.length > 0) {
     installments = payload.deferredSchedule.installments.map((inst, idx) => ({
-      id: inst.id || generateUUID(),
-      installmentNumber: inst.installmentNumber || idx + 1,
+      id: inst.id || generateUUID(), installmentNumber: inst.installmentNumber || idx + 1,
       dueDate: inst.dueDate || payload.deferredSchedule?.dueDate || payload.date || new Date().toISOString().slice(0, 10),
-      amount: Number(inst.amount) || 0,
-      status: inst.status || 'pending',
-      paidDate: inst.paidDate || null,
-      treasuryId: inst.treasuryId || null,
-      treasuryName: inst.treasuryName || null,
-      notes: inst.notes || '',
+      amount: Number(inst.amount) || 0, status: inst.status || 'pending',
+      paidDate: inst.paidDate || null, treasuryId: inst.treasuryId || null, treasuryName: inst.treasuryName || null, notes: inst.notes || '',
     }))
   } else if (remainingAmount > 0) {
-    installments = generateExpenseInstallments(
-      remainingAmount,
-      payload.installmentCount || 1,
-      payload.deferredSchedule?.dueDate || payload.dueDate || payload.date
-    )
+    installments = generateExpenseInstallments(remainingAmount, payload.installmentCount || 1, payload.deferredSchedule?.dueDate || payload.dueDate || payload.date)
   }
 
   const expenseCode = payload.code || `EXP-${new Date().getFullYear()}-${Date.now().toString().slice(-5)}`
@@ -259,10 +249,15 @@ export async function createExpenseRecord(payload = {}, options = {}) {
     })
 
     if (typeof setStoreState === 'function') {
-      setStoreState((state) => ({
-        treasuryAccounts: treasuries,
-        cashTransactions: [...newTxList, ...(state.cashTransactions || [])],
-      }))
+      setStoreState((state) => {
+        const nextCashTx = [...newTxList, ...(state.cashTransactions || [])]
+        updateLocalCachePayload('treasuryAccounts', treasuries)
+        updateLocalCachePayload('cashTransactions', nextCashTx)
+        return {
+          treasuryAccounts: treasuries,
+          cashTransactions: nextCashTx,
+        }
+      })
     }
   }
 
@@ -384,10 +379,15 @@ export async function settleExpenseInstallment(expenseId, installmentId, settlem
     } catch {}
 
     if (typeof setStoreState === 'function') {
-      setStoreState((state) => ({
-        treasuryAccounts: treasuries,
-        cashTransactions: [txRecord, ...(state.cashTransactions || [])],
-      }))
+      setStoreState((state) => {
+        const nextCashTx = [txRecord, ...(state.cashTransactions || [])]
+        updateLocalCachePayload('treasuryAccounts', treasuries)
+        updateLocalCachePayload('cashTransactions', nextCashTx)
+        return {
+          treasuryAccounts: treasuries,
+          cashTransactions: nextCashTx,
+        }
+      })
     }
   }
 

@@ -31,17 +31,22 @@ export const processInvoiceStoreState = (state, inv) => {
   let updatedClients = [...(state.clients || [])]
   let updatedSuppliers = [...(state.suppliers || [])]
 
+  let resolvedPartyId = inv.partyId || inv.clientId || inv.supplierId || null
+
   if (isCustomerRelated) {
-    const cIdx = updatedClients.findIndex((c) => c.name === inv.partyName)
+    const cIdx = updatedClients.findIndex((c) => (resolvedPartyId && c.id === resolvedPartyId) || c.name === inv.partyName)
     const balanceDelta = isSaleReturn ? -inv.remainingAmount : inv.remainingAmount
     if (cIdx >= 0) {
+      resolvedPartyId = updatedClients[cIdx].id
       updatedClients[cIdx] = {
         ...updatedClients[cIdx],
         balance: (updatedClients[cIdx].balance || 0) + balanceDelta,
       }
     } else {
+      const newClientId = resolvedPartyId || generateUUID()
+      resolvedPartyId = newClientId
       updatedClients.unshift({
-        id: generateUUID(),
+        id: newClientId,
         name: inv.partyName,
         balance: balanceDelta,
         phone: '',
@@ -50,7 +55,7 @@ export const processInvoiceStoreState = (state, inv) => {
     }
   } else {
     const sIdx = updatedSuppliers.findIndex(
-      (s) => s.name === inv.partyName || s.companyName === inv.partyName || s.id === inv.partyId
+      (s) => (resolvedPartyId && s.id === resolvedPartyId) || s.name === inv.partyName || s.companyName === inv.partyName
     )
     const isSupplierBuying = inv.type === 'sale' || isSaleReturn
     const balanceDelta = isSupplierBuying
@@ -58,13 +63,16 @@ export const processInvoiceStoreState = (state, inv) => {
       : (isPurchaseReturn ? -inv.remainingAmount : inv.remainingAmount)
 
     if (sIdx >= 0) {
+      resolvedPartyId = updatedSuppliers[sIdx].id
       updatedSuppliers[sIdx] = {
         ...updatedSuppliers[sIdx],
         balance: (updatedSuppliers[sIdx].balance || 0) + balanceDelta,
       }
     } else {
+      const newSupId = resolvedPartyId || generateUUID()
+      resolvedPartyId = newSupId
       updatedSuppliers.unshift({
-        id: generateUUID(),
+        id: newSupId,
         name: inv.partyName,
         companyName: inv.partyName,
         balance: balanceDelta,
@@ -125,6 +133,7 @@ export const processInvoiceStoreState = (state, inv) => {
       id: generateUUID(),
       code: txCode,
       type: isCashOut ? 'supplier_payment' : 'client_receipt',
+      partyId: resolvedPartyId,
       partyName: inv.partyName,
       amount: inv.paidAmount,
       treasuryId: inv.treasuryId || updatedTreasuries[0]?.id,
@@ -138,13 +147,17 @@ export const processInvoiceStoreState = (state, inv) => {
     inv.items.forEach((it) => {
       const itId = it.itemId || it.id
       const p = Number(it.price) || 0
-      if (itId && p > 0) {
+      const q = Number(it.quantity) || 0
+      if (itId && p > 0 && q > 0) {
         const itemIndex = updatedItems.findIndex((x) => x.id === itId)
         if (itemIndex >= 0) {
+          const itemMeta = updatedItems[itemIndex]
+          const cartonQty = getCartonEquivalent(q, it.unit, itemMeta)
+          const cartonCost = cartonQty > 0 ? Number(((q * p) / cartonQty).toFixed(2)) : p
           updatedItems[itemIndex] = {
-            ...updatedItems[itemIndex],
-            buyPrice: p,
-            buy_price: p,
+            ...itemMeta,
+            buyPrice: cartonCost,
+            buy_price: cartonCost,
           }
         }
       }
@@ -318,14 +331,16 @@ export const saveItemOpeningBalanceState = (state, { itemId, warehouseId, quanti
   const parsedQty = !isNaN(Number(quantity)) && quantity !== '' && quantity !== null ? Number(quantity) : 0
 
   const tempStockRow = {
-    warehouseId,
-    itemId,
-    unit: baseUnit,
     ...(prevItem || {}),
     warehouseId,
     itemId,
+    warehouse_id: warehouseId,
+    item_id: itemId,
+    unit: baseUnit,
     openingBalance: parsedQty,
+    opening_balance: parsedQty,
     openingDate: date || null,
+    opening_date: date || null,
   }
 
   if (idx !== -1) {
@@ -344,13 +359,107 @@ export const saveItemOpeningBalanceState = (state, { itemId, warehouseId, quanti
     transfers: state.transfers || [],
     stockAudits: state.stockAudits || [],
     warehouses: state.warehouses || [],
+    manufacturingOrders: state.manufacturingOrders || [],
   })
 
-  const finalStockRow = { ...tempStockRow, quantity: nextCurrentStock }
+  const finalStockRow = {
+    ...tempStockRow,
+    quantity: nextCurrentStock,
+    updated_at: new Date().toISOString(),
+  }
   const finalInventory = updatedInventory.map((s) =>
     (s.warehouseId || s.warehouse_id) === warehouseId && (s.itemId || s.item_id) === itemId ? finalStockRow : s
   )
 
   updateLocalCachePayload('inventoryStock', finalInventory)
   return { inventoryStock: finalInventory, newStock: nextCurrentStock, finalStockRow }
+}
+
+export const applyManufacturingOrderState = (state, order) => {
+  let updatedStock = [...(state.inventoryStock || [])]
+  const rawWhId = order.rawWarehouseId || order.raw_warehouse_id
+  const rawItId = order.rawItemId || order.raw_item_id
+  const rawItemMeta = (state.items || []).find((i) => i.id === rawItId)
+  const consumedCartons = getCartonEquivalent(order.consumedQuantity || order.consumed_quantity, order.consumedUnit || order.consumed_unit, rawItemMeta || order)
+  const rawIdx = updatedStock.findIndex((s) => (s.warehouseId || s.warehouse_id) === rawWhId && (s.itemId || s.item_id) === rawItId)
+  if (rawIdx >= 0) {
+    updatedStock[rawIdx] = { ...updatedStock[rawIdx], quantity: (Number(updatedStock[rawIdx].quantity) || 0) - consumedCartons }
+  }
+  ;(order.producedItems || order.produced_items || []).forEach((prod) => {
+    const pWhId = prod.targetWarehouseId || prod.warehouseId || rawWhId
+    const pItId = prod.itemId || prod.item_id || prod.id
+    const prodMeta = (state.items || []).find((i) => i.id === pItId)
+    const prodCartons = getCartonEquivalent(prod.quantity, prod.unit, prodMeta || prod)
+    const pIdx = updatedStock.findIndex((s) => (s.warehouseId || s.warehouse_id) === pWhId && (s.itemId || s.item_id) === pItId)
+    if (pIdx >= 0) {
+      updatedStock[pIdx] = { ...updatedStock[pIdx], quantity: (Number(updatedStock[pIdx].quantity) || 0) + prodCartons }
+    } else if (pWhId && pItId) {
+      updatedStock.push({ warehouseId: pWhId, itemId: pItId, quantity: prodCartons, unit: prodMeta?.unitType || prod.unit || 'كرتونة' })
+    }
+  })
+  const nextOrders = [order, ...(state.manufacturingOrders || [])]
+  updateLocalCachePayload('manufacturingOrders', nextOrders)
+  updateLocalCachePayload('inventoryStock', updatedStock)
+  return { manufacturingOrders: nextOrders, inventoryStock: updatedStock }
+}
+
+export const deleteManufacturingOrderState = (state, orderId) => {
+  const order = (state.manufacturingOrders || []).find((m) => m.id === orderId)
+  let updatedStock = [...(state.inventoryStock || [])]
+  if (order) {
+    const rawWhId = order.rawWarehouseId || order.raw_warehouse_id
+    const rawItId = order.rawItemId || order.raw_item_id
+    const rawItemMeta = (state.items || []).find((i) => i.id === rawItId)
+    const consumedCartons = getCartonEquivalent(order.consumedQuantity || order.consumed_quantity, order.consumedUnit || order.consumed_unit, rawItemMeta || order)
+    const rawIdx = updatedStock.findIndex((s) => (s.warehouseId || s.warehouse_id) === rawWhId && (s.itemId || s.item_id) === rawItId)
+    if (rawIdx >= 0) {
+      updatedStock[rawIdx] = { ...updatedStock[rawIdx], quantity: (Number(updatedStock[rawIdx].quantity) || 0) + consumedCartons }
+    }
+    ;(order.producedItems || order.produced_items || []).forEach((prod) => {
+      const pWhId = prod.targetWarehouseId || prod.warehouseId || rawWhId
+      const pItId = prod.itemId || prod.item_id || prod.id
+      const prodMeta = (state.items || []).find((i) => i.id === pItId)
+      const prodCartons = getCartonEquivalent(prod.quantity, prod.unit, prodMeta || prod)
+      const pIdx = updatedStock.findIndex((s) => (s.warehouseId || s.warehouse_id) === pWhId && (s.itemId || s.item_id) === pItId)
+      if (pIdx >= 0) {
+        updatedStock[pIdx] = { ...updatedStock[pIdx], quantity: (Number(updatedStock[pIdx].quantity) || 0) - prodCartons }
+      }
+    })
+  }
+  const nextOrders = (state.manufacturingOrders || []).filter((m) => m.id !== orderId)
+  updateLocalCachePayload('manufacturingOrders', nextOrders)
+  updateLocalCachePayload('inventoryStock', updatedStock)
+  return { manufacturingOrders: nextOrders, inventoryStock: updatedStock }
+}
+
+export const updateManufacturingOrderState = (state, order) => {
+  const revertedState = deleteManufacturingOrderState(state, order.id)
+  return applyManufacturingOrderState({ ...state, ...revertedState }, order)
+}
+
+export const editItemStoreState = (state, item) => {
+  const nextItems = (state.items || []).map((i) => (i.id === item.id ? { ...i, ...item } : i))
+  const purchases = (state.invoices || []).filter((i) => i.type === 'purchase' || i.type === 'purchase_return')
+  const sales = (state.invoices || []).filter((i) => i.type === 'sale' || i.type === 'sale_return')
+  const baseUnit = item.unitType || item.unit_type || 'كرتونة'
+  const nextStock = (state.inventoryStock || []).map((s) => {
+    if ((s.itemId || s.item_id) !== item.id) return s
+    const whId = s.warehouseId || s.warehouse_id
+    const newQty = recalculateItemStock({
+      itemId: item.id,
+      warehouseId: whId,
+      inventoryStock: state.inventoryStock || [],
+      items: nextItems,
+      purchases,
+      sales,
+      transfers: state.transfers || [],
+      stockAudits: state.stockAudits || [],
+      warehouses: state.warehouses || [],
+      manufacturingOrders: state.manufacturingOrders || [],
+    })
+    return { ...s, quantity: newQty, unit: baseUnit }
+  })
+  updateLocalCachePayload('items', nextItems)
+  updateLocalCachePayload('inventoryStock', nextStock)
+  return { items: nextItems, inventoryStock: nextStock }
 }

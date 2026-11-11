@@ -1,5 +1,6 @@
 import { supabase, isSupabaseConfigured } from './supabaseClient.js'
 import { offlineDB } from './offlineDB.js'
+import { recalculateItemStock } from '../components/warehouses/itemMovementHelpers.js'
 
 export const AX_DatabaseSync = {
   fetchFullDatabase: async () => {
@@ -103,6 +104,10 @@ export const AX_DatabaseSync = {
           openingBalance: Number(s.opening_balance || 0),
           openingDate: s.opening_date || null,
           unit: s.unit || 'كرتونة',
+          warehouse_id: s.warehouse_id,
+          item_id: s.item_id,
+          opening_balance: Number(s.opening_balance || 0),
+          opening_date: s.opening_date || null,
         }))
       }
 
@@ -174,6 +179,7 @@ export const AX_DatabaseSync = {
             id: c.id,
             code: c.code,
             type: resolvedType,
+            partyId: c.party_id || null,
             partyType: c.party_type,
             partyName: c.party_name,
             amount: Number(c.amount || 0),
@@ -230,6 +236,9 @@ export const AX_DatabaseSync = {
             id: inv.id,
             code: inv.code,
             type: resolvedType,
+            partyId: inv.party_id || null,
+            clientId: inv.party_id || null,
+            supplierId: inv.party_id || null,
             partyName: inv.party_name,
             partyType: inv.party_type || (resolvedType === 'sale' || resolvedType === 'sale_return' ? 'customer' : 'supplier'),
             partyKind: inv.party_type || (resolvedType === 'sale' || resolvedType === 'sale_return' ? 'customer' : 'supplier'),
@@ -258,6 +267,9 @@ export const AX_DatabaseSync = {
       if (Array.isArray(clients)) {
         payload.clients = clients.map((c) => ({
           ...c,
+          openingBalance: Number(c.opening_balance !== undefined ? c.opening_balance : (c.openingBalance || 0)),
+          openingBalanceType: c.opening_balance_type || c.openingBalanceType || 'debit',
+          openingBalanceDate: c.opening_balance_date || c.openingBalanceDate || null,
           salesRepName: c.sales_rep_name || c.salesRepName || '',
           commercialRegister: c.commercial_register || c.commercialRegister || '',
           contactPerson: c.contact_person || c.contactPerson || '',
@@ -269,10 +281,38 @@ export const AX_DatabaseSync = {
           notes: c.notes || '',
           attachments: c.attachments || [],
         }))
+        if (Array.isArray(activityLogs)) {
+          try {
+            const rawAdj = localStorage.getItem('ax_customer_balance_adjustments')
+            const parsedAdj = rawAdj ? JSON.parse(rawAdj) : []
+            const adjList = Array.isArray(parsedAdj) ? [...parsedAdj] : []
+            activityLogs.forEach((log) => {
+              if (log.table_name === 'ax_clients' && log.action === 'BALANCE_ADJUSTMENT' && log.record_id && log.new_data) {
+                const entry = typeof log.new_data === 'string' ? JSON.parse(log.new_data) : log.new_data
+                if (entry && entry.id && !adjList.some((x) => x && x.id === entry.id)) {
+                  adjList.push({ ...entry, customerId: entry.customerId || log.record_id })
+                }
+              }
+            })
+            localStorage.setItem('ax_customer_balance_adjustments', JSON.stringify(adjList))
+          } catch {}
+        }
       }
 
       if (Array.isArray(suppliers)) {
-        payload.suppliers = suppliers
+        payload.suppliers = suppliers.map((s) => ({
+          ...s,
+          companyName: s.name || s.companyName || '',
+          contactPerson: s.contact_person || s.contactPerson || '',
+          phone2: s.phone2 || '',
+          taxNumber: s.tax_number || s.taxNumber || '',
+          commercialRegistration: s.commercial_registration || s.commercialRegistration || '',
+          openingBalance: Number(s.opening_balance !== undefined ? s.opening_balance : (s.openingBalance || 0)),
+          openingBalanceType: s.opening_balance_type || s.openingBalanceType || 'payable',
+          openingBalanceDate: s.opening_balance_date || s.openingBalanceDate || null,
+          balance: Number(s.balance || 0),
+          notes: s.notes || '',
+        }))
       }
 
       if (Array.isArray(distributors)) {
@@ -281,24 +321,35 @@ export const AX_DatabaseSync = {
           name: d.name,
           vanNumber: d.van_number,
         }))
-        payload.salesReps = distributors.map((d) => ({
-          id: d.id,
-          name: d.name || '',
-          phone: d.phone || '',
-          assignedBranch: d.van_number || 'المخزن الرئيسي',
-          vanNumber: d.van_number || '',
-          targetAmount: Number(d.target_amount ?? d.sales_target ?? 0),
-          salesTarget: Number(d.target_amount ?? d.sales_target ?? 0),
-          commissionModel: d.commission_model || 'volume_rate',
-          stepAmount: Number(d.step_amount || 1000),
-          stepRate: Number(d.step_rate || 50),
-          openingBalance: Number(d.opening_balance || 0),
-          netBalance: Number(d.balance || 0),
-          currentBalance: Number(d.balance || 0),
-          balance: Number(d.balance || 0),
-          status: d.status || 'active',
-          createdAt: d.created_at || new Date().toISOString(),
-        }))
+        const repLedgerList = []
+        payload.salesReps = distributors.map((d) => {
+          const meta = d.metadata || {}
+          if (Array.isArray(meta.ledger)) {
+            meta.ledger.forEach((tx) => repLedgerList.push({ ...tx, repId: tx.repId || d.id }))
+          }
+          return {
+            id: d.id,
+            name: d.name || '',
+            phone: d.phone || '',
+            assignedBranch: d.van_number || 'المخزن الرئيسي',
+            vanNumber: d.van_number || '',
+            targetAmount: Number(d.target_amount ?? d.sales_target ?? 0),
+            salesTarget: Number(d.target_amount ?? d.sales_target ?? 0),
+            commissionModel: d.commission_model || 'volume_rate',
+            stepAmount: Number(d.step_amount || 1000),
+            stepRate: Number(d.step_rate || 50),
+            openingBalance: Number(d.opening_balance || 0),
+            netBalance: Number(d.balance || 0),
+            currentBalance: Number(d.balance || 0),
+            balance: Number(d.balance || 0),
+            status: d.status || 'active',
+            metadata: meta,
+            createdAt: d.created_at || new Date().toISOString(),
+          }
+        })
+        if (repLedgerList.length > 0) {
+          payload.salesRepLedger = repLedgerList
+        }
       }
 
       if (Array.isArray(notifs)) {
@@ -331,121 +382,80 @@ export const AX_DatabaseSync = {
 
       if (Array.isArray(mfgOrders)) {
         payload.manufacturingOrders = mfgOrders.map((o) => ({
-          id: o.id,
-          code: o.code,
-          date: o.date,
-          rawItemId: o.raw_item_id,
-          rawWarehouseId: o.raw_warehouse_id,
-          consumedQuantity: Number(o.consumed_quantity || 0),
-          consumedUnit: o.consumed_unit || 'كرتونة',
-          producedItems: o.produced_items || [],
-          wastePercentage: Number(o.waste_percentage || 0),
-          status: o.status || 'completed',
-          operator: o.operator || '',
-          notes: o.notes || '',
-          createdAt: o.created_at,
+          id: o.id, code: o.code, date: o.date, rawItemId: o.raw_item_id, rawWarehouseId: o.raw_warehouse_id,
+          consumedQuantity: Number(o.consumed_quantity || 0), consumedUnit: o.consumed_unit || 'كرتونة',
+          producedItems: o.produced_items || [], wastePercentage: Number(o.waste_percentage || 0),
+          status: o.status || 'completed', operator: o.operator || '', notes: o.notes || '', createdAt: o.created_at,
         }))
+      }
+
+      if (Array.isArray(payload.inventoryStock)) {
+        const purchasesList = (payload.invoices || []).filter((i) => i.type === 'purchase' || i.type === 'purchase_return')
+        const salesList = (payload.invoices || []).filter((i) => i.type === 'sale' || i.type === 'sale_return')
+        payload.inventoryStock = payload.inventoryStock.map((row) => {
+          const calcQty = recalculateItemStock({
+            itemId: row.itemId, warehouseId: row.warehouseId, inventoryStock: payload.inventoryStock,
+            items: payload.items || [], purchases: purchasesList, sales: salesList,
+            transfers: payload.transfers || [], stockAudits: payload.stockAudits || [],
+            warehouses: payload.warehouses || [], manufacturingOrders: payload.manufacturingOrders || [],
+          })
+          return { ...row, quantity: calcQty }
+        })
       }
 
       if (Array.isArray(recycleBin)) {
         payload.recycleBin = recycleBin.map((r) => ({
-          id: r.id,
-          entityType: r.entity_type,
-          entityId: r.entity_id,
-          entityCode: r.entity_code,
-          entityTitle: r.entity_title,
-          deletedBy: r.deleted_by,
-          deletedAt: r.deleted_at,
-          originalData: r.original_data,
-          metadata: r.metadata || {},
+          id: r.id, entityType: r.entity_type, entityId: r.entity_id, entityCode: r.entity_code,
+          entityTitle: r.entity_title, deletedBy: r.deleted_by, deletedAt: r.deleted_at,
+          originalData: r.original_data, metadata: r.metadata || {},
         }))
       }
 
       if (Array.isArray(staffInvites)) {
         payload.staffInvites = staffInvites.map((inv) => ({
-          id: inv.id,
-          token: inv.token,
-          role: inv.role,
-          roleTitle: inv.role_title || inv.role,
-          role_title: inv.role_title || inv.role,
-          warehouseId: inv.warehouse_id,
-          warehouse_id: inv.warehouse_id,
-          warehouseName: inv.warehouse_name || 'كافة الفروع والمخازن',
-          warehouse_name: inv.warehouse_name || 'كافة الفروع والمخازن',
-          permissions: inv.permissions,
-          status: inv.status,
-          expiresAt: inv.expires_at,
-          expires_at: inv.expires_at,
-          createdAt: inv.created_at,
-          created_at: inv.created_at,
-          claimedAt: inv.claimed_at,
-          claimedByEmail: inv.claimed_by_email,
-          claimedByName: inv.claimed_by_name,
+          id: inv.id, token: inv.token, role: inv.role, roleTitle: inv.role_title || inv.role, role_title: inv.role_title || inv.role,
+          warehouseId: inv.warehouse_id, warehouse_id: inv.warehouse_id,
+          warehouseName: inv.warehouse_name || 'كافة الفروع والمخازن', warehouse_name: inv.warehouse_name || 'كافة الفروع والمخازن',
+          permissions: inv.permissions, status: inv.status, expiresAt: inv.expires_at, expires_at: inv.expires_at,
+          createdAt: inv.created_at, created_at: inv.created_at, claimedAt: inv.claimed_at,
+          claimedByEmail: inv.claimed_by_email, claimedByName: inv.claimed_by_name,
         }))
-        try {
-          localStorage.setItem('ax_staff_invites', JSON.stringify(payload.staffInvites))
-        } catch {}
+        try { localStorage.setItem('ax_staff_invites', JSON.stringify(payload.staffInvites)) } catch {}
       }
 
       if (Array.isArray(usersProfiles)) {
         payload.employees = usersProfiles.map((u) => ({
-          id: u.id,
-          code: `EMP-${String(u.id).slice(-4)}`,
-          name: u.full_name,
-          role: u.role === 'super_admin' ? 'admin' : 'staff',
-          roleTitle: u.role || 'موظف',
-          phone: u.phone || '',
-          email: u.email,
-          warehouseId: u.branch_id || 'all',
+          id: u.id, code: `EMP-${String(u.id).slice(-4)}`, name: u.full_name,
+          role: u.role === 'super_admin' ? 'admin' : 'staff', roleTitle: u.role || 'موظف',
+          phone: u.phone || '', email: u.email, warehouseId: u.branch_id || 'all',
           warehouseName: u.branch_id ? 'مخزن' : 'كافة الفروع والمخازن',
-          status: u.is_active ? 'active' : 'suspended',
-          permissions: u.permissions || {},
+          status: u.is_active ? 'active' : 'suspended', permissions: u.permissions || {},
         }))
-        try {
-          localStorage.setItem('ax_staff_employees', JSON.stringify(payload.employees))
-        } catch {}
+        try { localStorage.setItem('ax_staff_employees', JSON.stringify(payload.employees)) } catch {}
       }
 
       if (Array.isArray(companyEmployees)) {
         payload.companyEmployees = companyEmployees.map((e) => ({
-          id: e.id,
-          code: e.code,
-          name: e.name,
-          phone: e.phone || '',
-          nationalId: e.national_id,
-          department: e.department || 'التشغيل والمصنع',
-          jobTitle: e.job_title || 'عامل تشغيل',
-          salaryType: e.salary_type || 'monthly',
-          baseSalary: Number(e.base_salary || 0),
-          dailyRate: Number(e.daily_rate || 0),
-          hireDate: e.hire_date,
-          status: e.status || 'active',
-          notes: e.notes || '',
+          id: e.id, code: e.code, name: e.name, phone: e.phone || '', nationalId: e.national_id,
+          department: e.department || 'التشغيل والمصنع', jobTitle: e.job_title || 'عامل تشغيل',
+          salaryType: e.salary_type || 'monthly', baseSalary: Number(e.base_salary || 0),
+          dailyRate: Number(e.daily_rate || 0), hireDate: e.hire_date, status: e.status || 'active', notes: e.notes || '',
         }))
-        try {
-          localStorage.setItem('ax_company_employees', JSON.stringify(payload.companyEmployees))
-        } catch {}
+        try { localStorage.setItem('ax_company_employees', JSON.stringify(payload.companyEmployees)) } catch {}
       }
 
       if (Array.isArray(employeeAttendance)) {
         payload.employeeAttendance = employeeAttendance.map((a) => ({
-          id: a.id,
-          date: a.date,
-          employeeId: a.employee_id,
-          employeeName: a.employee_name,
-          status: a.status,
-          deductionDays: Number(a.deduction_days || 0),
-          dailyEarned: Number(a.daily_earned || 0),
-          notes: a.notes || '',
+          id: a.id, date: a.date, employeeId: a.employee_id, employeeName: a.employee_name,
+          status: a.status, deductionDays: Number(a.deduction_days || 0),
+          dailyEarned: Number(a.daily_earned || 0), notes: a.notes || '',
         }))
-        try {
-          localStorage.setItem('ax_employee_attendance', JSON.stringify(payload.employeeAttendance))
-        } catch {}
+        try { localStorage.setItem('ax_employee_attendance', JSON.stringify(payload.employeeAttendance)) } catch {}
       }
 
       try {
         localStorage.setItem('ax_cached_db_payload', JSON.stringify(payload))
-        localStorage.setItem('ax_cached_payload_version', import.meta.env.VITE_APP_VERSION || '1.8.39')
+        localStorage.setItem('ax_cached_payload_version', import.meta.env.VITE_APP_VERSION || '2.3.0')
         offlineDB.cacheData('full_database', payload).catch(() => {})
       } catch {}
 
