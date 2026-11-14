@@ -9,6 +9,7 @@ export function AX_AddTreasuryModal({ isOpen, onClose, onSave, editingAccount = 
   useBodyScrollLock(isOpen, onClose)
   const [name, setName] = useState('')
   const [type, setType] = useState('cash')
+  const [openingBalance, setOpeningBalance] = useState('')
   const [balance, setBalance] = useState('')
   const [errorMsg, setErrorMsg] = useState(null)
 
@@ -16,10 +17,13 @@ export function AX_AddTreasuryModal({ isOpen, onClose, onSave, editingAccount = 
     if (editingAccount) {
       setName(editingAccount.name || '')
       setType(editingAccount.type || 'cash')
+      const ob = editingAccount.openingBalance !== undefined ? editingAccount.openingBalance : (editingAccount.opening_balance ?? 0)
+      setOpeningBalance(String(ob))
       setBalance(editingAccount.balance !== undefined ? String(editingAccount.balance) : '')
     } else {
       setName('')
       setType('cash')
+      setOpeningBalance('')
       setBalance('')
     }
     setErrorMsg(null)
@@ -36,24 +40,34 @@ export function AX_AddTreasuryModal({ isOpen, onClose, onSave, editingAccount = 
       return
     }
 
+    const obNum = Number(openingBalance) || 0
+
     if (isEdit) {
+      const oldOb = Number(editingAccount.openingBalance ?? editingAccount.opening_balance ?? 0)
+      const obDelta = obNum - oldOb
+      const prevBal = Number(editingAccount.balance || 0)
+      const inputBal = Number(balance) || 0
+      const finalBal = obDelta !== 0 && Math.abs(inputBal - prevBal) < 0.001 ? (prevBal + obDelta) : inputBal
+
       const updated = {
         ...editingAccount,
         name: name.trim(),
         type,
-        balance: Number(balance) || 0,
+        openingBalance: obNum,
+        balance: finalBal,
       }
       onSave(updated)
-      axToast.success('تم تعديل بيانات الحساب بنجاح')
+      axToast.success('تم حفظ وتعديل بيانات الخزينة ورصيد أول المدة بنجاح')
     } else {
       const newAcc = {
         id: generateUUID(),
         name: name.trim(),
         type,
-        balance: Number(balance) || 0,
+        openingBalance: obNum,
+        balance: obNum,
       }
       onSave(newAcc)
-      axToast.success('تمت إضافة الحساب المالي بنجاح')
+      axToast.success('تمت إضافة الحساب المالي ورصيد أول المدة بنجاح')
     }
 
     onClose()
@@ -119,16 +133,37 @@ export function AX_AddTreasuryModal({ isOpen, onClose, onSave, editingAccount = 
 
           <div>
             <label className="block text-xs font-bold text-on-surface-variant mb-1">
-              {isEdit ? 'الرصيد المالي الحالي (ج.م)' : 'الرصيد الافتتاحي (ج.م)'}
+              رصيد أول المدة الافتتاحي (ج.م)
             </label>
             <input
               type="number"
               placeholder="0"
-              value={balance}
-              onChange={(e) => setBalance(e.target.value)}
+              value={openingBalance}
+              onChange={(e) => {
+                setOpeningBalance(e.target.value)
+                if (!isEdit) setBalance(e.target.value)
+              }}
               className="w-full px-3.5 py-2.5 rounded-2xl bg-surface-low border border-outline-variant/30 text-xs font-bold text-on-surface focus:outline-none focus:border-primary font-mono"
             />
+            <span className="text-[10px] text-on-surface-variant block mt-0.5">
+              الرصيد النقدي الذي بدأت به الخزينة قبل تسجيل أي حركات قبض أو صرف
+            </span>
           </div>
+
+          {isEdit && (
+            <div>
+              <label className="block text-xs font-bold text-on-surface-variant mb-1">
+                الرصيد المالي الحالي الدفتري (ج.م)
+              </label>
+              <input
+                type="number"
+                placeholder="0"
+                value={balance}
+                onChange={(e) => setBalance(e.target.value)}
+                className="w-full px-3.5 py-2.5 rounded-2xl bg-surface-low border border-outline-variant/30 text-xs font-bold text-on-surface focus:outline-none focus:border-primary font-mono"
+              />
+            </div>
+          )}
 
           <div className="flex items-center gap-2 pt-2">
             <button

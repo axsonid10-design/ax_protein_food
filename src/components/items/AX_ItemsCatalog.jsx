@@ -14,6 +14,8 @@ import { AX_OpeningBalancesManager } from './AX_OpeningBalancesManager'
 import { AX_ItemStatusIndicators } from './AX_ItemStatusIndicators'
 import { formatDualUnits, isItemNearDepletion } from '../../utils/itemUnitFormatters'
 import { getCategoryClass } from '../../utils/categoryColors'
+import { calculateItemValuation } from '../../utils/pricingCalculations'
+import { calculateFifoProfits } from '../../utils/fifoCalculations'
 
 export function AX_ItemsCatalog() {
   const {
@@ -26,32 +28,22 @@ export function AX_ItemsCatalog() {
     addSecondaryCategory, editSecondaryCategory, deleteSecondaryCategory,
   } = useAXStore()
 
-  const [searchTerm, setSearchTerm] = useState('')
-  const [catalogSubTab, setCatalogSubTab] = useState('catalog')
-  const [selectedPrimary, setSelectedPrimary] = useState('الكل')
-  const [isSingleAddOpen, setIsSingleAddOpen] = useState(false)
-  const [isBulkAddOpen, setIsBulkAddOpen] = useState(false)
-  const [itemToEdit, setItemToEdit] = useState(null)
-  const [selectedItemForCard, setSelectedItemForCard] = useState(null)
-  const [itemForOpeningBalance, setItemForOpeningBalance] = useState(null)
-  const [currentPage, setCurrentPage] = useState(1)
-  const [itemToDelete, setItemToDelete] = useState(null)
-  const [isDeleting, setIsDeleting] = useState(false)
-  const [showCodeColumn, setShowCodeColumn] = useState(false)
+  const [searchTerm, setSearchTerm] = useState(''), [catalogSubTab, setCatalogSubTab] = useState('catalog'), [selectedPrimary, setSelectedPrimary] = useState('الكل')
+  const [isSingleAddOpen, setIsSingleAddOpen] = useState(false), [isBulkAddOpen, setIsBulkAddOpen] = useState(false), [itemToEdit, setItemToEdit] = useState(null)
+  const [selectedItemForCard, setSelectedItemForCard] = useState(null), [itemForOpeningBalance, setItemForOpeningBalance] = useState(null), [currentPage, setCurrentPage] = useState(1)
+  const [itemToDelete, setItemToDelete] = useState(null), [isDeleting, setIsDeleting] = useState(false), [showCodeColumn, setShowCodeColumn] = useState(false)
   const PAGE_SIZE = 15
 
   const purchaseInvoices = useMemo(() => (invoices || []).filter((i) => i.type === 'purchase' || i.type === 'purchase_return'), [invoices])
   const salesInvoices = useMemo(() => (invoices || []).filter((i) => i.type === 'sale' || i.type === 'sale_return'), [invoices])
+  const itemValuationsMap = useMemo(() => {
+    const map = new Map(), safeInvoices = Array.isArray(invoices) ? invoices : [], fifoResult = calculateFifoProfits(safeInvoices, items, inventoryStock)
+    items.forEach((it) => map.set(it.id, calculateItemValuation(it, safeInvoices, inventoryStock, fifoResult.remainingInventoryByItem?.get(it.id))))
+    return map
+  }, [items, invoices, inventoryStock])
 
-  const getItemStock = (itemId) => {
-    return (inventoryStock || []).filter((s) => (s.itemId || s.item_id) === itemId).reduce((sum, s) => sum + Number(s.quantity || 0), 0)
-  }
-
-  const categoryHandlers = {
-    addCategory, editCategory, deleteCategory,
-    addSubCategory, editSubCategory, deleteSubCategory,
-    addSecondaryCategory, editSecondaryCategory, deleteSecondaryCategory,
-  }
+  const getItemStock = (itemId) => (inventoryStock || []).filter((s) => (s.itemId || s.item_id) === itemId).reduce((sum, s) => sum + Number(s.quantity || 0), 0)
+  const categoryHandlers = { addCategory, editCategory, deleteCategory, addSubCategory, editSubCategory, deleteSubCategory, addSecondaryCategory, editSecondaryCategory, deleteSecondaryCategory }
 
   const renderItemActions = (item, isMobile = false) => (
     <div className="flex items-center justify-center gap-1.5">
@@ -64,7 +56,7 @@ export function AX_ItemsCatalog() {
       <button type="button" onClick={() => setItemToEdit(item)} className="p-1 rounded-full text-secondary hover:bg-secondary/10 transition-colors cursor-pointer" title="تعديل بيانات الصنف">
         <Edit3 className={isMobile ? 'w-4 h-4' : 'w-3.5 h-3.5'} />
       </button>
-      <button type="button" onClick={() => handleQuickVariant(item)} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-secondary/10 hover:bg-secondary/20 text-secondary text-[11px] font-black transition-all cursor-pointer" title="إضافة وزن أو تفريع بديل لنفس الصنف">
+      <button type="button" onClick={() => setIsSingleAddOpen(true)} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-secondary/10 hover:bg-secondary/20 text-secondary text-[11px] font-black transition-all cursor-pointer" title="إضافة وزن أو تفريع بديل لنفس الصنف">
         <Copy className="w-3 h-3" />
         <span>تفريع</span>
       </button>
@@ -76,41 +68,20 @@ export function AX_ItemsCatalog() {
 
   const handleConfirmDelete = async () => {
     if (!itemToDelete) return
-    const targetId = itemToDelete.id
-    try {
-      setIsDeleting(true)
-      await deleteItem(targetId)
-      axToast.success('تم حذف الصنف بنجاح')
-      setItemToDelete(null)
-    } finally {
-      setIsDeleting(false)
-    }
-  }
-
-  const handleQuickVariant = (item) => {
-    setIsSingleAddOpen(true)
+    try { setIsDeleting(true); await deleteItem(itemToDelete.id); axToast.success('تم حذف الصنف بنجاح'); setItemToDelete(null) } finally { setIsDeleting(false) }
   }
 
   const term = searchTerm.trim().toLowerCase()
   const filteredItems = items.filter((item) => {
     if (!item) return false
     const compName = (item.compositeName || `${item.subCategory || ''} ${item.secondaryCategory || ''}`).toLowerCase()
-    const itemCode = (item.code || '').toLowerCase()
-    const primCat = (item.primaryCategory || '').toLowerCase()
-
-    const matchesSearch =
-      !term || compName.includes(term) || itemCode.includes(term) || primCat.includes(term)
-
-    const matchesPrimary = selectedPrimary === 'الكل' || item.primaryCategory === selectedPrimary
-    return matchesSearch && matchesPrimary
+    const matchesSearch = !term || compName.includes(term) || (item.code || '').toLowerCase().includes(term) || (item.primaryCategory || '').toLowerCase().includes(term)
+    return matchesSearch && (selectedPrimary === 'الكل' || item.primaryCategory === selectedPrimary)
   })
 
   const totalItems = filteredItems.length
   const totalPages = Math.max(1, Math.ceil(totalItems / PAGE_SIZE))
-  const paginatedItems = filteredItems.slice(
-    (currentPage - 1) * PAGE_SIZE,
-    currentPage * PAGE_SIZE
-  )
+  const paginatedItems = filteredItems.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE)
 
   return (
     <div className="space-y-6 pb-20 lg:pb-6">
@@ -266,6 +237,7 @@ export function AX_ItemsCatalog() {
               <th className="px-3.5 whitespace-nowrap">الوحدة</th>
               <th className="px-3.5 whitespace-nowrap">سعر الشراء</th>
               <th className="px-3.5 whitespace-nowrap">سعر البيع</th>
+              <th className="px-3.5 whitespace-nowrap">قيمة الصنف</th>
               <th className="px-3.5 whitespace-nowrap text-center">إجراءات</th>
             </tr>
           </thead>
@@ -336,6 +308,21 @@ export function AX_ItemsCatalog() {
                   </td>
                   <td className="px-3.5 whitespace-nowrap font-mono font-bold text-on-surface-variant">{item.buyPrice} ج.م</td>
                   <td className="px-3.5 whitespace-nowrap font-mono font-black text-primary">{item.sellPrice} ج.م</td>
+                  <td className="px-3.5 whitespace-nowrap">
+                    {(() => {
+                      const v = itemValuationsMap.get(item.id)
+                      return (
+                        <div className="font-mono text-[11px] leading-tight flex flex-col">
+                          <span className="text-amber-800 font-bold" title="قيمة التكلفة (FIFO)">
+                            ت: {v?.totalCostValuation?.toLocaleString('en-US') || 0} ج
+                          </span>
+                          <span className="text-emerald-700 font-black" title={`إجمالي القيمة البيعية (متوسط: ${v?.avgSellingPrice || item.sellPrice} ج)`}>
+                            ب: {v?.totalSellingValuation?.toLocaleString('en-US') || 0} ج
+                          </span>
+                        </div>
+                      )
+                    })()}
+                  </td>
                   <td className="px-3.5 whitespace-nowrap text-center">
                     {renderItemActions(item)}
                   </td>
@@ -393,6 +380,20 @@ export function AX_ItemsCatalog() {
                   <span className="font-mono font-black text-primary">{item.sellPrice} ج.م</span>
                 </div>
               </div>
+
+              {(() => {
+                const v = itemValuationsMap.get(item.id)
+                return (
+                  <div className="pt-2 border-t border-surface-container flex items-center justify-between gap-1 text-[10px] font-mono">
+                    <span className="px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-800 border border-amber-500/20" title="قيمة التكلفة (FIFO)">
+                      ت: {v?.totalCostValuation?.toLocaleString('en-US') || 0} ج
+                    </span>
+                    <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-800 border border-emerald-500/20" title={`إجمالي القيمة البيعية (متوسط: ${v?.avgSellingPrice || 0} ج)`}>
+                      ب: {v?.totalSellingValuation?.toLocaleString('en-US') || 0} ج
+                    </span>
+                  </div>
+                )
+              })()}
 
               <div className="flex items-center justify-between text-xs pt-2 border-t border-surface-container">
                 <span className="text-on-surface-variant font-mono text-[11px] font-bold">

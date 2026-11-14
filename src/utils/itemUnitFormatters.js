@@ -12,7 +12,7 @@ export function formatDualUnits(quantity, unit, item) {
 
   if ((currentUnit === 'كيس' || currentUnit === 'قطعة' || currentUnit === 'طبق') && pieces > 1) {
     const cartons = numQty / pieces
-    const formattedCartons = Number.isInteger(cartons) ? cartons : Number(cartons.toFixed(2))
+    const formattedCartons = Number.isInteger(cartons) ? cartons : Number(cartons.toFixed(3))
     return `${numQty} ${currentUnit} (${formattedCartons} كرتونة)`
   }
 

@@ -60,14 +60,6 @@ export default defineConfig({
         importScripts: ['/sw-push-handler.js'],
         runtimeCaching: [
           {
-            urlPattern: ({ request }) => request.mode === 'navigate',
-            handler: 'NetworkFirst',
-            options: {
-              cacheName: 'html-cache',
-              networkTimeoutSeconds: 3
-            }
-          },
-          {
             urlPattern: ({ url }) => /version\.json.*/i.test(url.pathname),
             handler: 'NetworkOnly'
           },

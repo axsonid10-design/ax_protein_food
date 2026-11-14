@@ -2,6 +2,9 @@ import React, { useState, useEffect, useMemo } from 'react'
 import { X, Package, Boxes, TrendingUp, ShoppingBag, Warehouse, Printer, History, Layers } from 'lucide-react'
 import { calculateItemMovements, recalculateItemStock } from './itemMovementHelpers'
 import { AX_ItemOpeningBalanceModal } from '../items/AX_ItemOpeningBalanceModal'
+import { AX_ItemValuationBanner } from '../items/AX_ItemValuationBanner'
+import { calculateItemValuation } from '../../utils/pricingCalculations'
+import { getFifoItemValuation } from '../../utils/fifoCalculations'
 
 export function AX_ItemMovementCardModal({
   isOpen, onClose, item = null, initialWarehouseId = 'ALL', warehouses = [],
@@ -18,61 +21,29 @@ export function AX_ItemMovementCardModal({
 
   const itemId = item?.id
 
-  const effectivePurchases = useMemo(() => {
-    if (purchaseInvoices && purchaseInvoices.length > 0) return purchaseInvoices
-    return (invoices || []).filter((i) => i.type === 'purchase' || i.type === 'purchase_return')
-  }, [purchaseInvoices, invoices])
-
-  const effectiveSales = useMemo(() => {
-    if (salesInvoices && salesInvoices.length > 0) return salesInvoices
-    return (invoices || []).filter((i) => i.type === 'sale' || i.type === 'sale_return')
-  }, [salesInvoices, invoices])
+  const effectivePurchases = useMemo(() => purchaseInvoices?.length ? purchaseInvoices : (invoices || []).filter((i) => i.type === 'purchase' || i.type === 'purchase_return'), [purchaseInvoices, invoices])
+  const effectiveSales = useMemo(() => salesInvoices?.length ? salesInvoices : (invoices || []).filter((i) => i.type === 'sale' || i.type === 'sale_return'), [salesInvoices, invoices])
 
   const stockPerWarehouse = useMemo(() => {
     if (!itemId) return []
     return (warehouses || []).map((wh) => {
-      const s = (inventoryStock || []).find(
-        (st) => st && (st.itemId || st.item_id) === itemId && (st.warehouseId || st.warehouse_id) === wh.id
-      )
+      const s = (inventoryStock || []).find((st) => st && (st.itemId || st.item_id) === itemId && (st.warehouseId || st.warehouse_id) === wh.id)
       const hasOpening = s && (s.openingBalance !== undefined || s.opening_balance !== undefined)
       const qty = hasOpening
-        ? recalculateItemStock({
-            itemId, warehouseId: wh.id, inventoryStock, items: item ? [item] : [],
-            purchases: effectivePurchases, sales: effectiveSales, transfers, stockAudits, warehouses, manufacturingOrders,
-          })
+        ? recalculateItemStock({ itemId, warehouseId: wh.id, inventoryStock, items: item ? [item] : [], purchases: effectivePurchases, sales: effectiveSales, transfers, stockAudits, warehouses, manufacturingOrders })
         : (Number(s?.quantity) || 0)
-      return {
-        warehouseId: wh.id,
-        warehouseName: wh.name || 'مخزن',
-        warehouseType: wh.type || 'cold_store',
-        quantity: qty,
-        unit: item?.unitType || s?.unit || 'كرتونة',
-      }
+      return { warehouseId: wh.id, warehouseName: wh.name || 'مخزن', warehouseType: wh.type || 'cold_store', quantity: qty, unit: item?.unitType || s?.unit || 'كرتونة' }
     })
   }, [itemId, warehouses, inventoryStock, item, effectivePurchases, effectiveSales, transfers, stockAudits, manufacturingOrders])
 
-  const totalCurrentStock = useMemo(() => {
-    const sum = stockPerWarehouse.reduce((acc, s) => acc + s.quantity, 0)
-    return Number(sum.toFixed(4))
-  }, [stockPerWarehouse])
-
-  const baseCurrentStock = useMemo(() => {
-    if (selectedWhId === 'ALL') return totalCurrentStock
-    const found = stockPerWarehouse.find((s) => s.warehouseId === selectedWhId)
-    return found ? found.quantity : 0
-  }, [selectedWhId, totalCurrentStock, stockPerWarehouse])
-
-  const selectedWarehouseObj = useMemo(() => {
-    if (selectedWhId === 'ALL') return null
-    return (warehouses || []).find((w) => w.id === selectedWhId) || null
-  }, [selectedWhId, warehouses])
+  const totalCurrentStock = useMemo(() => Number(stockPerWarehouse.reduce((acc, s) => acc + s.quantity, 0).toFixed(4)), [stockPerWarehouse])
+  const baseCurrentStock = useMemo(() => selectedWhId === 'ALL' ? totalCurrentStock : (stockPerWarehouse.find((s) => s.warehouseId === selectedWhId)?.quantity || 0), [selectedWhId, totalCurrentStock, stockPerWarehouse])
+  const selectedWarehouseObj = useMemo(() => selectedWhId === 'ALL' ? null : ((warehouses || []).find((w) => w.id === selectedWhId) || null), [selectedWhId, warehouses])
 
   const { movementsList, openingBalance, totalInward, totalOutward, currentStock } = useMemo(() => {
     return calculateItemMovements({
-      itemId, selectedWhId, items: item ? [item] : [],
-      purchases: effectivePurchases, sales: effectiveSales,
-      transfers, stockAudits, manufacturingOrders,
-      currentStock: baseCurrentStock, warehouses, inventoryStock,
+      itemId, selectedWhId, items: item ? [item] : [], purchases: effectivePurchases, sales: effectiveSales,
+      transfers, stockAudits, manufacturingOrders, currentStock: baseCurrentStock, warehouses, inventoryStock,
     })
   }, [itemId, item, selectedWhId, effectivePurchases, effectiveSales, transfers, stockAudits, manufacturingOrders, baseCurrentStock, warehouses, inventoryStock])
 
@@ -81,6 +52,18 @@ export function AX_ItemMovementCardModal({
   const buyPrice = Number(item.buyPrice ?? item.buy_price ?? 0)
   const sellPrice = Number(item.sellPrice ?? item.sell_price ?? 0)
   const marginPct = buyPrice > 0 ? Math.round(((sellPrice - buyPrice) / buyPrice) * 100) : 0
+
+  const allInvoices = useMemo(() => invoices?.length ? invoices : [...(effectivePurchases || []), ...(effectiveSales || [])], [invoices, effectivePurchases, effectiveSales])
+  const fifoValuation = useMemo(() => itemId ? getFifoItemValuation(itemId, allInvoices, item ? [item] : [], inventoryStock) : null, [itemId, allInvoices, item, inventoryStock])
+  const itemValuation = useMemo(() => item ? calculateItemValuation(item, allInvoices, inventoryStock, fifoValuation) : { currentStock: 0, avgSellingPrice: sellPrice, avgPiecePrice: null, totalSellingValuation: 0, totalCostValuation: 0, expectedProfit: 0, expectedMarginPct: 0 }, [item, allInvoices, inventoryStock, fifoValuation, sellPrice])
+
+  const scopeStock = selectedWhId === 'ALL' ? totalCurrentStock : baseCurrentStock
+  const unitCostRate = fifoValuation?.avgCostPerCarton > 0 ? fifoValuation.avgCostPerCarton : buyPrice
+  const unitSellRate = itemValuation?.avgSellingPrice > 0 ? itemValuation.avgSellingPrice : sellPrice
+  const scopeCostValuation = Number((Math.max(0, scopeStock) * unitCostRate).toFixed(2))
+  const scopeSellingValuation = Number((Math.max(0, scopeStock) * unitSellRate).toFixed(2))
+  const scopeExpectedProfit = Number((scopeSellingValuation - scopeCostValuation).toFixed(2))
+  const scopeMarginPct = scopeSellingValuation > 0 ? Number(((scopeExpectedProfit / scopeSellingValuation) * 100).toFixed(1)) : 0
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-150">
@@ -230,6 +213,20 @@ export function AX_ItemMovementCardModal({
                 <span className="text-xs font-normal text-on-surface-variant">{item.unitType || 'كرتونة'}</span>
               </div>
             </div>
+          </div>
+
+          <div className="mt-2.5">
+            <AX_ItemValuationBanner
+              valuation={{
+                avgSellingPrice: itemValuation.avgSellingPrice,
+                avgPiecePrice: itemValuation.avgPiecePrice,
+                totalCostValuation: scopeCostValuation,
+                totalSellingValuation: scopeSellingValuation,
+                expectedProfit: scopeExpectedProfit,
+                expectedMarginPct: scopeMarginPct,
+              }}
+              scopeTitle={selectedWhId === 'ALL' ? 'إجمالي المخزون المتاح' : `مخزن: ${selectedWarehouseObj?.name || ''}`}
+            />
           </div>
         </div>
 

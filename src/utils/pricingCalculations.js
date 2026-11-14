@@ -155,3 +155,99 @@ export function getCartonEquivalent(quantity, unit = 'كرتونة', item = {}) 
 
   return qty
 }
+
+export function calculateItemSalesMetrics(itemId, invoices = [], itemMeta = {}) {
+  const safeInvoices = Array.isArray(invoices) ? invoices : []
+  let totalRevenue = 0
+  let totalCartons = 0
+  let salesCount = 0
+  const recordedPrices = []
+
+  safeInvoices.forEach((inv) => {
+    if (!inv || inv.status === 'cancelled' || inv.isCancelled) return
+    if (inv.type !== 'sale') return
+    const invItems = Array.isArray(inv.items) ? inv.items : []
+    invItems.forEach((it) => {
+      const itId = it.itemId || it.item_id || it.id
+      if (itId !== itemId) return
+      const qty = Number(it.quantity) || 0
+      if (qty <= 0) return
+      const cartonQty = getCartonEquivalent(qty, it.unit, itemMeta || it)
+      const lineTotal = Number(it.total) || (qty * Number(it.price || 0))
+      totalRevenue += lineTotal
+      totalCartons += cartonQty
+      salesCount++
+      const unitCartonPrice = cartonQty > 0 ? (lineTotal / cartonQty) : Number(it.price || 0)
+      if (unitCartonPrice > 0) recordedPrices.push(unitCartonPrice)
+    })
+  })
+
+  const catalogSellPrice = Number(itemMeta?.sellPrice ?? itemMeta?.sell_price ?? 0)
+  const weightedAvgCartonPrice = totalCartons > 0 ? Number((totalRevenue / totalCartons).toFixed(2)) : catalogSellPrice
+  const pieces = Number(itemMeta?.piecesPerCarton ?? itemMeta?.pieces_per_carton ?? 0)
+  const avgPiecePrice = pieces > 0 && weightedAvgCartonPrice > 0 ? Number((weightedAvgCartonPrice / pieces).toFixed(2)) : null
+
+  return {
+    totalRevenue: Number(totalRevenue.toFixed(2)),
+    totalCartonsSold: Number(totalCartons.toFixed(4)),
+    avgSellingPrice: weightedAvgCartonPrice,
+    avgPiecePrice,
+    salesCount,
+    hasSalesHistory: totalCartons > 0,
+  }
+}
+
+export function calculateItemValuation(item, invoices = [], inventoryStock = [], fifoValuation = null) {
+  if (!item || !item.id) {
+    return {
+      currentStock: 0,
+      avgSellingPrice: 0,
+      avgPiecePrice: null,
+      totalSellingValuation: 0,
+      totalCostValuation: 0,
+      expectedProfit: 0,
+      expectedMarginPct: 0,
+      salesCount: 0,
+      totalCartonsSold: 0,
+      hasSalesHistory: false,
+      fifoBatches: [],
+    }
+  }
+
+  const safeStock = Array.isArray(inventoryStock) ? inventoryStock : []
+  const currentStock = safeStock.reduce((acc, s) => {
+    const sId = s.itemId || s.item_id
+    if (sId === item.id) {
+      return acc + (Number(s.quantity) || 0)
+    }
+    return acc
+  }, 0)
+
+  const salesMetrics = calculateItemSalesMetrics(item.id, invoices, item)
+  const catalogBuyPrice = Number(item.buyPrice ?? item.buy_price ?? 0)
+  let totalCostValuation = 0
+
+  if (fifoValuation && typeof fifoValuation.totalCostValuation === 'number' && fifoValuation.totalCostValuation > 0) {
+    totalCostValuation = fifoValuation.totalCostValuation
+  } else if (currentStock > 0 && catalogBuyPrice > 0) {
+    totalCostValuation = Number((currentStock * catalogBuyPrice).toFixed(2))
+  }
+
+  const totalSellingValuation = Number((currentStock * salesMetrics.avgSellingPrice).toFixed(2))
+  const expectedProfit = Number((totalSellingValuation - totalCostValuation).toFixed(2))
+  const expectedMarginPct = totalSellingValuation > 0 ? Number(((expectedProfit / totalSellingValuation) * 100).toFixed(1)) : 0
+
+  return {
+    currentStock: Number(currentStock.toFixed(4)),
+    avgSellingPrice: salesMetrics.avgSellingPrice,
+    avgPiecePrice: salesMetrics.avgPiecePrice,
+    totalSellingValuation,
+    totalCostValuation,
+    expectedProfit,
+    expectedMarginPct,
+    salesCount: salesMetrics.salesCount,
+    totalCartonsSold: salesMetrics.totalCartonsSold,
+    hasSalesHistory: salesMetrics.hasSalesHistory,
+    fifoBatches: fifoValuation?.remainingBatches || [],
+  }
+}

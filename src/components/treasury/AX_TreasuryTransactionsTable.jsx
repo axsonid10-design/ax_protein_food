@@ -170,6 +170,14 @@ export function AX_TreasuryTransactionsTable({
     }
   }, [filteredList])
 
+  const targetAccount = useMemo(() => {
+    if (selectedTreasuryId === 'ALL') return null
+    return (treasuryAccounts || []).find((t) => t.id === selectedTreasuryId) || null
+  }, [selectedTreasuryId, treasuryAccounts])
+
+  const targetOpeningBalance = targetAccount ? Number(targetAccount.openingBalance ?? targetAccount.opening_balance ?? 0) : 0
+  const targetCurrentBalance = targetAccount ? Number(targetAccount.balance || 0) : 0
+
   const hasActiveFilters =
     selectedType !== 'ALL' ||
     selectedTreasuryId !== 'ALL' ||
@@ -237,6 +245,36 @@ export function AX_TreasuryTransactionsTable({
         }}
       />
 
+      {targetAccount && (
+        <div className="p-3 rounded-2xl bg-surface-low border border-outline-variant/30 flex flex-wrap items-center justify-between gap-2.5 text-xs">
+          <div className="flex items-center gap-2">
+            <span className="font-black text-on-surface">كشف حساب: {targetAccount.name}</span>
+            <span className="text-[10px] px-2 py-0.5 rounded-full bg-primary/10 text-primary font-bold">
+              {targetAccount.type === 'bank' ? 'بنكي' : targetAccount.type === 'wallet' ? 'محفظة' : targetAccount.type === 'instapay' ? 'إنستاباي' : targetAccount.type === 'van_cash' ? 'عهدة سيارة' : 'خزينة نقدية'}
+            </span>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2 font-mono text-[11px] font-bold">
+            <div className="px-2.5 py-1 rounded-xl bg-surface-lowest border border-outline-variant/30">
+              <span className="text-on-surface-variant text-[10px] block font-sans">رصيد أول المدة:</span>
+              <span className="text-amber-800 font-black">{targetOpeningBalance.toLocaleString('en-US')} ج.م</span>
+            </div>
+            <div className="px-2.5 py-1 rounded-xl bg-surface-lowest border border-outline-variant/30">
+              <span className="text-on-surface-variant text-[10px] block font-sans">إجمالي المقبوضات (+):</span>
+              <span className="text-emerald-700 font-black">+{summary.inflow.toLocaleString('en-US')} ج.م</span>
+            </div>
+            <div className="px-2.5 py-1 rounded-xl bg-surface-lowest border border-outline-variant/30">
+              <span className="text-on-surface-variant text-[10px] block font-sans">إجمالي المدفوعات (-):</span>
+              <span className="text-rose-700 font-black">-{summary.outflow.toLocaleString('en-US')} ج.م</span>
+            </div>
+            <div className="px-2.5 py-1 rounded-xl bg-primary/10 text-primary border border-primary/20">
+              <span className="text-[10px] block font-sans">الرصيد الدفتري الحالي:</span>
+              <span className="font-black">{targetCurrentBalance.toLocaleString('en-US')} ج.م</span>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="hidden lg:block overflow-hidden rounded-2xl border border-surface-container">
         <table className="w-full text-right text-xs">
           <thead className="bg-surface-low border-b border-surface-container text-on-surface-variant font-black">
@@ -252,6 +290,20 @@ export function AX_TreasuryTransactionsTable({
             </tr>
           </thead>
           <tbody className="divide-y divide-surface-container text-on-surface font-bold">
+            {currentPage === 1 && targetAccount && (
+              <tr className="h-10 bg-amber-500/5 font-black border-b border-amber-500/20 text-amber-900">
+                <td className="px-3.5 whitespace-nowrap font-mono text-[11px] text-primary">OPENING</td>
+                <td className="px-3.5 whitespace-nowrap">
+                  <span className="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-900 text-[10px]">رصيد افتتاحي</span>
+                </td>
+                <td className="px-3.5 whitespace-nowrap">رصيد أول المدة</td>
+                <td className="px-3.5 whitespace-nowrap">{targetAccount.name}</td>
+                <td className="px-3.5 whitespace-nowrap font-mono text-emerald-700">+{targetOpeningBalance.toLocaleString('en-US')} ج.م</td>
+                <td className="px-3.5 whitespace-nowrap font-mono text-[11px] text-on-surface-variant">—</td>
+                <td className="px-3.5 whitespace-nowrap text-on-surface-variant font-normal">الرصيد الافتتاحي المعتمد للحساب</td>
+                {onDeleteTransaction && <td className="px-3.5 text-center text-on-surface-variant">—</td>}
+              </tr>
+            )}
             {paginatedTransactions.map((tx) => {
               const isPayroll = tx.type === 'payroll' || tx.notes?.startsWith('[أجور ومرتبات]')
               const isExpense = tx.type === 'expense' && !isPayroll
@@ -317,6 +369,15 @@ export function AX_TreasuryTransactionsTable({
       </div>
 
       <div className="grid grid-cols-1 gap-3 lg:hidden">
+        {currentPage === 1 && targetAccount && (
+          <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-4 shadow-sm space-y-1.5 text-xs">
+            <div className="flex items-center justify-between">
+              <span className="font-black text-amber-950">رصيد أول المدة الافتتاحي</span>
+              <span className="font-mono font-black text-emerald-800 text-sm">+{targetOpeningBalance.toLocaleString('en-US')} ج.م</span>
+            </div>
+            <span className="text-[11px] text-amber-900/80 block">الرصيد الافتتاحي المعتمد لحساب {targetAccount.name}</span>
+          </div>
+        )}
         {paginatedTransactions.map((tx) => {
           const isPayroll = tx.type === 'payroll' || tx.notes?.startsWith('[أجور ومرتبات]')
           const isExpense = tx.type === 'expense' && !isPayroll

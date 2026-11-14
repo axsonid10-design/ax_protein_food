@@ -182,7 +182,9 @@ export const AX_OperationsService = {
     const VALID_TREASURY_TYPES = ['cash', 'bank', 'wallet', 'instapay', 'van_cash']
     const accId = account.id || generateUUID()
     const accType = VALID_TREASURY_TYPES.includes(account.type) ? account.type : 'cash'
-    const row = { id: accId, name: account.name.trim(), type: accType, balance: Number(account.balance || 0) }
+    const openingBal = Number(account.openingBalance ?? account.opening_balance ?? account.balance ?? 0)
+    const currentBal = Number(account.balance !== undefined ? account.balance : openingBal)
+    const row = { id: accId, name: account.name.trim(), type: accType, opening_balance: openingBal, balance: currentBal }
     try {
       const { error } = await supabase.from('ax_treasuries').insert(row)
       if (error) throw error
@@ -198,7 +200,16 @@ export const AX_OperationsService = {
     if (!supabase || typeof supabase.from !== 'function' || !account?.id) return { success: false }
     const VALID_TYPES = ['cash', 'bank', 'wallet', 'instapay', 'van_cash']
     const accType = VALID_TYPES.includes(account.type) ? account.type : 'cash'
-    const row = { name: account.name?.trim(), type: accType, balance: Number(account.balance || 0) }
+    const openingBal = (account.openingBalance !== undefined || account.opening_balance !== undefined)
+      ? Number(account.openingBalance ?? account.opening_balance ?? 0)
+      : undefined
+    const row = {
+      name: account.name?.trim(),
+      type: accType,
+      balance: Number(account.balance || 0),
+      ...(openingBal !== undefined ? { opening_balance: openingBal } : {}),
+      updated_at: new Date().toISOString(),
+    }
     try {
       const { error } = await supabase.from('ax_treasuries').update(row).eq('id', account.id)
       if (error) throw error
@@ -206,6 +217,33 @@ export const AX_OperationsService = {
       return { success: true }
     } catch (err) {
       try { await offlineDB.enqueue('ax_treasuries', 'update', { ...row, id: account.id }) } catch {}
+      return { success: false, error: err.message, enqueued: true }
+    }
+  },
+
+  saveTreasuryOpeningBalanceInDB: async ({ treasuryId, openingBalance, currentBalance }, userProfile = null) => {
+    if (!supabase || typeof supabase.from !== 'function' || !treasuryId) return { success: false }
+    const row = {
+      opening_balance: Number(openingBalance || 0),
+      balance: Number(currentBalance || 0),
+      updated_at: new Date().toISOString(),
+    }
+    try {
+      const { error } = await supabase.from('ax_treasuries').update(row).eq('id', treasuryId)
+      if (error) throw error
+      try {
+        await supabase.from('ax_activity_logs').insert({
+          id: generateUUID(),
+          table_name: 'ax_treasuries',
+          action: 'UPDATE_TREASURY_OPENING_BALANCE',
+          record_id: treasuryId,
+          new_data: row,
+          user_id: userProfile?.id || null,
+        })
+      } catch {}
+      return { success: true }
+    } catch (err) {
+      try { await offlineDB.enqueue('ax_treasuries', 'update', { ...row, id: treasuryId }) } catch {}
       return { success: false, error: err.message, enqueued: true }
     }
   },

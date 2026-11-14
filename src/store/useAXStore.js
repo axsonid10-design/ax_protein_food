@@ -57,12 +57,9 @@ export const useAXStore = create((set, get) => ({
     try {
       const cachedVer = localStorage.getItem('ax_cached_payload_version')
       const currentVer = import.meta.env.VITE_APP_VERSION || '2.3.0'
-      if (cachedVer === currentVer) {
-        const s = localStorage.getItem('ax_cached_db_payload')
-        if (s) c = JSON.parse(s)
-      } else {
-        localStorage.removeItem('ax_cached_db_payload')
-      }
+      const s = localStorage.getItem('ax_cached_db_payload')
+      if (s) c = JSON.parse(s)
+      if (cachedVer !== currentVer) localStorage.setItem('ax_cached_payload_version', currentVer)
     } catch {}
     return {
       items: c?.items || initialItems, warehouses: c?.warehouses || initialWarehouses,
@@ -90,7 +87,7 @@ export const useAXStore = create((set, get) => ({
       salesRepLedger: Array.isArray(payload?.salesRepLedger) ? payload.salesRepLedger : state.salesRepLedger,
       ...(payload?.cashTransfers && !payload?.pendingCashTransfers ? { pendingCashTransfers: payload.cashTransfers } : {}),
     }
-    try { localStorage.setItem('ax_cached_db_payload', JSON.stringify(payload)) } catch {}
+    try { localStorage.setItem('ax_cached_db_payload', JSON.stringify(payload)); localStorage.setItem('ax_cached_payload_version', import.meta.env.VITE_APP_VERSION || '2.3.0') } catch {}
     return nextState
   }),
 
@@ -308,8 +305,9 @@ export const useAXStore = create((set, get) => ({
       return { warehouses: nextWh, distributors: nextDist, transfers: nextTransfers, inventoryStock: stockCopy }
     })
   },
-  addTreasuryAccount: (account) => { const acc = { ...account, id: account.id || generateUUID() }; AX_OperationsService.addTreasuryAccountInDB(acc, get().profile); set((state) => { const nextTr = [...state.treasuryAccounts, acc]; updateLocalCachePayload('treasuryAccounts', nextTr); return { treasuryAccounts: nextTr } }) },
+  addTreasuryAccount: (account) => { const acc = { ...account, id: account.id || generateUUID(), openingBalance: Number(account.openingBalance ?? account.balance ?? 0) }; AX_OperationsService.addTreasuryAccountInDB(acc, get().profile); set((state) => { const nextTr = [...state.treasuryAccounts, acc]; updateLocalCachePayload('treasuryAccounts', nextTr); return { treasuryAccounts: nextTr } }) },
   updateTreasuryAccount: (account) => { AX_OperationsService.updateTreasuryAccountInDB(account, get().profile); set((state) => { const nextTr = state.treasuryAccounts.map((t) => (t.id === account.id ? { ...t, ...account } : t)); updateLocalCachePayload('treasuryAccounts', nextTr); return { treasuryAccounts: nextTr } }) },
+  saveTreasuryOpeningBalance: ({ treasuryId, openingBalance, currentBalance }) => { AX_OperationsService.saveTreasuryOpeningBalanceInDB({ treasuryId, openingBalance, currentBalance }, get().profile); set((state) => { const nextTr = (state.treasuryAccounts || []).map((t) => (t.id === treasuryId ? { ...t, openingBalance: Number(openingBalance || 0), balance: Number(currentBalance || 0) } : t)); updateLocalCachePayload('treasuryAccounts', nextTr); return { treasuryAccounts: nextTr } }) },
   deleteTreasuryAccount: (id) => {
     AX_OperationsService.deleteTreasuryAccountInDB(id, get().profile)
     set((state) => {

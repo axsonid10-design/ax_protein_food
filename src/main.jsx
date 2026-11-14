@@ -4,6 +4,15 @@ import App from './App.jsx'
 import './index.css'
 import { AX_alertTelegram } from './utils/AX_TelegramAlert'
 
+;(function () {
+  const _orig = Number.prototype.toLocaleString
+  Number.prototype.toLocaleString = function (locale, opts) {
+    const merged = { maximumFractionDigits: 3, ...opts }
+    if (merged.maximumFractionDigits > 3) merged.maximumFractionDigits = 3
+    return _orig.call(this, locale ?? 'en-US', merged)
+  }
+})()
+
 if (typeof window !== 'undefined') {
   window.addEventListener('error', (event) => {
     const msg = String(event.error?.stack || event.error?.message || event.message || '')
@@ -30,6 +39,13 @@ if (typeof window !== 'undefined') {
   })
 
   if ('serviceWorker' in navigator) {
+    const hadController = Boolean(navigator.serviceWorker.controller)
+    let reloaded = false
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (!hadController || reloaded) return
+      reloaded = true
+      window.location.reload()
+    })
     window.addEventListener('load', () => {
       navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch((err) => {
         console.warn('[PWA] SW registration suppressed:', err?.message || err)

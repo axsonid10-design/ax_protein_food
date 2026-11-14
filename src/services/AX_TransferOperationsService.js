@@ -71,6 +71,9 @@ export const AX_TransferOperationsService = {
       }
       if (updates.notes !== undefined) dbUpdates.notes = updates.notes
       if (updates.status) dbUpdates.status = updates.status
+      if (updates.from_warehouse_id || updates.fromId) dbUpdates.from_warehouse_id = updates.from_warehouse_id || updates.fromId
+      if (updates.to_warehouse_id || updates.toId) dbUpdates.to_warehouse_id = updates.to_warehouse_id || updates.toId
+      if (updates.items !== undefined) dbUpdates.items = updates.items
 
       const { error } = await supabase.from('ax_transfers').update(dbUpdates).eq('id', transferId)
       if (error) throw error

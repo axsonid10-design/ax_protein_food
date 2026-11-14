@@ -219,7 +219,17 @@ export function calculateFifoProfits(invoices = [], items = [], inventoryStock =
       if (!batchesByItem.has(rowItemId)) {
         batchesByItem.set(rowItemId, [])
       }
-      batchesByItem.get(rowItemId).unshift(returnBatch)
+      const itemBatchesList = batchesByItem.get(rowItemId)
+      const insertIndex = itemBatchesList.findIndex((b) => {
+        const bDate = String(b.date || '')
+        if (bDate !== retDate) return bDate > retDate
+        return String(b.createdAt || '') > retCreated
+      })
+      if (insertIndex === -1) {
+        itemBatchesList.push(returnBatch)
+      } else {
+        itemBatchesList.splice(insertIndex, 0, returnBatch)
+      }
     })
   })
 
@@ -421,8 +431,24 @@ export function calculateFifoProfits(invoices = [], items = [], inventoryStock =
   totalProfit = Number(totalProfit.toFixed(2))
   const grossMarginPct = totalRevenue > 0 ? Number(((totalProfit / totalRevenue) * 100).toFixed(2)) : 0
 
+  const remainingInventoryByItem = new Map()
+  batchesByItem.forEach((batchList, itId) => {
+    const remainingBatches = (batchList || []).filter((b) => (b.remainingQty || 0) > 0.00001)
+    const totalRemainingCartons = remainingBatches.reduce((acc, b) => acc + b.remainingQty, 0)
+    const totalRemainingCost = remainingBatches.reduce((acc, b) => acc + (b.remainingQty * (b.unitCost || 0)), 0)
+    const avgRemainingCost = totalRemainingCartons > 0 ? Number((totalRemainingCost / totalRemainingCartons).toFixed(2)) : 0
+    remainingInventoryByItem.set(itId, {
+      itemId: itId,
+      remainingCartons: Number(totalRemainingCartons.toFixed(4)),
+      totalCostValuation: Number(totalRemainingCost.toFixed(2)),
+      avgCostPerCarton: avgRemainingCost,
+      remainingBatches,
+    })
+  })
+
   return {
     salesProfits,
+    remainingInventoryByItem,
     totalRevenue,
     totalCogs,
     totalProfit,
@@ -435,6 +461,20 @@ export function calculateFifoProfits(invoices = [], items = [], inventoryStock =
 
 export const calculateBatchProfits = calculateFifoProfits
 export const calculateBatchMargins = calculateFifoProfits
+
+export function getFifoItemValuation(itemId, invoices = [], items = [], inventoryStock = []) {
+  const safeInvoices = Array.isArray(invoices) ? invoices : []
+  const result = calculateFifoProfits(safeInvoices, items, inventoryStock)
+  const itemValuation = result.remainingInventoryByItem?.get(itemId)
+  if (itemValuation) return itemValuation
+  return {
+    itemId,
+    remainingCartons: 0,
+    totalCostValuation: 0,
+    avgCostPerCarton: 0,
+    remainingBatches: [],
+  }
+}
 
 export function getInvoiceFifoProfit(saleInvoice, invoices = [], items = [], inventoryStock = []) {
   if (!saleInvoice || saleInvoice.type !== 'sale') {

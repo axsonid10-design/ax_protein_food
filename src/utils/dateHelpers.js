@@ -175,16 +175,16 @@ export function matchesInvoiceTimeframe(inv, timeframeOrOptions = 'all', specifi
   }
 
   if (timeframe === 'all') return true
-  const createdRaw = inv.createdAt || inv.created_at
-  const createdDate = createdRaw ? toLocalDateString(createdRaw) : ''
   const opRaw = inv.date || inv.operationalDate || inv.transactionDate
+  const createdRaw = inv.createdAt || inv.created_at
   const opDate = opRaw ? toLocalDateString(opRaw) : ''
+  const createdDate = createdRaw ? toLocalDateString(createdRaw) : ''
   const primaryDate = opDate || createdDate
-  if (!primaryDate && !createdDate) return false
+  if (!primaryDate) return false
 
   const todayStr = getLocalTodayStr()
   if (timeframe === 'today' || timeframe === 'day') {
-    return primaryDate === todayStr || createdDate === todayStr
+    return primaryDate === todayStr
   }
   if (timeframe === 'week') {
     const d = new Date()
@@ -202,7 +202,7 @@ export function matchesInvoiceTimeframe(inv, timeframeOrOptions = 'all', specifi
     return primaryDate >= startOfYear && primaryDate <= todayStr
   }
   if (timeframe === 'specific_day') {
-    return specDate ? (primaryDate === specDate || createdDate === specDate) : true
+    return specDate ? primaryDate === specDate : true
   }
   if (timeframe === 'custom' || timeframe === 'custom_range') {
     if (cStart && cEnd) {

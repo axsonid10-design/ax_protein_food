@@ -34,6 +34,7 @@ export const AX_DatabaseSync = {
         { data: recycleBin },
         { data: companyEmployees },
         { data: employeeAttendance },
+        { data: activityLogs },
       ] = await Promise.all([
         supabase.from('ax_items').select('*'),
         supabase.from('ax_warehouses').select('*'),
@@ -55,6 +56,7 @@ export const AX_DatabaseSync = {
         supabase.from('ax_recycle_bin').select('*').order('deleted_at', { ascending: false }),
         supabase.from('ax_company_employees').select('*').order('name', { ascending: true }),
         supabase.from('ax_employee_attendance').select('*').order('date', { ascending: false }).limit(300),
+        supabase.from('ax_activity_logs').select('record_id,table_name,action,new_data').eq('action', 'BALANCE_ADJUSTMENT').limit(500),
       ])
 
       const payload = {}
@@ -165,6 +167,7 @@ export const AX_DatabaseSync = {
           id: tr.id,
           name: tr.name,
           type: tr.type,
+          openingBalance: Number(tr.opening_balance || 0),
           balance: Number(tr.balance || 0),
         }))
       }
@@ -210,6 +213,8 @@ export const AX_DatabaseSync = {
         payload.pendingCashTransfers = mappedTransfers
         payload.cashTransfers = mappedTransfers
       }
+
+
 
       if (Array.isArray(invoices)) {
         payload.invoices = invoices.map((inv) => {

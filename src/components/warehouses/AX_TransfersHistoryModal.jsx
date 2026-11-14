@@ -19,8 +19,11 @@ import {
 import { useAXStore } from '../../store/useAXStore'
 import { AX_ConfirmModal } from '../common/AX_ConfirmModal'
 import { AX_CompanyDatePicker } from '../common/AX_CompanyDatePicker'
+import { AX_SearchableSelect } from '../common/AX_SearchableSelect'
 import { AX_TransferPrintModal } from './AX_TransferPrintModal'
+import { AX_TransferEditModal } from './AX_TransferEditModal'
 import { axToast } from '../common/AX_Toast'
+import { AX_TransferOperationsService } from '../../services/AX_TransferOperationsService'
 
 export function AX_TransfersHistoryModal({
   isOpen,
@@ -38,23 +41,52 @@ export function AX_TransfersHistoryModal({
   const updateTransfer = useAXStore((s) => s.updateTransfer)
   const rollbackTransfer = useAXStore((s) => s.rollbackTransfer)
 
-  const [transferToEditDate, setTransferToEditDate] = useState(null)
-  const [newDateVal, setNewDateVal] = useState('')
+  const [transferToEdit, setTransferToEdit] = useState(null)
+  const [editDate, setEditDate] = useState('')
+  const [editFromId, setEditFromId] = useState('')
+  const [editToId, setEditToId] = useState('')
+  const [editNotes, setEditNotes] = useState('')
+  const [editItems, setEditItems] = useState([])
   const [transferToRollback, setTransferToRollback] = useState(null)
   const [transferToPrint, setTransferToPrint] = useState(null)
   const [isProcessing, setIsProcessing] = useState(false)
 
-  const handleSaveTransferDate = async () => {
-    if (!transferToEditDate || !newDateVal) return
+  const openEditModal = (trf) => {
+    const trfItems = trf.items && trf.items.length > 0
+      ? trf.items
+      : [{ itemId: trf.itemId, quantity: trf.quantity, unit: trf.unit }]
+    setTransferToEdit(trf)
+    setEditDate(String(trf.operationalDate || trf.date || trf.requestedAt || '').slice(0, 10))
+    setEditFromId(trf.fromId || trf.fromWarehouseId || trf.from_warehouse_id || '')
+    setEditToId(trf.toId || trf.toWarehouseId || trf.to_warehouse_id || '')
+    setEditNotes(trf.notes || '')
+    setEditItems(trfItems.map((it) => ({ ...it, quantity: Number(it.quantity) || 0 })))
+  }
+
+  const handleSaveTransfer = async () => {
+    if (!transferToEdit || !editDate || !editFromId || !editToId) return
     try {
       setIsProcessing(true)
-      if (updateTransfer) {
-        updateTransfer(transferToEditDate.id, { date: newDateVal, operationalDate: newDateVal })
+      const updates = {
+        date: editDate,
+        operationalDate: editDate,
+        notes: editNotes,
+        fromId: editFromId,
+        fromWarehouseId: editFromId,
+        from_warehouse_id: editFromId,
+        fromName: warehouses.find((w) => w.id === editFromId)?.name,
+        toId: editToId,
+        toWarehouseId: editToId,
+        to_warehouse_id: editToId,
+        toName: warehouses.find((w) => w.id === editToId)?.name,
+        items: editItems,
       }
-      axToast.success(`تم تحديث تاريخ إذن التحويل [${transferToEditDate.code}] إلى ${newDateVal} بنجاح`)
-      setTransferToEditDate(null)
+      if (updateTransfer) updateTransfer(transferToEdit.id, updates)
+      await AX_TransferOperationsService.updateTransferInDB(transferToEdit.id, updates)
+      axToast.success(`تم تحديث إذن التحويل [${transferToEdit.code}] بنجاح`)
+      setTransferToEdit(null)
     } catch {
-      axToast.error('تعذر تحديث تاريخ إذن التحويل')
+      axToast.error('تعذر تحديث إذن التحويل')
     } finally {
       setIsProcessing(false)
     }
@@ -244,10 +276,14 @@ export function AX_TransfersHistoryModal({
 
                       <div className="flex items-center gap-2 text-xs font-bold text-on-surface">
                         <span className="text-on-surface-variant text-[11px]">من:</span>
-                        <span className="font-black">{trf.fromName || 'مخزن الإرسال'}</span>
+                        <span className="font-black">
+                          {trf.fromName || warehouses.find((w) => w.id === (trf.fromId || trf.fromWarehouseId || trf.from_warehouse_id))?.name || 'مخزن الإرسال'}
+                        </span>
                         <ArrowLeftRight className="w-3.5 h-3.5 text-amber-600 shrink-0 mx-1" />
                         <span className="text-on-surface-variant text-[11px]">إلى:</span>
-                        <span className="font-black text-primary">{trf.toName || 'مخزن الاستلام'}</span>
+                        <span className="font-black text-primary">
+                          {trf.toName || warehouses.find((w) => w.id === (trf.toId || trf.toWarehouseId || trf.to_warehouse_id))?.name || 'مخزن الاستلام'}
+                        </span>
                       </div>
                     </div>
 
@@ -353,14 +389,13 @@ export function AX_TransfersHistoryModal({
                               type="button"
                               onClick={(e) => {
                                 e.stopPropagation()
-                                setTransferToEditDate(trf)
-                                setNewDateVal(String(trf.operationalDate || trf.date || trf.requestedAt || '').slice(0, 10))
+                                openEditModal(trf)
                               }}
                               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-amber-500/10 hover:bg-amber-500/20 text-amber-800 text-xs font-black border border-amber-500/20 transition-all cursor-pointer active:scale-95"
-                              title="تعديل تاريخ تنفيذ هذا الإذن"
+                              title="تعديل بيانات إذن التحويل"
                             >
                               <Edit3 className="w-3.5 h-3.5" />
-                              <span>تعديل التاريخ</span>
+                              <span>تعديل التحويل</span>
                             </button>
 
                             <button
@@ -412,51 +447,24 @@ export function AX_TransfersHistoryModal({
         </div>
       </div>
 
-      {transferToEditDate && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200">
-          <div className="w-full max-w-sm bg-surface rounded-3xl p-5 shadow-level3 border border-outline-variant/40 space-y-4">
-            <div className="flex items-center justify-between border-b border-surface-container pb-2">
-              <span className="font-black text-sm text-on-surface">
-                تعديل تاريخ إذن التحويل [{transferToEditDate.code}]
-              </span>
-              <button
-                type="button"
-                onClick={() => setTransferToEditDate(null)}
-                className="w-7 h-7 rounded-full bg-surface-container hover:bg-surface-high flex items-center justify-center cursor-pointer"
-              >
-                <X className="w-4 h-4 text-on-surface-variant" />
-              </button>
-            </div>
-
-            <div>
-              <label className="block text-xs font-black text-on-surface mb-1.5">اختر التاريخ الجديد:</label>
-              <AX_CompanyDatePicker
-                value={newDateVal}
-                onChange={setNewDateVal}
-                placeholder="اختر تاريخ التحويل..."
-              />
-            </div>
-
-            <div className="flex items-center justify-end gap-2 pt-2">
-              <button
-                type="button"
-                onClick={() => setTransferToEditDate(null)}
-                className="px-4 py-2 rounded-full bg-surface-container text-on-surface font-bold text-xs cursor-pointer"
-              >
-                تراجع
-              </button>
-              <button
-                type="button"
-                disabled={isProcessing || !newDateVal}
-                onClick={handleSaveTransferDate}
-                className="px-5 py-2 rounded-full bg-primary text-white font-black text-xs hover:bg-primary-dark cursor-pointer disabled:opacity-50"
-              >
-                {isProcessing ? 'جاري الحفظ...' : 'حفظ التاريخ'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <AX_TransferEditModal
+        transfer={transferToEdit}
+        warehouses={warehouses}
+        getItem={getItem}
+        editDate={editDate}
+        setEditDate={setEditDate}
+        editFromId={editFromId}
+        setEditFromId={setEditFromId}
+        editToId={editToId}
+        setEditToId={setEditToId}
+        editNotes={editNotes}
+        setEditNotes={setEditNotes}
+        editItems={editItems}
+        setEditItems={setEditItems}
+        isProcessing={isProcessing}
+        onSave={handleSaveTransfer}
+        onClose={() => setTransferToEdit(null)}
+      />
 
       {transferToRollback && (
         <AX_ConfirmModal

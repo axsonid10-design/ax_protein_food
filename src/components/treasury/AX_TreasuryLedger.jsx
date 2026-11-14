@@ -197,7 +197,11 @@ export function AX_TreasuryLedger() {
               {(treasuryAccounts || []).reduce((sum, a) => sum + (Number(a.balance) || 0), 0).toLocaleString('en-US')} ج.م
             </div>
           </div>
-          <span className="text-[11px] text-white/70">{(treasuryAccounts || []).length} قنوات دفع مفعّلة</span>
+          <div className="pt-2 border-t border-white/20 flex items-center justify-between text-[11px] text-white/80 font-mono">
+            <span>إجمالي أول المدة:</span>
+            <span className="font-bold">{(treasuryAccounts || []).reduce((sum, a) => sum + (Number(a.openingBalance ?? a.opening_balance ?? 0)), 0).toLocaleString('en-US')} ج.م</span>
+          </div>
+          <span className="text-[11px] text-white/70 block mt-1">{(treasuryAccounts || []).length} قنوات دفع مفعّلة</span>
         </div>
 
         <div className="flex-1 min-w-0 flex items-stretch gap-3 overflow-x-auto pb-2 scrollbar-thin snap-x">
@@ -236,6 +240,10 @@ export function AX_TreasuryLedger() {
                 <span className="text-xs font-bold text-on-surface-variant block truncate" title={account.name}>{account.name}</span>
                 <div className="text-base font-black font-mono text-on-surface mt-1">
                   {(Number(account.balance) || 0).toLocaleString('en-US')} ج.م
+                </div>
+                <div className="flex items-center justify-between text-[10px] font-mono font-bold text-on-surface-variant mt-1.5 pt-1.5 border-t border-surface-container/60">
+                  <span className="font-sans">أول المدة:</span>
+                  <span className="text-amber-800">{(Number(account.openingBalance ?? account.opening_balance ?? 0)).toLocaleString('en-US')} ج.م</span>
                 </div>
               </div>
             </div>

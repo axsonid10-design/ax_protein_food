@@ -42,7 +42,8 @@ export const offlineSync = {
             const { error } = await supabase.from(table).upsert(payload, onConflict ? { onConflict } : undefined)
             if (error) throw error
           } else if (action === 'update') {
-            const { id, ...updates } = payload
+            const { id, updated_at, ...updates } = payload
+            if (table === 'ax_treasuries') delete updates.balance
             const { error } = await supabase.from(table).update(updates).eq('id', id)
             if (error) throw error
           } else if (action === 'delete') {

@@ -2,9 +2,14 @@ export function formatNumber(val, optionsOrDecimals = 0) {
   if (val === null || val === undefined || val === '') return '0'
   const num = Number(val)
   if (isNaN(num)) return '0'
-  const options = typeof optionsOrDecimals === 'number'
-    ? { minimumFractionDigits: 0, maximumFractionDigits: optionsOrDecimals }
-    : { minimumFractionDigits: 0, maximumFractionDigits: 2, ...optionsOrDecimals }
+  let options
+  if (typeof optionsOrDecimals === 'number') {
+    options = { minimumFractionDigits: 0, maximumFractionDigits: Math.min(optionsOrDecimals, 3) }
+  } else {
+    const merged = { minimumFractionDigits: 0, maximumFractionDigits: 2, ...optionsOrDecimals }
+    merged.maximumFractionDigits = Math.min(merged.maximumFractionDigits, 3)
+    options = merged
+  }
   return num.toLocaleString('en-US', options)
 }
 
