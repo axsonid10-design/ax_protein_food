@@ -41,21 +41,32 @@ export function AX_ItemMovementCardModal({
   const selectedWarehouseObj = useMemo(() => selectedWhId === 'ALL' ? null : ((warehouses || []).find((w) => w.id === selectedWhId) || null), [selectedWhId, warehouses])
 
   const { movementsList, openingBalance, totalInward, totalOutward, currentStock } = useMemo(() => {
+    if (!item) return { movementsList: [], openingBalance: 0, totalInward: 0, totalOutward: 0, currentStock: 0 }
     return calculateItemMovements({
       itemId, selectedWhId, items: item ? [item] : [], purchases: effectivePurchases, sales: effectiveSales,
       transfers, stockAudits, manufacturingOrders, currentStock: baseCurrentStock, warehouses, inventoryStock,
     })
   }, [itemId, item, selectedWhId, effectivePurchases, effectiveSales, transfers, stockAudits, manufacturingOrders, baseCurrentStock, warehouses, inventoryStock])
 
+  const allInvoices = useMemo(() => {
+    return invoices?.length ? invoices : [...(effectivePurchases || []), ...(effectiveSales || [])]
+  }, [invoices, effectivePurchases, effectiveSales])
+
+  const fifoValuation = useMemo(() => {
+    if (!itemId) return null
+    return getFifoItemValuation(itemId, allInvoices, item ? [item] : [], inventoryStock)
+  }, [itemId, allInvoices, item, inventoryStock])
+
+  const itemValuation = useMemo(() => {
+    if (!item) return { currentStock: 0, avgSellingPrice: 0, avgPiecePrice: null, totalSellingValuation: 0, totalCostValuation: 0, expectedProfit: 0, expectedMarginPct: 0 }
+    return calculateItemValuation(item, allInvoices, inventoryStock, fifoValuation)
+  }, [item, allInvoices, inventoryStock, fifoValuation])
+
   if (!isOpen || !item) return null
 
   const buyPrice = Number(item.buyPrice ?? item.buy_price ?? 0)
   const sellPrice = Number(item.sellPrice ?? item.sell_price ?? 0)
   const marginPct = buyPrice > 0 ? Math.round(((sellPrice - buyPrice) / buyPrice) * 100) : 0
-
-  const allInvoices = useMemo(() => invoices?.length ? invoices : [...(effectivePurchases || []), ...(effectiveSales || [])], [invoices, effectivePurchases, effectiveSales])
-  const fifoValuation = useMemo(() => itemId ? getFifoItemValuation(itemId, allInvoices, item ? [item] : [], inventoryStock) : null, [itemId, allInvoices, item, inventoryStock])
-  const itemValuation = useMemo(() => item ? calculateItemValuation(item, allInvoices, inventoryStock, fifoValuation) : { currentStock: 0, avgSellingPrice: sellPrice, avgPiecePrice: null, totalSellingValuation: 0, totalCostValuation: 0, expectedProfit: 0, expectedMarginPct: 0 }, [item, allInvoices, inventoryStock, fifoValuation, sellPrice])
 
   const scopeStock = selectedWhId === 'ALL' ? totalCurrentStock : baseCurrentStock
   const unitCostRate = fifoValuation?.avgCostPerCarton > 0 ? fifoValuation.avgCostPerCarton : buyPrice

@@ -208,7 +208,6 @@ export const AX_OperationsService = {
       type: accType,
       balance: Number(account.balance || 0),
       ...(openingBal !== undefined ? { opening_balance: openingBal } : {}),
-      updated_at: new Date().toISOString(),
     }
     try {
       const { error } = await supabase.from('ax_treasuries').update(row).eq('id', account.id)
@@ -226,7 +225,6 @@ export const AX_OperationsService = {
     const row = {
       opening_balance: Number(openingBalance || 0),
       balance: Number(currentBalance || 0),
-      updated_at: new Date().toISOString(),
     }
     try {
       const { error } = await supabase.from('ax_treasuries').update(row).eq('id', treasuryId)
