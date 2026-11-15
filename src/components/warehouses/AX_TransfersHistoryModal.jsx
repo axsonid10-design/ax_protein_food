@@ -40,6 +40,7 @@ export function AX_TransfersHistoryModal({
 
   const updateTransfer = useAXStore((s) => s.updateTransfer)
   const rollbackTransfer = useAXStore((s) => s.rollbackTransfer)
+  const items = useAXStore((s) => s.items || [])
 
   const [transferToEdit, setTransferToEdit] = useState(null)
   const [editDate, setEditDate] = useState('')
@@ -52,19 +53,26 @@ export function AX_TransfersHistoryModal({
   const [isProcessing, setIsProcessing] = useState(false)
 
   const openEditModal = (trf) => {
-    const trfItems = trf.items && trf.items.length > 0
-      ? trf.items
-      : [{ itemId: trf.itemId, quantity: trf.quantity, unit: trf.unit }]
+    const trfItems = trf.items && trf.items.length > 0 ? trf.items : [{ itemId: trf.itemId || trf.item_id, quantity: trf.quantity, unit: trf.unit, name: trf.itemName || trf.name }]
     setTransferToEdit(trf)
     setEditDate(String(trf.operationalDate || trf.date || trf.requestedAt || '').slice(0, 10))
     setEditFromId(trf.fromId || trf.fromWarehouseId || trf.from_warehouse_id || '')
     setEditToId(trf.toId || trf.toWarehouseId || trf.to_warehouse_id || '')
     setEditNotes(trf.notes || '')
-    setEditItems(trfItems.map((it) => ({ ...it, quantity: Number(it.quantity) || 0 })))
+    setEditItems(trfItems.map((it) => ({ itemId: it.itemId || it.id || it.item_id || '', name: it.name || it.itemName || '', quantity: Number(it.quantity) || 0, unit: it.unit || 'كرتونة' })))
   }
 
   const handleSaveTransfer = async () => {
     if (!transferToEdit || !editDate || !editFromId || !editToId) return
+    const validItems = editItems.filter((it) => it.itemId && Number(it.quantity) > 0)
+    if (validItems.length === 0) {
+      axToast.error('يجب اختيار صنف واحد على الأقل بكمية صالحة')
+      return
+    }
+    if (editFromId === editToId) {
+      axToast.error('لا يمكن التحويل لنفس المخزن')
+      return
+    }
     try {
       setIsProcessing(true)
       const updates = {
@@ -79,10 +87,21 @@ export function AX_TransfersHistoryModal({
         toWarehouseId: editToId,
         to_warehouse_id: editToId,
         toName: warehouses.find((w) => w.id === editToId)?.name,
-        items: editItems,
+        items: validItems.map((it) => {
+          const itMeta = (items || []).find((c) => c.id === it.itemId) || {}
+          return {
+            ...it,
+            name: itMeta.compositeName || itMeta.name || it.name || 'صنف',
+            primaryCategory: itMeta.primaryCategory || it.primaryCategory || 'أصناف عامة',
+            piecesPerCarton: itMeta.piecesPerCarton ?? itMeta.pieces_per_carton,
+            weightPerCarton: itMeta.weightPerCarton ?? itMeta.weight_per_carton,
+            unitType: itMeta.unitType || itMeta.unit_type,
+            subUnitType: itMeta.subUnitType || itMeta.sub_unit_type,
+          }
+        }),
       }
-      if (updateTransfer) updateTransfer(transferToEdit.id, updates)
-      await AX_TransferOperationsService.updateTransferInDB(transferToEdit.id, updates)
+      if (updateTransfer) await updateTransfer(transferToEdit.id, updates)
+      else await AX_TransferOperationsService.updateTransferInDB(transferToEdit.id, updates, null, transferToEdit)
       axToast.success(`تم تحديث إذن التحويل [${transferToEdit.code}] بنجاح`)
       setTransferToEdit(null)
     } catch {
@@ -114,30 +133,25 @@ export function AX_TransfersHistoryModal({
 
   const filteredTransfers = useMemo(() => {
     const q = searchQuery.trim().toLowerCase()
-    return (transfers || [])
-      .filter((t) => {
-        if (!t) return false
-        const status = t.status || 'confirmed'
-        if (selectedStatusFilter !== 'ALL' && status !== selectedStatusFilter) return false
-
-        const fromId = t.fromId || t.fromWarehouseId || t.from_warehouse_id
-        const toId = t.toId || t.toWarehouseId || t.to_warehouse_id
-        const whMatch =
-          selectedWhFilter === 'ALL' || fromId === selectedWhFilter || toId === selectedWhFilter
-        if (!whMatch) return false
-
-        if (!q) return true
-        const code = String(t.code || '').toLowerCase()
-        const fromName = String(t.fromName || '').toLowerCase()
-        const toName = String(t.toName || '').toLowerCase()
-        const notes = String(t.notes || '').toLowerCase()
-        return code.includes(q) || fromName.includes(q) || toName.includes(q) || notes.includes(q)
-      })
-      .sort((a, b) => {
-        const dateA = new Date(a.operationalDate || a.date || a.createdAt || a.requestedAt || 0).getTime()
-        const dateB = new Date(b.operationalDate || b.date || b.createdAt || b.requestedAt || 0).getTime()
-        return dateB - dateA
-      })
+    return (transfers || []).filter((t) => {
+      if (!t) return false
+      const status = t.status || 'confirmed'
+      if (selectedStatusFilter !== 'ALL' && status !== selectedStatusFilter) return false
+      const fromId = t.fromId || t.fromWarehouseId || t.from_warehouse_id
+      const toId = t.toId || t.toWarehouseId || t.to_warehouse_id
+      const whMatch = selectedWhFilter === 'ALL' || fromId === selectedWhFilter || toId === selectedWhFilter
+      if (!whMatch) return false
+      if (!q) return true
+      const code = String(t.code || '').toLowerCase()
+      const fromName = String(t.fromName || '').toLowerCase()
+      const toName = String(t.toName || '').toLowerCase()
+      const notes = String(t.notes || '').toLowerCase()
+      return code.includes(q) || fromName.includes(q) || toName.includes(q) || notes.includes(q)
+    }).sort((a, b) => {
+      const dateA = new Date(a.operationalDate || a.date || a.createdAt || a.requestedAt || 0).getTime()
+      const dateB = new Date(b.operationalDate || b.date || b.createdAt || b.requestedAt || 0).getTime()
+      return dateB - dateA
+    })
   }, [transfers, selectedStatusFilter, selectedWhFilter, searchQuery])
 
   if (!isOpen) return null
@@ -448,22 +462,11 @@ export function AX_TransfersHistoryModal({
       </div>
 
       <AX_TransferEditModal
-        transfer={transferToEdit}
-        warehouses={warehouses}
-        getItem={getItem}
-        editDate={editDate}
-        setEditDate={setEditDate}
-        editFromId={editFromId}
-        setEditFromId={setEditFromId}
-        editToId={editToId}
-        setEditToId={setEditToId}
-        editNotes={editNotes}
-        setEditNotes={setEditNotes}
-        editItems={editItems}
-        setEditItems={setEditItems}
-        isProcessing={isProcessing}
-        onSave={handleSaveTransfer}
-        onClose={() => setTransferToEdit(null)}
+        transfer={transferToEdit} warehouses={warehouses} items={items} getItem={getItem}
+        editDate={editDate} setEditDate={setEditDate} editFromId={editFromId} setEditFromId={setEditFromId}
+        editToId={editToId} setEditToId={setEditToId} editNotes={editNotes} setEditNotes={setEditNotes}
+        editItems={editItems} setEditItems={setEditItems} isProcessing={isProcessing}
+        onSave={handleSaveTransfer} onClose={() => setTransferToEdit(null)}
       />
 
       {transferToRollback && (

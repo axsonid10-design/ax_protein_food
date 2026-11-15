@@ -3,12 +3,14 @@ import { generateUUID } from '../utils/AX_UUID.js'
 import {
   checkTransferAuditDiscrepancy,
   calculateTransferStockMovement,
+  calculateTransferEditStockMovement,
   getLatestConfirmedAudit,
 } from './transferAuditHelpers.js'
 
 export {
   checkTransferAuditDiscrepancy,
   calculateTransferStockMovement,
+  calculateTransferEditStockMovement,
   getLatestConfirmedAudit,
 }
 

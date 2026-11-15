@@ -60,9 +60,99 @@ export const AX_TransferOperationsService = {
     } catch {}
   },
 
-  updateTransferInDB: async (transferId, updates = {}, userProfile = null) => {
+  updateTransferInDB: async (transferId, updates = {}, userProfile = null, oldTransferFallback = null) => {
     if (!supabase || typeof supabase.from !== 'function' || !transferId) return { success: false }
     try {
+      let oldTransfer = oldTransferFallback
+      if (!oldTransfer?.items || oldTransfer.items.length === 0) {
+        const { data } = await supabase.from('ax_transfers').select('*').eq('id', transferId).maybeSingle()
+        if (data) oldTransfer = data
+      }
+
+      const isOldConfirmed = oldTransfer && (oldTransfer.status === 'confirmed' || oldTransfer.status === undefined)
+
+      if (isOldConfirmed) {
+        const oldFromId = oldTransfer.from_warehouse_id || oldTransfer.fromWarehouseId || oldTransfer.fromId
+        const oldToId = oldTransfer.to_warehouse_id || oldTransfer.toWarehouseId || oldTransfer.toId
+        const oldItems = oldTransfer.items && oldTransfer.items.length > 0
+          ? oldTransfer.items
+          : [{ itemId: oldTransfer.itemId || oldTransfer.item_id, quantity: oldTransfer.quantity, unit: oldTransfer.unit }]
+
+        const newFromId = updates.from_warehouse_id || updates.fromWarehouseId || updates.fromId || oldFromId
+        const newToId = updates.to_warehouse_id || updates.toWarehouseId || updates.toId || oldToId
+        const newItems = updates.items !== undefined ? updates.items : oldItems
+
+        const allItemIds = Array.from(new Set([
+          ...oldItems.map((i) => i.itemId || i.id || i.item_id),
+          ...newItems.map((i) => i.itemId || i.id || i.item_id),
+        ])).filter(Boolean)
+
+        let itemsCatalog = []
+        if (allItemIds.length > 0) {
+          try {
+            const { data: dbItems } = await supabase
+              .from('ax_items')
+              .select('id, unit_type, sub_unit_type, pieces_per_carton, weight_per_carton')
+              .in('id', allItemIds)
+            if (dbItems) itemsCatalog = dbItems
+          } catch {}
+        }
+
+        const getItemMeta = (itId, rawItem) => {
+          const found = itemsCatalog.find((c) => c.id === itId)
+          return found ? { ...rawItem, ...found } : rawItem
+        }
+
+        const deltas = new Map()
+        const addDelta = (whId, itId, qtyChange) => {
+          if (!whId || !itId || !qtyChange) return
+          const key = `${whId}:::${itId}`
+          deltas.set(key, (deltas.get(key) || 0) + qtyChange)
+        }
+
+        for (const it of oldItems) {
+          const itId = it.itemId || it.id || it.item_id
+          const rawQty = Number(it.quantity) || 0
+          if (!itId || rawQty <= 0) continue
+          const meta = getItemMeta(itId, it)
+          const cartonQty = getCartonEquivalent(rawQty, it.unit, meta)
+          if (oldFromId) addDelta(oldFromId, itId, +cartonQty)
+          if (oldToId) addDelta(oldToId, itId, -cartonQty)
+        }
+
+        for (const it of newItems) {
+          const itId = it.itemId || it.id || it.item_id
+          const rawQty = Number(it.quantity) || 0
+          if (!itId || rawQty <= 0) continue
+          const meta = getItemMeta(itId, it)
+          const cartonQty = getCartonEquivalent(rawQty, it.unit, meta)
+          if (newFromId) addDelta(newFromId, itId, -cartonQty)
+          if (newToId) addDelta(newToId, itId, +cartonQty)
+        }
+
+        for (const [key, delta] of deltas.entries()) {
+          if (Math.abs(delta) < 0.0001) continue
+          const [whId, itId] = key.split(':::')
+          try {
+            const { data: curStock } = await supabase
+              .from('ax_inventory_stock')
+              .select('quantity')
+              .eq('warehouse_id', whId)
+              .eq('item_id', itId)
+              .maybeSingle()
+            const curQty = Number(curStock?.quantity || 0)
+            const finalQty = curQty + delta
+            await supabase.from('ax_inventory_stock').upsert({
+              warehouse_id: whId,
+              item_id: itId,
+              quantity: finalQty,
+              unit: 'كرتونة',
+              updated_at: new Date().toISOString(),
+            }, { onConflict: 'warehouse_id,item_id' })
+          } catch {}
+        }
+      }
+
       const dbUpdates = {}
       if (updates.date || updates.operationalDate) {
         dbUpdates.date = updates.date || updates.operationalDate

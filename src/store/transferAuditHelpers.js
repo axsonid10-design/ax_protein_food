@@ -239,3 +239,93 @@ export const calculateTransferStockMovement = (transfer, currentStock = [], stoc
     discrepancyInfo
   }
 }
+
+export const calculateTransferEditStockMovement = (
+  oldTransfer,
+  updates,
+  currentStock = [],
+  itemsCatalog = []
+) => {
+  if (!oldTransfer) return [...currentStock]
+
+  const oldFromId = oldTransfer.fromId || oldTransfer.fromWarehouseId || oldTransfer.from_warehouse_id
+  const oldToId = oldTransfer.toId || oldTransfer.toWarehouseId || oldTransfer.to_warehouse_id
+  const oldItems = oldTransfer.items && oldTransfer.items.length > 0
+    ? oldTransfer.items
+    : [{ itemId: oldTransfer.itemId || oldTransfer.item_id, quantity: oldTransfer.quantity, unit: oldTransfer.unit }]
+
+  const newFromId = updates.fromId || updates.fromWarehouseId || updates.from_warehouse_id || oldFromId
+  const newToId = updates.toId || updates.toWarehouseId || updates.to_warehouse_id || oldToId
+  const newItems = updates.items !== undefined ? updates.items : oldItems
+
+  let updatedStock = [...currentStock]
+
+  const getItemMeta = (itId, rawItem) => {
+    const found = (itemsCatalog || []).find((c) => (c.id === itId || c.itemId === itId))
+    return found ? { ...rawItem, ...found } : rawItem
+  }
+
+  for (const it of oldItems) {
+    const itId = it.itemId || it.id || it.item_id
+    const rawQty = Number(it.quantity) || 0
+    if (!itId || rawQty <= 0) continue
+    const meta = getItemMeta(itId, it)
+    const cartonQty = getCartonEquivalent(rawQty, it.unit, meta)
+    if (cartonQty <= 0) continue
+
+    if (oldFromId) {
+      const idx = updatedStock.findIndex(
+        (s) => (s.warehouseId === oldFromId || s.warehouse_id === oldFromId) && ((s.itemId || s.item_id) === itId)
+      )
+      if (idx >= 0) {
+        updatedStock[idx] = { ...updatedStock[idx], quantity: (Number(updatedStock[idx].quantity) || 0) + cartonQty }
+      } else {
+        updatedStock.push({ warehouseId: oldFromId, itemId: itId, quantity: cartonQty, unit: 'كرتونة' })
+      }
+    }
+
+    if (oldToId) {
+      const idx = updatedStock.findIndex(
+        (s) => (s.warehouseId === oldToId || s.warehouse_id === oldToId) && ((s.itemId || s.item_id) === itId)
+      )
+      if (idx >= 0) {
+        updatedStock[idx] = { ...updatedStock[idx], quantity: (Number(updatedStock[idx].quantity) || 0) - cartonQty }
+      } else {
+        updatedStock.push({ warehouseId: oldToId, itemId: itId, quantity: -cartonQty, unit: 'كرتونة' })
+      }
+    }
+  }
+
+  for (const it of newItems) {
+    const itId = it.itemId || it.id || it.item_id
+    const rawQty = Number(it.quantity) || 0
+    if (!itId || rawQty <= 0) continue
+    const meta = getItemMeta(itId, it)
+    const cartonQty = getCartonEquivalent(rawQty, it.unit, meta)
+    if (cartonQty <= 0) continue
+
+    if (newFromId) {
+      const idx = updatedStock.findIndex(
+        (s) => (s.warehouseId === newFromId || s.warehouse_id === newFromId) && ((s.itemId || s.item_id) === itId)
+      )
+      if (idx >= 0) {
+        updatedStock[idx] = { ...updatedStock[idx], quantity: (Number(updatedStock[idx].quantity) || 0) - cartonQty }
+      } else {
+        updatedStock.push({ warehouseId: newFromId, itemId: itId, quantity: -cartonQty, unit: 'كرتونة' })
+      }
+    }
+
+    if (newToId) {
+      const idx = updatedStock.findIndex(
+        (s) => (s.warehouseId === newToId || s.warehouse_id === newToId) && ((s.itemId || s.item_id) === itId)
+      )
+      if (idx >= 0) {
+        updatedStock[idx] = { ...updatedStock[idx], quantity: (Number(updatedStock[idx].quantity) || 0) + cartonQty }
+      } else {
+        updatedStock.push({ warehouseId: newToId, itemId: itId, quantity: cartonQty, unit: 'كرتونة' })
+      }
+    }
+  }
+
+  return updatedStock
+}

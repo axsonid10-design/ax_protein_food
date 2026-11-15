@@ -478,43 +478,21 @@ export function getFifoItemValuation(itemId, invoices = [], items = [], inventor
 
 export function getInvoiceFifoProfit(saleInvoice, invoices = [], items = [], inventoryStock = []) {
   if (!saleInvoice || saleInvoice.type !== 'sale') {
-    return {
-      invoiceId: saleInvoice?.id || null,
-      subtotal: 0,
-      cogs: 0,
-      profit: 0,
-      profitMargin: 0,
-      profitStatus: 'calculated',
-      isProfitPending: false,
-      lines: [],
-    }
+    return { invoiceId: saleInvoice?.id || null, subtotal: 0, cogs: 0, profit: 0, profitMargin: 0, profitStatus: 'calculated', isProfitPending: false, lines: [] }
   }
-
   const safeInvoices = Array.isArray(invoices) ? [...invoices] : []
-  const exists = safeInvoices.some((i) => i && i.id === saleInvoice.id)
-  if (!exists) {
-    safeInvoices.push(saleInvoice)
-  }
-
+  if (!safeInvoices.some((i) => i && i.id === saleInvoice.id)) safeInvoices.push(saleInvoice)
   const result = calculateFifoProfits(safeInvoices, items, inventoryStock)
   const entry = result.salesProfits.get(saleInvoice.id)
   if (entry) return entry
-
   return {
     invoiceId: saleInvoice.id,
     subtotal: Number(saleInvoice.subtotal) || Number(saleInvoice.total) || 0,
-    cogs: null,
-    profit: null,
-    profitMargin: null,
-    profitStatus: 'pending',
-    isProfitPending: true,
-    lines: [],
+    cogs: null, profit: null, profitMargin: null, profitStatus: 'pending', isProfitPending: true, lines: []
   }
 }
 
 export function formatProfitStatus(profit, status) {
-  if (status === 'pending' || profit === null || profit === undefined || isNaN(Number(profit))) {
-    return 'قيد الاحتساب'
-  }
+  if (status === 'pending' || profit === null || profit === undefined || isNaN(Number(profit))) return 'قيد الاحتساب'
   return Number(profit).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ج.م'
 }

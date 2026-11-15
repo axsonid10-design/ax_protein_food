@@ -11,7 +11,7 @@ import { categoryHelpers } from './categoryHelpers.js'
 import { recycleBinHelpers } from './recycleBinHelpers.js'
 import { expenseCategoryHelpers, initialExpenseCategories } from './expenseCategoryHelpers.js'
 import { updateLocalCachePayload, processInvoiceStoreState, saveSalesRepState, updateSalesRepState, deleteSalesRepState, updateInvoiceStoreState, deleteInvoiceStoreState, saveItemOpeningBalanceState, applyManufacturingOrderState, updateManufacturingOrderState, deleteManufacturingOrderState, editItemStoreState } from './storeCacheHelper.js'
-import { checkTransferAuditDiscrepancy, calculateTransferStockMovement } from './transferAuditHelpers.js'
+import { checkTransferAuditDiscrepancy, calculateTransferStockMovement, calculateTransferEditStockMovement } from './transferAuditHelpers.js'
 import {
   initialCategories, initialSubCategories, initialSecondaryCategories, initialItems, initialWarehouses, initialDistributors, initialInventoryStock, initialTransfers, initialStockAudits, initialTreasuryAccounts, initialCashTransactions, initialPendingCashTransfers, initialManufacturingOrders, initialInvoices, initialClients, initialSuppliers, initialSalesReps, initialSalesRepLedger, initialNotifications,
 } from './initialData.js'
@@ -458,7 +458,16 @@ export const useAXStore = create((set, get) => ({
   purgeFromRecycleBin: (id) => recycleBinHelpers.purgeItem(id, set),
   rollbackStockAudit: (auditId) => recycleBinHelpers.rollbackAudit(auditId, get().profile, set, get()),
   deleteStockAudit: (auditId) => recycleBinHelpers.deleteAudit(auditId, get().profile, set, get()),
-  updateTransfer: (id, updates) => { AX_OperationsService.updateTransferInDB(id, updates, get().profile); set((state) => { const next = (state.transfers || []).map((t) => t.id === id ? { ...t, ...updates } : t); updateLocalCachePayload('transfers', next); return { transfers: next } }) },
+  updateTransfer: async (id, updates) => {
+    const oldTrf = (get().transfers || []).find((t) => t.id === id)
+    if (oldTrf && (oldTrf.status === 'confirmed' || !oldTrf.status)) {
+      const nextStock = calculateTransferEditStockMovement(oldTrf, updates, get().inventoryStock || [], get().items || [])
+      set((state) => { const next = (state.transfers || []).map((t) => (t.id === id ? { ...t, ...updates } : t)); updateLocalCachePayload('transfers', next); updateLocalCachePayload('inventory_stock', nextStock); return { inventoryStock: nextStock, transfers: next } })
+    } else {
+      set((state) => { const next = (state.transfers || []).map((t) => (t.id === id ? { ...t, ...updates } : t)); updateLocalCachePayload('transfers', next); return { transfers: next } })
+    }
+    return await AX_OperationsService.updateTransferInDB(id, updates, get().profile, oldTrf)
+  },
   rollbackTransfer: (id) => recycleBinHelpers.rollbackTransfer(id, get().profile, set, get()),
   deleteTransfer: (id) => recycleBinHelpers.deleteTransfer(id, get().profile, set, get()),
 
