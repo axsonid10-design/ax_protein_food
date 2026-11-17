@@ -5,6 +5,7 @@ import { AX_InvoiceItemsGrid } from './AX_InvoiceItemsGrid'
 import { getItemDisplayName } from '../../utils/AX_ItemNameHelper'
 import { resolveInvoiceUnitPrice, getCartonEquivalent } from '../../utils/pricingCalculations'
 import { calculateDynamicRemainingStock, getRemainingStockBadge } from './invoiceValidationHelper'
+import { formatStockPackages } from '../../utils/itemUnitFormatters'
 
 export function AX_InvoiceItemsEditor({
   items = [],
@@ -126,7 +127,7 @@ export function AX_InvoiceItemsEditor({
                 options={availableItems.map((it) => ({
                   value: it.id,
                   label: getItemDisplayName(it),
-                  sublabel: `${it.primaryCategory || ''} • ${it.unitType || 'كرتونة'}${invType === 'sale' ? ` • متاح: ${getStock(it.id)}` : ''}`,
+                  sublabel: `${it.primaryCategory || ''} • ${it.unitType || 'كرتونة'}${invType === 'sale' ? ` • متاح: ${formatStockPackages(getStock(it.id), it.unitType, it)}` : ''}`,
                 }))}
                 placeholder="اختر الصنف المراد إضافته..."
               />
@@ -190,11 +191,12 @@ export function AX_InvoiceItemsEditor({
 
             <div className="flex items-center gap-2">
               {invType === 'sale' && draftItem?.itemId ? (() => {
+                const draftObj = items.find((i) => i.id === draftItem.itemId)
                 const draftDynamic = getDynamicStock(draftItem.itemId)
                 const badge = getRemainingStockBadge(draftDynamic)
                 return (
                   <span className={`text-[11px] font-mono font-bold px-2 py-0.5 rounded-full border ${badge.className}`}>
-                    {badge.text} {items.find((i) => i.id === draftItem.itemId)?.unitType || 'كرتونة'}
+                    متاح: {formatStockPackages(draftDynamic, draftObj?.unitType, draftObj)}
                   </span>
                 )
               })() : <span />}
@@ -255,7 +257,7 @@ export function AX_InvoiceItemsEditor({
                     </span>
                     {invType === 'sale' && (
                       <span className={`text-[10px] font-mono font-bold px-1.5 py-0.5 rounded border shrink-0 ${stockBadge.className}`}>
-                        {stockBadge.text}
+                        متاح: {formatStockPackages(remStock, itObj?.unitType, itObj)}
                       </span>
                     )}
                   </div>

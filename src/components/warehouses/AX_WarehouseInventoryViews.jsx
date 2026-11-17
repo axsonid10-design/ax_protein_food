@@ -1,7 +1,7 @@
 import React from 'react'
 import { LayoutGrid, Table as TableIcon, FolderKanban, Tag } from 'lucide-react'
 import { AX_ItemStatusIndicators } from '../items/AX_ItemStatusIndicators'
-import { formatDualUnits, isItemNearDepletion } from '../../utils/itemUnitFormatters'
+import { formatDualUnits, formatStockPackages, isItemNearDepletion } from '../../utils/itemUnitFormatters'
 
 export function AX_WarehouseInventoryViews({
   viewMode = 'grid',
@@ -17,7 +17,6 @@ export function AX_WarehouseInventoryViews({
     )
   }
 
-  // Group by Primary Category directly (not subCategory) for 'categories' mode
   const primaryGroups = stockRows.reduce((acc, curr) => {
     const pCat = curr.item?.primaryCategory || 'عام'
     if (!acc[pCat]) acc[pCat] = []
@@ -79,7 +78,7 @@ export function AX_WarehouseInventoryViews({
                         : 'text-primary bg-primary/10 border-primary/20'
                     }`}
                   >
-                    {s.quantity}
+                    {formatStockPackages(s.quantity, s.unit, it)}
                     {isNegative && <span className="mr-0.5 text-[9px] font-bold">(سالب)</span>}
                   </span>
                 </div>
@@ -136,7 +135,7 @@ export function AX_WarehouseInventoryViews({
                             : 'text-primary bg-primary/10 border border-primary/20'
                         }`}
                       >
-                        {s.quantity}
+                        {formatStockPackages(s.quantity, s.unit, it)}
                         {isNegative && <span className="mr-1 text-[10px]">(سالب)</span>}
                       </span>
                     </td>
@@ -194,9 +193,9 @@ export function AX_WarehouseInventoryViews({
                         {it.compositeName || 'صنف'}
                       </span>
                       <div className="flex items-center justify-between pt-1 border-t border-surface-container/30">
-                        <span className="text-[10px] text-on-surface-variant font-bold">{s.unit}</span>
+                        <span className="text-[10px] text-on-surface-variant font-bold">{formatDualUnits(s.quantity, s.unit, it)}</span>
                         <span className={`font-mono font-black text-xs ${isNegative ? 'text-error' : 'text-primary'}`}>
-                          {s.quantity}
+                          {formatStockPackages(s.quantity, s.unit, it)}
                         </span>
                       </div>
                     </div>

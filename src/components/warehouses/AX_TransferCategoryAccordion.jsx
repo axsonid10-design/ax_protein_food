@@ -1,5 +1,7 @@
 import React, { useState, useMemo } from 'react'
-import { ChevronDown, ChevronUp, Search, Plus, Minus, Package, Layers, CheckCircle2 } from 'lucide-react'
+import { ChevronDown, ChevronUp, Search, Plus, Minus, Package, Layers, CheckCircle2, LayoutGrid, ListPlus } from 'lucide-react'
+import { formatStockPackages, roundMax3 } from '../../utils/itemUnitFormatters'
+import { AX_TransferItemsGrid } from './AX_TransferItemsGrid'
 
 export function AX_TransferCategoryAccordion({
   category,
@@ -9,11 +11,12 @@ export function AX_TransferCategoryAccordion({
   isExpanded = false,
   onToggleExpand,
 }) {
+  const [localUnits, setLocalUnits] = useState({})
   const selectedCount = items.filter((it) => (Number(selectedQuantities[it.id]?.quantity) || 0) > 0).length
-  const totalCategoryQty = items.reduce(
+  const totalCategoryQty = roundMax3(items.reduce(
     (sum, it) => sum + (Number(selectedQuantities[it.id]?.quantity) || 0),
     0
-  )
+  ))
 
   return (
     <div className="border border-outline-variant/30 rounded-2xl bg-surface-lowest overflow-hidden transition-all shadow-sm">
@@ -50,10 +53,11 @@ export function AX_TransferCategoryAccordion({
       {isExpanded && (
         <div className="p-3 space-y-2 border-t border-outline-variant/20 bg-surface-lowest animate-fadeIn">
           {items.map((it) => {
-            const currentSel = selectedQuantities[it.id] || { quantity: 0, unit: it.unitType || 'كرتونة' }
+            const currentSel = selectedQuantities[it.id] || { quantity: 0 }
             const currentQty = Number(currentSel.quantity) || 0
-            const currentUnit = currentSel.unit || it.unitType || 'كرتونة'
+            const currentUnit = currentSel.unit || localUnits[it.id] || it.unitType || 'كرتونة'
             const avail = Number(it.availableStock) || 0
+            const unitOptions = Array.from(new Set([it.unitType || 'كرتونة', it.subUnitType || it.sub_unit_type, 'طبق', 'قطعة', 'كيس', 'كيلو'].filter(Boolean)))
 
             return (
               <div
@@ -78,7 +82,7 @@ export function AX_TransferCategoryAccordion({
                     </h4>
                     <div className="flex items-center gap-2 mt-1 flex-wrap">
                       <span className="text-[11px] font-bold text-on-surface-variant">
-                        المتاح: <strong className={avail > 0 ? 'text-primary' : 'text-error'}>{avail}</strong> {it.unitType || 'كرتونة'}
+                        المتاح: <strong className={avail > 0 ? 'text-primary' : 'text-error'}>{formatStockPackages(avail, it.unitType, it)}</strong>
                       </span>
                       {it.subCategory && it.subCategory !== 'عام' && (
                         <span className="px-1.5 py-0.5 rounded-md bg-surface-low text-[10px] font-bold text-on-surface-variant border border-outline-variant/30">
@@ -89,11 +93,11 @@ export function AX_TransferCategoryAccordion({
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
+                <div className="flex items-center gap-2 shrink-0 self-end sm:self-center flex-wrap">
                   <div className="flex items-center border border-outline-variant/40 rounded-full bg-surface-low p-0.5 shadow-sm">
                     <button
                       type="button"
-                      onClick={() => onQuantityChange(it.id, Math.max(0, currentQty - 1), currentUnit, it)}
+                      onClick={() => onQuantityChange(it.id, Math.max(0, roundMax3(currentQty - 1)), currentUnit, it)}
                       disabled={currentQty <= 0}
                       className="w-7 h-7 rounded-full flex items-center justify-center text-on-surface-variant hover:bg-surface-lowest active:scale-95 disabled:opacity-30 disabled:pointer-events-none cursor-pointer"
                     >
@@ -102,29 +106,33 @@ export function AX_TransferCategoryAccordion({
                     <input
                       type="number"
                       min="0"
+                      step="any"
                       value={currentQty === 0 ? '' : currentQty}
                       placeholder="0"
                       onChange={(e) => {
                         const val = Math.max(0, Number(e.target.value) || 0)
-                        onQuantityChange(it.id, val, currentUnit, it)
+                        onQuantityChange(it.id, roundMax3(val), currentUnit, it)
                       }}
                       className="w-14 text-center font-mono font-black text-xs text-on-surface bg-transparent focus:outline-none"
                     />
                     <button
                       type="button"
-                      onClick={() => onQuantityChange(it.id, currentQty + 1, currentUnit, it)}
+                      onClick={() => onQuantityChange(it.id, roundMax3(currentQty + 1), currentUnit, it)}
                       className="w-7 h-7 rounded-full flex items-center justify-center text-primary hover:bg-surface-lowest active:scale-95 cursor-pointer font-black"
                     >
                       <Plus className="w-3.5 h-3.5" />
                     </button>
                   </div>
 
-                  <div className="flex gap-1">
-                    {['كرتونة', 'كيلو', 'قطعة'].map((u) => (
+                  <div className="flex gap-1 flex-wrap">
+                    {unitOptions.map((u) => (
                       <button
                         key={u}
                         type="button"
-                        onClick={() => onQuantityChange(it.id, currentQty, u, it)}
+                        onClick={() => {
+                          setLocalUnits((prev) => ({ ...prev, [it.id]: u }))
+                          if (currentQty > 0) onQuantityChange(it.id, currentQty, u, it)
+                        }}
                         className={`px-2 py-1 rounded-full text-[10px] font-black transition-all cursor-pointer ${
                           currentUnit === u
                             ? 'bg-primary text-white shadow-sm'
@@ -154,6 +162,14 @@ export function AX_TransferCategoryAccordionGroup({
 }) {
   const [searchTerm, setSearchTerm] = useState('')
   const [expandedCategories, setExpandedCategories] = useState({})
+  const [viewMode, setViewMode] = useState(() => {
+    try { return localStorage.getItem('ax_transfer_view_mode') || 'grid' } catch { return 'grid' }
+  })
+
+  const handleChangeViewMode = (mode) => {
+    setViewMode(mode)
+    try { localStorage.setItem('ax_transfer_view_mode', mode) } catch {}
+  }
 
   const itemsWithAvailable = useMemo(() => {
     const stockMap = new Map()
@@ -206,38 +222,72 @@ export function AX_TransferCategoryAccordionGroup({
 
   return (
     <div className="space-y-3">
-      <div className="relative">
-        <input
-          type="text"
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          placeholder="ابحث بالاسم أو الكود لتصفية الأصناف في الأقسام..."
-          className="w-full pl-9 pr-4 py-2.5 rounded-2xl bg-surface-low border border-outline-variant/40 text-on-surface text-xs font-bold focus:border-primary focus:outline-none"
-        />
-        <Search className="w-4 h-4 text-on-surface-variant absolute left-3 top-3 pointer-events-none" />
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <span className="text-[11px] font-bold text-on-surface-variant">شكل عرض واختيار الأصناف:</span>
+        <div className="flex items-center gap-1 bg-surface-low p-0.5 rounded-full border border-outline-variant/30">
+          {[
+            ['grid', 'شبكة الكروت', LayoutGrid],
+            ['compact', 'كروت مدمجة', ListPlus],
+            ['accordion', 'أقسام منسدلة', Layers],
+          ].map(([mode, label, Icon]) => (
+            <button
+              key={mode}
+              type="button"
+              onClick={() => handleChangeViewMode(mode)}
+              className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-[11px] font-black transition-all cursor-pointer ${
+                viewMode === mode ? 'bg-primary text-white shadow-xs' : 'text-on-surface-variant hover:text-on-surface'
+              }`}
+            >
+              <Icon className="w-3 h-3" />
+              <span>{label}</span>
+            </button>
+          ))}
+        </div>
       </div>
 
-      {categoryNames.length === 0 ? (
-        <div className="p-6 text-center text-xs font-bold text-on-surface-variant bg-surface-low rounded-2xl border border-dashed border-outline-variant/40">
-          لا توجد أصناف مطابقة للبحث
-        </div>
+      {viewMode === 'grid' || viewMode === 'compact' ? (
+        <AX_TransferItemsGrid
+          items={itemsWithAvailable}
+          selectedQuantities={selectedQuantities}
+          onQuantityChange={onQuantityChange}
+          layoutMode={viewMode}
+        />
       ) : (
-        <div className="space-y-2">
-          {categoryNames.map((cat) => {
-            const isAutoExpanded = Boolean(searchTerm.trim()) || Boolean(expandedCategories[cat])
-            return (
-              <AX_TransferCategoryAccordion
-                key={cat}
-                category={cat}
-                items={filteredCategories[cat]}
-                selectedQuantities={selectedQuantities}
-                onQuantityChange={onQuantityChange}
-                isExpanded={isAutoExpanded}
-                onToggleExpand={() => toggleCategory(cat)}
-              />
-            )
-          })}
-        </div>
+        <>
+          <div className="relative">
+            <input
+              type="text"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="ابحث بالاسم أو الكود لتصفية الأصناف في الأقسام..."
+              className="w-full pl-9 pr-4 py-2.5 rounded-2xl bg-surface-low border border-outline-variant/40 text-on-surface text-xs font-bold focus:border-primary focus:outline-none"
+            />
+            <Search className="w-4 h-4 text-on-surface-variant absolute left-3 top-3 pointer-events-none" />
+          </div>
+
+          {categoryNames.length === 0 ? (
+            <div className="p-6 text-center text-xs font-bold text-on-surface-variant bg-surface-low rounded-2xl border border-dashed border-outline-variant/40">
+              لا توجد أصناف مطابقة للبحث
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {categoryNames.map((cat) => {
+                const isAutoExpanded = Boolean(searchTerm.trim()) || Boolean(expandedCategories[cat])
+                return (
+                  <AX_TransferCategoryAccordion
+                    key={cat}
+                    category={cat}
+                    items={filteredCategories[cat]}
+                    selectedQuantities={selectedQuantities}
+                    onQuantityChange={onQuantityChange}
+                    isExpanded={isAutoExpanded}
+                    onToggleExpand={() => toggleCategory(cat)}
+                  />
+                )
+              })}
+            </div>
+          )}
+        </>
       )}
     </div>
   )

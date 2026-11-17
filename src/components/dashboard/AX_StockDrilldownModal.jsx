@@ -12,6 +12,7 @@ import {
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock'
 import { useAXStore } from '../../store/useAXStore'
 import { getItemDisplayName } from '../../utils/AX_ItemNameHelper'
+import { formatStockPackages, roundMax3 } from '../../utils/itemUnitFormatters'
 
 export function AX_StockDrilldownModal({ item, isOpen, onClose }) {
   useBodyScrollLock(isOpen)
@@ -53,9 +54,9 @@ export function AX_StockDrilldownModal({ item, isOpen, onClose }) {
     const piecesPerCarton = Number(item.piecesPerCarton) || 0
     const weightPerCarton = Number(item.weightPerCarton) || 0
     const packagingSummary = {
-      totalCartons: totalQuantity,
-      totalPieces: piecesPerCarton > 0 ? totalQuantity * piecesPerCarton : null,
-      totalWeightKg: weightPerCarton > 0 ? totalQuantity * weightPerCarton : null,
+      totalCartons: roundMax3(totalQuantity),
+      totalPieces: piecesPerCarton > 0 ? Math.round(totalQuantity * piecesPerCarton) : null,
+      totalWeightKg: weightPerCarton > 0 ? roundMax3(totalQuantity * weightPerCarton) : null,
     }
 
     return { totalQuantity, byWarehouse, packagingSummary }
@@ -93,7 +94,7 @@ export function AX_StockDrilldownModal({ item, isOpen, onClose }) {
           <div className="bg-surface-low/70 border border-outline-variant/20 rounded-2xl p-3 text-center">
             <span className="text-[11px] font-bold text-on-surface-variant block">إجمالي المخزون</span>
             <span className="text-lg font-black font-mono text-primary">
-              {drilldownData.totalQuantity.toLocaleString('en-US')} {item.unitType || 'كرتونة'}
+              {formatStockPackages(drilldownData.totalQuantity, item.unitType, item)}
             </span>
           </div>
 
@@ -160,7 +161,7 @@ export function AX_StockDrilldownModal({ item, isOpen, onClose }) {
                           {row.manager}
                         </td>
                         <td className="py-2.5 px-3 font-mono font-black text-on-surface">
-                          {row.quantity.toLocaleString('en-US')} {row.unit}
+                          {formatStockPackages(row.quantity, row.unit, item)}
                         </td>
                         <td className="py-2.5 px-3 font-mono font-bold text-center">
                           {row.sharePercentage}%

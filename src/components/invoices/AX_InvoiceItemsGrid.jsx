@@ -3,6 +3,7 @@ import { Search, Plus, Minus, Check, Layers } from 'lucide-react'
 import { getItemDisplayName } from '../../utils/AX_ItemNameHelper'
 import { resolveInvoiceUnitPrice, getCartonEquivalent } from '../../utils/pricingCalculations'
 import { calculateDynamicRemainingStock, getRemainingStockBadge } from './invoiceValidationHelper'
+import { formatStockPackages, roundMax3 } from '../../utils/itemUnitFormatters'
 import { axToast } from '../common/AX_Toast'
 
 export function AX_InvoiceItemsGrid({
@@ -234,7 +235,7 @@ export function AX_InvoiceItemsGrid({
                             ))}
                           </div>
                           <span className={`text-[10px] font-mono font-black px-1.5 py-0.5 rounded-md border shrink-0 ${stockBadge.className}`}>
-                            {stockBadge.text}
+                            متاح: {formatStockPackages(avail, item.unitType, item)}
                           </span>
                           {isAdded && (
                             <span className="w-4 h-4 rounded-full bg-primary text-white flex items-center justify-center shrink-0">
@@ -265,7 +266,7 @@ export function AX_InvoiceItemsGrid({
                               <Minus className="w-2.5 h-2.5" />
                             </button>
                             <span className="font-mono text-xs font-black px-1 text-primary">
-                              {addedQty}
+                              {roundMax3(addedQty)}
                             </span>
                             <button
                               type="button"

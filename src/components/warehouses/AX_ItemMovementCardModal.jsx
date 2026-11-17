@@ -5,6 +5,7 @@ import { AX_ItemOpeningBalanceModal } from '../items/AX_ItemOpeningBalanceModal'
 import { AX_ItemValuationBanner } from '../items/AX_ItemValuationBanner'
 import { calculateItemValuation } from '../../utils/pricingCalculations'
 import { getFifoItemValuation } from '../../utils/fifoCalculations'
+import { formatStockPackages, roundMax3 } from '../../utils/itemUnitFormatters'
 
 export function AX_ItemMovementCardModal({
   isOpen, onClose, item = null, initialWarehouseId = 'ALL', warehouses = [],
@@ -35,7 +36,7 @@ export function AX_ItemMovementCardModal({
     })
   }, [itemId, warehouses, inventoryStock, item, effectivePurchases, effectiveSales, transfers, stockAudits, manufacturingOrders])
 
-  const totalCurrentStock = useMemo(() => Number(stockPerWarehouse.reduce((acc, s) => acc + s.quantity, 0).toFixed(4)), [stockPerWarehouse])
+  const totalCurrentStock = useMemo(() => roundMax3(stockPerWarehouse.reduce((acc, s) => acc + s.quantity, 0)), [stockPerWarehouse])
   const baseCurrentStock = useMemo(() => selectedWhId === 'ALL' ? totalCurrentStock : (stockPerWarehouse.find((s) => s.warehouseId === selectedWhId)?.quantity || 0), [selectedWhId, totalCurrentStock, stockPerWarehouse])
   const selectedWarehouseObj = useMemo(() => selectedWhId === 'ALL' ? null : ((warehouses || []).find((w) => w.id === selectedWhId) || null), [selectedWhId, warehouses])
 
@@ -104,7 +105,7 @@ export function AX_ItemMovementCardModal({
               <Boxes className="w-3.5 h-3.5" />
               <span>كافة المخازن</span>
               <span className={`px-1.5 py-0.2 rounded-full font-mono text-[10px] ${totalCurrentStock < 0 ? 'bg-rose-500 text-white' : selectedWhId === 'ALL' ? 'bg-white/20 text-white' : 'bg-surface-container text-on-surface-variant'}`}>
-                {totalCurrentStock.toLocaleString('en-US')}
+                {formatStockPackages(totalCurrentStock, item.unitType, item)}
               </span>
             </button>
             {stockPerWarehouse.map((w) => {
@@ -119,7 +120,7 @@ export function AX_ItemMovementCardModal({
                   <Warehouse className="w-3.5 h-3.5" />
                   <span>{w.warehouseName}</span>
                   <span className={`px-1.5 py-0.2 rounded-full font-mono text-[10px] ${w.quantity < 0 ? 'bg-rose-500 text-white' : isSelected ? 'bg-white/20 text-white' : 'bg-surface-container text-on-surface-variant'}`}>
-                    {w.quantity.toLocaleString('en-US')}
+                    {formatStockPackages(w.quantity, item.unitType, item)}
                   </span>
                 </button>
               )
@@ -143,7 +144,7 @@ export function AX_ItemMovementCardModal({
                   </button>
                 </div>
                 <div className={`font-mono font-black text-base sm:text-xl ${openingBalance < 0 ? 'text-error' : 'text-on-surface'}`}>
-                  {openingBalance.toLocaleString('en-US')} <span className="text-[11px] font-normal text-on-surface-variant">{item.unitType || 'كرتونة'}</span>
+                  {formatStockPackages(openingBalance, item.unitType, item)}
                 </div>
               </div>
 
@@ -152,9 +153,8 @@ export function AX_ItemMovementCardModal({
                   <span>الرصيد الحالي:</span>
                   <Boxes className="w-4 h-4 text-primary" />
                 </div>
-                <div className={`font-mono font-black text-base sm:text-xl flex items-center gap-1.5 ${currentStock < 0 ? 'text-error' : 'text-primary'}`}>
-                  <span>{currentStock.toLocaleString('en-US')}</span>
-                  <span className="text-[11px] font-normal text-on-surface-variant">{item.unitType || 'كرتونة'}</span>
+                <div className={`font-mono font-black text-base sm:text-xl flex items-center gap-1.5 flex-wrap ${currentStock < 0 ? 'text-error' : 'text-primary'}`}>
+                  <span>{formatStockPackages(currentStock, item.unitType, item)}</span>
                   {currentStock < 0 && <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-rose-500/10 text-rose-700 font-black border border-rose-500/20">سالب</span>}
                 </div>
               </div>
@@ -165,7 +165,7 @@ export function AX_ItemMovementCardModal({
                   <ShoppingBag className="w-4 h-4 text-emerald-600" />
                 </div>
                 <div className="font-mono font-black text-base sm:text-xl text-emerald-700">
-                  +{totalInward.toLocaleString('en-US')} <span className="text-[11px] font-normal text-on-surface-variant">{item.unitType || 'كرتونة'}</span>
+                  +{formatStockPackages(totalInward, item.unitType, item)}
                 </div>
               </div>
 
@@ -175,7 +175,7 @@ export function AX_ItemMovementCardModal({
                   <TrendingUp className="w-4 h-4 text-rose-600" />
                 </div>
                 <div className="font-mono font-black text-base sm:text-xl text-rose-700">
-                  -{totalOutward.toLocaleString('en-US')} <span className="text-[11px] font-normal text-on-surface-variant">{item.unitType || 'كرتونة'}</span>
+                  -{formatStockPackages(totalOutward, item.unitType, item)}
                 </div>
               </div>
             </div>
@@ -261,13 +261,13 @@ export function AX_ItemMovementCardModal({
                                 )}
                               </td>
                               <td className="px-3 text-center font-mono font-black text-emerald-600">
-                                {m.inQty > 0 ? <span>+{m.inQty}{m.unit && m.unit !== 'كرتونة' && <span className="block text-[9px] text-on-surface-variant font-normal">({m.rawQty} {m.unit})</span>}</span> : '—'}
+                                {m.inQty > 0 ? <span>+{formatStockPackages(m.inQty, item.unitType, item)}{m.unit && m.unit !== 'كرتونة' && <span className="block text-[9px] text-on-surface-variant font-normal">({roundMax3(m.rawQty)} {m.unit})</span>}</span> : '—'}
                               </td>
                               <td className="px-3 text-center font-mono font-black text-rose-700">
-                                {m.outQty > 0 ? <span>-{m.outQty}{m.unit && m.unit !== 'كرتونة' && <span className="block text-[9px] text-on-surface-variant font-normal">({m.rawQty} {m.unit})</span>}</span> : '—'}
+                                {m.outQty > 0 ? <span>-{formatStockPackages(m.outQty, item.unitType, item)}{m.unit && m.unit !== 'كرتونة' && <span className="block text-[9px] text-on-surface-variant font-normal">({roundMax3(m.rawQty)} {m.unit})</span>}</span> : '—'}
                               </td>
-                              <td className={`px-3 text-center font-mono font-black ${m.balanceAfter < 0 ? 'text-error' : 'text-primary'}`}>{m.balanceAfter.toLocaleString('en-US')}</td>
-                              <td className="px-3 text-left font-mono font-black text-on-surface">{m.unitPrice > 0 ? `${m.unitPrice.toLocaleString('en-US')} ج.م` : '—'}</td>
+                              <td className={`px-3 text-center font-mono font-black ${m.balanceAfter < 0 ? 'text-error' : 'text-primary'}`}>{formatStockPackages(m.balanceAfter, item.unitType, item)}</td>
+                              <td className="px-3 text-left font-mono font-black text-on-surface">{m.unitPrice > 0 ? `${roundMax3(m.unitPrice).toLocaleString('en-US')} ج.م` : '—'}</td>
                             </tr>
                           ))}
                           <tr className="bg-secondary/5 font-black text-on-surface border-t-2 border-secondary/20">
@@ -276,7 +276,7 @@ export function AX_ItemMovementCardModal({
                             <td className="px-3 py-2 text-on-surface-variant text-[11px]">الرصيد الدفتري الافتتاحي</td>
                             <td className="px-3 py-2 text-center text-on-surface-variant">—</td>
                             <td className="px-3 py-2 text-center text-on-surface-variant">—</td>
-                            <td className={`px-3 py-2 text-center font-mono text-sm ${openingBalance < 0 ? 'text-error' : 'text-secondary font-black'}`}>{openingBalance.toLocaleString('en-US')}</td>
+                            <td className={`px-3 py-2 text-center font-mono text-sm ${openingBalance < 0 ? 'text-error' : 'text-secondary font-black'}`}>{formatStockPackages(openingBalance, item.unitType, item)}</td>
                             <td className="px-3 py-2 text-left text-on-surface-variant">—</td>
                           </tr>
                         </tbody>
@@ -305,19 +305,19 @@ export function AX_ItemMovementCardModal({
                           </div>
                           <div className="flex items-center justify-between text-xs pt-1.5 border-t border-surface-container/50">
                             <div>
-                              {m.inQty > 0 && <span className="font-mono font-black text-emerald-700">وارد: +{m.inQty} {item.unitType || 'كرتونة'}</span>}
-                              {m.outQty > 0 && <span className="font-mono font-black text-rose-700">منصرف: -{m.outQty} {item.unitType || 'كرتونة'}</span>}
+                              {m.inQty > 0 && <span className="font-mono font-black text-emerald-700">وارد: +{formatStockPackages(m.inQty, item.unitType, item)}</span>}
+                              {m.outQty > 0 && <span className="font-mono font-black text-rose-700">منصرف: -{formatStockPackages(m.outQty, item.unitType, item)}</span>}
                               {m.inQty === 0 && m.outQty === 0 && <span className="text-on-surface-variant font-bold">—</span>}
                             </div>
                             <div className="text-left font-mono">
                               <span className="text-[11px] text-on-surface-variant ml-1">الرصيد:</span>
-                              <strong className={`font-black ${m.balanceAfter < 0 ? 'text-error' : 'text-primary'}`}>{m.balanceAfter.toLocaleString('en-US')}</strong>
+                              <strong className={`font-black ${m.balanceAfter < 0 ? 'text-error' : 'text-primary'}`}>{formatStockPackages(m.balanceAfter, item.unitType, item)}</strong>
                             </div>
                           </div>
                           {m.unitPrice > 0 && (
                             <div className="text-[11px] font-bold text-on-surface-variant pt-1 border-t border-surface-container/30 flex justify-between">
                               <span>السعر:</span>
-                              <span className="font-mono text-on-surface font-black">{m.unitPrice.toLocaleString('en-US')} ج.م</span>
+                              <span className="font-mono text-on-surface font-black">{roundMax3(m.unitPrice).toLocaleString('en-US')} ج.م</span>
                             </div>
                           )}
                         </div>
@@ -326,7 +326,7 @@ export function AX_ItemMovementCardModal({
                       <div className="p-3 rounded-2xl bg-secondary/10 border border-secondary/25 space-y-1">
                         <div className="flex items-center justify-between text-xs">
                           <span className="font-black text-secondary">رصيد أول المدة (بداية الفترة)</span>
-                          <span className="font-mono font-black text-secondary">{openingBalance.toLocaleString('en-US')} {item.unitType || 'كرتونة'}</span>
+                          <span className="font-mono font-black text-secondary">{formatStockPackages(openingBalance, item.unitType, item)}</span>
                         </div>
                       </div>
                     </div>
@@ -356,12 +356,12 @@ export function AX_ItemMovementCardModal({
                             <span>{s.warehouseName}</span>
                           </td>
                           <td className={`px-3 text-center font-mono font-black text-sm ${Number(s.quantity) < 0 ? 'text-error' : 'text-primary'}`}>
-                            {s.quantity.toLocaleString('en-US')}
+                            {formatStockPackages(s.quantity, s.unit, item)}
                             {Number(s.quantity) < 0 && <span className="mr-1 text-[10px] px-1.5 py-0.2 rounded-full bg-rose-500/10 text-rose-700">سالب</span>}
                           </td>
                           <td className="px-3 text-center text-on-surface-variant text-[11px]">{s.unit}</td>
-                          <td className="px-3 text-left font-mono font-black text-on-surface">{(s.quantity * buyPrice).toLocaleString('en-US')} ج.م</td>
-                          <td className="px-3 text-left font-mono font-black text-primary">{(s.quantity * sellPrice).toLocaleString('en-US')} ج.م</td>
+                          <td className="px-3 text-left font-mono font-black text-on-surface">{roundMax3(s.quantity * buyPrice).toLocaleString('en-US')} ج.م</td>
+                          <td className="px-3 text-left font-mono font-black text-primary">{roundMax3(s.quantity * sellPrice).toLocaleString('en-US')} ج.م</td>
                         </tr>
                       ))}
                     </tbody>
@@ -377,12 +377,12 @@ export function AX_ItemMovementCardModal({
                           <span>{s.warehouseName}</span>
                         </span>
                         <span className={`font-mono font-black text-sm ${Number(s.quantity) < 0 ? 'text-error' : 'text-primary'}`}>
-                          {s.quantity.toLocaleString('en-US')} {s.unit}
+                          {formatStockPackages(s.quantity, s.unit, item)}
                         </span>
                       </div>
                       <div className="flex items-center justify-between text-[11px] font-bold text-on-surface-variant pt-1 border-t border-surface-container/30">
-                        <span>تكلفة: {(s.quantity * buyPrice).toLocaleString('en-US')} ج</span>
-                        <span>بيع: {(s.quantity * sellPrice).toLocaleString('en-US')} ج</span>
+                        <span>تكلفة: {roundMax3(s.quantity * buyPrice).toLocaleString('en-US')} ج</span>
+                        <span>بيع: {roundMax3(s.quantity * sellPrice).toLocaleString('en-US')} ج</span>
                       </div>
                     </div>
                   ))}

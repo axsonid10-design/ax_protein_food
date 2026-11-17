@@ -5,6 +5,7 @@ import {
   Boxes,
   CheckCheck,
 } from 'lucide-react'
+import { roundMax3, formatStockPackages } from '../../utils/itemUnitFormatters'
 
 export function AX_StockAuditCategoryGroup({
   category,
@@ -79,7 +80,6 @@ export function AX_StockAuditCategoryGroup({
 
       {isExpanded && (
         <div>
-          {/* Desktop Table View */}
           <div className="hidden md:block overflow-x-auto">
             <table className="w-full text-right text-xs">
               <thead>
@@ -155,7 +155,7 @@ export function AX_StockAuditCategoryGroup({
                         </div>
                       </td>
                       <td className="px-3 text-center font-mono text-on-surface font-black whitespace-nowrap">
-                        {r.systemQty} <span className="text-[10px] text-on-surface-variant font-normal">{baseUnit}</span>
+                        {formatStockPackages(r.systemQty, baseUnit, r)}
                       </td>
                       <td className="px-3 text-center whitespace-nowrap">
                         <div className="flex flex-col items-center gap-0.5">
@@ -168,7 +168,7 @@ export function AX_StockAuditCategoryGroup({
                           />
                           {isUnitConverted && (
                             <span className="text-[9px] text-primary font-black font-mono">
-                              = {r.actualQtyNum} {baseUnit}
+                              = {roundMax3(r.actualQtyNum)} {baseUnit}
                             </span>
                           )}
                         </div>
@@ -211,7 +211,7 @@ export function AX_StockAuditCategoryGroup({
                               : 'text-emerald-600'
                           }
                         >
-                          {r.variance > 0 ? `+${r.variance}` : r.variance} {baseUnit}
+                          {roundMax3(r.variance) > 0 ? `+${roundMax3(r.variance)}` : roundMax3(r.variance)} {baseUnit}
                         </span>
                       </td>
                       <td className="px-2 text-center whitespace-nowrap">
@@ -251,7 +251,6 @@ export function AX_StockAuditCategoryGroup({
             </table>
           </div>
 
-          {/* Mobile Bento Cards View */}
           <div className="md:hidden divide-y divide-surface-container/40 p-2 space-y-2">
             {items.map((r) => {
               const currentAuditUnit = r.auditUnit || r.unit || 'كرتونة'
@@ -302,7 +301,7 @@ export function AX_StockAuditCategoryGroup({
                   <div className="grid grid-cols-2 gap-2 text-[11px] font-mono">
                     <div className="p-1.5 rounded-lg bg-surface-lowest border border-outline-variant/20 flex justify-between">
                       <span className="text-on-surface-variant">الدفتري:</span>
-                      <span className="font-black text-on-surface">{r.systemQty} {baseUnit}</span>
+                      <span className="font-black text-on-surface">{formatStockPackages(r.systemQty, baseUnit, r)}</span>
                     </div>
                     <div className="p-1.5 rounded-lg bg-surface-lowest border border-outline-variant/20 flex justify-between">
                       <span className="text-on-surface-variant">الفارق:</span>
@@ -315,7 +314,7 @@ export function AX_StockAuditCategoryGroup({
                             : 'text-emerald-600'
                         }`}
                       >
-                        {r.variance > 0 ? `+${r.variance}` : r.variance} {baseUnit}
+                        {roundMax3(r.variance) > 0 ? `+${roundMax3(r.variance)}` : roundMax3(r.variance)} {baseUnit}
                       </span>
                     </div>
                   </div>
@@ -355,7 +354,7 @@ export function AX_StockAuditCategoryGroup({
                   </div>
                   {isUnitConverted && (
                     <div className="text-[10px] text-primary font-bold text-left font-mono">
-                      يعادل: {r.actualQtyNum} {baseUnit}
+                      يعادل: {roundMax3(r.actualQtyNum)} {baseUnit}
                     </div>
                   )}
                 </div>

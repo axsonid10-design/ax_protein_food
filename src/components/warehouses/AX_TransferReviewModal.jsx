@@ -2,6 +2,7 @@ import React from 'react'
 import { Check, ArrowRight, X, Warehouse, ArrowLeftRight, Calendar, PackageCheck, Layers, FileText } from 'lucide-react'
 import { formatDateOnly } from '../../utils/dateHelpers'
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock'
+import { roundMax3 } from '../../utils/itemUnitFormatters'
 
 export function AX_TransferReviewModal({
   isOpen,
@@ -95,7 +96,7 @@ export function AX_TransferReviewModal({
                 الأصناف المحولة حسب الأقسام ({totalItemsCount} صنف)
               </span>
               <span className="text-xs font-black text-primary font-mono">
-                إجمالي الكمية: {totalQuantities}
+                إجمالي الكمية: {roundMax3(totalQuantities)}
               </span>
             </div>
 
@@ -132,14 +133,14 @@ export function AX_TransferReviewModal({
                         </div>
                         <div className="flex items-center gap-2 shrink-0">
                           <span className="font-mono font-black text-primary text-sm">
-                            {item.quantity}
+                            {roundMax3(item.quantity)}
                           </span>
                           <span className="px-2 py-0.5 rounded-full bg-surface-low border border-outline-variant/30 text-on-surface-variant text-[11px] font-bold">
                             {item.unit || 'كرتونة'}
                           </span>
                           {item.unit && item.unit !== 'كرتونة' && item.cartonEquivalent !== undefined && (
                             <span className="text-[10px] font-bold text-on-surface-variant">
-                              ({item.cartonEquivalent} كرتونة)
+                              ({roundMax3(item.cartonEquivalent)} كرتونة)
                             </span>
                           )}
                         </div>

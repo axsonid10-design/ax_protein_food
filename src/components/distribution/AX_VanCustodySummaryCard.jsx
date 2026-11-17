@@ -17,6 +17,7 @@ import {
   calculateItemBreakdown,
   calculateVanCustodyTotals,
 } from '../../store/vanDistributionHelpers'
+import { formatStockPackages, roundMax3 } from '../../utils/itemUnitFormatters'
 
 export function AX_VanCustodySummaryCard({
   currentVan,
@@ -147,16 +148,16 @@ export function AX_VanCustodySummaryCard({
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 p-3 rounded-2xl bg-surface-low border border-outline-variant/20">
             <div>
               <span className="text-[11px] font-bold text-on-surface-variant block">إجمالي الكراتين</span>
-              <span className="text-sm font-mono font-black text-primary">{totals.totalCartons} ك</span>
+              <span className="text-sm font-mono font-black text-primary">{roundMax3(totals.totalCartons)} ك</span>
             </div>
             <div>
               <span className="text-[11px] font-bold text-on-surface-variant block">إجمالي الوزن</span>
-              <span className="text-sm font-mono font-black text-on-surface">{totals.totalWeightKg} كجم</span>
+              <span className="text-sm font-mono font-black text-on-surface">{roundMax3(totals.totalWeightKg)} كجم</span>
             </div>
             <div>
               <span className="text-[11px] font-bold text-on-surface-variant block">القيمة التقديرية</span>
               <span className="text-sm font-mono font-black text-secondary">
-                {totals.totalValueEgp.toLocaleString('en-US')} ج.م
+                {roundMax3(totals.totalValueEgp).toLocaleString('en-US')} ج.م
               </span>
             </div>
           </div>
@@ -202,7 +203,7 @@ export function AX_VanCustodySummaryCard({
                     </div>
 
                     <div className="text-left font-mono font-black text-sm text-primary">
-                      {s.quantity} {s.unit || 'كرتونة'}
+                      {formatStockPackages(s.quantity, s.unit, it)}
                     </div>
                   </div>
                 )

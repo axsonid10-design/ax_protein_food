@@ -12,6 +12,7 @@ import {
 import { useAXStore } from '../../store/useAXStore'
 import { AX_StockDrilldownModal } from './AX_StockDrilldownModal'
 import { getItemDisplayName } from '../../utils/AX_ItemNameHelper'
+import { formatStockPackages, roundMax3 } from '../../utils/itemUnitFormatters'
 
 export function AX_PinnedStockWidget() {
   const { items = [], inventoryStock = [] } = useAXStore()
@@ -103,16 +104,13 @@ export function AX_PinnedStockWidget() {
 
               <div className="flex items-baseline gap-1 pt-0.5">
                 <span className={`text-base sm:text-xl font-black font-mono ${qty < 0 ? 'text-error' : 'text-primary'}`}>
-                  {qty.toLocaleString('en-US')}
-                </span>
-                <span className="text-[11px] font-bold text-on-surface-variant">
-                  {item.unitType || 'كرتونة'}
+                  {formatStockPackages(qty, item.unitType, item)}
                 </span>
               </div>
 
               <div className="flex items-center justify-between text-[10px] text-on-surface-variant font-bold pt-1 border-t border-outline-variant/20 w-full">
-                <span>{piecesPerCarton > 0 ? `${(qty * piecesPerCarton).toLocaleString('en-US')} قطعة` : '—'}</span>
-                <span>{weightPerCarton > 0 ? `${(qty * weightPerCarton).toLocaleString('en-US')} كجم` : '—'}</span>
+                <span>{piecesPerCarton > 0 ? `${Math.round(qty * piecesPerCarton).toLocaleString('en-US')} ${item.subUnitType || 'قطعة'}` : '—'}</span>
+                <span>{weightPerCarton > 0 ? `${roundMax3(qty * weightPerCarton).toLocaleString('en-US')} كجم` : '—'}</span>
               </div>
             </button>
           )
