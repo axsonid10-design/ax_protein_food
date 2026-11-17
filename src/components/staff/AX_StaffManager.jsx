@@ -108,7 +108,7 @@ export function AX_StaffManager() {
               id: u.id,
               code: `EMP-${String(u.id).slice(-4)}`,
               name: u.full_name,
-              role: u.role === 'super_admin' ? 'admin' : 'staff',
+              role: (u.role === 'super_admin' || u.role === 'admin' || (typeof u.role === 'string' && u.role.includes('مدير'))) ? 'admin' : 'staff',
               roleTitle: u.role || 'موظف',
               phone: u.phone || '',
               email: u.email,

@@ -372,11 +372,30 @@ export function isMasterUser(user) {
   )
 }
 
+export function isAdminUser(user) {
+  if (!user) return false
+  if (isMasterUser(user)) return true
+  const roleStr = String(user.role || '').toLowerCase()
+  return (
+    roleStr === 'admin' ||
+    roleStr === 'super_admin' ||
+    roleStr === 'manager' ||
+    roleStr.includes('مدير') ||
+    user.isMaster === true ||
+    user.is_master === true
+  )
+}
+
 export function hasModulePermission(user, moduleId, action = 'view') {
   if (!user) return false
-  if (isMasterUser(user) || user.role === 'admin') return true
+  if (isMasterUser(user)) return true
   const perms = Array.isArray(user.permissions) ? normalizePermissions(user.permissions) : (user.permissions || {})
   const mod = perms[moduleId]
+  if (isAdminUser(user)) {
+    if (!mod) return true
+    if (action === 'view') return mod.view !== false
+    return mod[action] !== undefined ? Boolean(mod[action]) : true
+  }
   if (!mod || !mod.view) return false
   if (action === 'view') return true
   return Boolean(mod[action])
@@ -385,27 +404,45 @@ export function hasModulePermission(user, moduleId, action = 'view') {
 export function hasModuleAccess(user, moduleId) {
   if (!user) return false
   if (isMasterUser(user)) return true
-  if (moduleId === 'staff' || moduleId === 'recycle_bin') {
-    return isMasterUser(user) || user.role === 'super_admin' || user.role === 'admin'
+  const isAdmin = isAdminUser(user)
+  const perms = Array.isArray(user.permissions) ? normalizePermissions(user.permissions) : (user.permissions || {})
+  const mod = perms[moduleId]
+
+  if (moduleId === 'staff') {
+    return isAdmin || Boolean(mod && mod.view) || Boolean(perms.staff && perms.staff.view) || Boolean(perms.staff && perms.staff.manage_permissions)
+  }
+  if (moduleId === 'recycle_bin') {
+    return (
+      isAdmin ||
+      Boolean(mod && mod.view) ||
+      Boolean(perms.recycle_bin && perms.recycle_bin.view) ||
+      Boolean(perms.staff && perms.staff.view) ||
+      Boolean(perms.staff && perms.staff.manage_permissions)
+    )
   }
   if (moduleId === 'employees') {
-    return isMasterUser(user) || user.role === 'super_admin' || user.role === 'admin' || user.role === 'accountant' || user.role === 'branch_manager'
+    return (
+      isAdmin ||
+      user.role === 'accountant' ||
+      user.role === 'branch_manager' ||
+      Boolean(mod && mod.view) ||
+      Boolean(perms.employees && perms.employees.view) ||
+      Boolean(perms.staff && perms.staff.view)
+    )
   }
   if (moduleId === 'expenses') {
-    if (isMasterUser(user) || user.role === 'admin' || user.role === 'super_admin' || user.role === 'accountant') return true
-    const perms = Array.isArray(user.permissions) ? normalizePermissions(user.permissions) : (user.permissions || {})
-    const mod = perms[moduleId]
+    if (isAdmin || user.role === 'accountant') return true
     return Boolean(mod && mod.view)
   }
   if (moduleId === 'sales' || moduleId === 'purchases') {
-    if (isMasterUser(user) || user.role === 'admin' || user.role === 'super_admin') return true
-    const perms = Array.isArray(user.permissions) ? normalizePermissions(user.permissions) : (user.permissions || {})
-    const mod = perms[moduleId] || perms['invoices']
-    return Boolean(mod && mod.view)
+    if (isAdmin) return true
+    const invMod = perms['invoices']
+    return Boolean((mod && mod.view) || (invMod && invMod.view))
   }
-  if (user.role === 'admin') return true
-  const perms = Array.isArray(user.permissions) ? normalizePermissions(user.permissions) : (user.permissions || {})
-  const mod = perms[moduleId]
+  if (isAdmin) {
+    if (mod && mod.view === false) return false
+    return true
+  }
   return Boolean(mod && mod.view)
 }
 
@@ -425,6 +462,7 @@ export function getFirstAccessibleTab(user) {
     'reports',
     'employees',
     'staff',
+    'recycle_bin',
   ]
   for (const tab of tabsOrder) {
     if (hasModuleAccess(user, tab)) return tab

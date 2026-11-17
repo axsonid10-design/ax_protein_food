@@ -223,7 +223,7 @@ export function AX_Sidebar({ activeTab, onSelectTab, onOpenMasterControl }) {
             </div>
             <div className="text-right leading-none min-w-0 flex-1">
               <span className="text-xs font-black text-on-surface truncate block">{userName}</span>
-              <span className="text-[10px] text-on-surface-variant font-bold">صلاحيات كاملة</span>
+              <span className="text-[10px] text-on-surface-variant font-bold truncate block">{profile?.role || 'صلاحيات كاملة'}</span>
             </div>
           </div>
         ) : (

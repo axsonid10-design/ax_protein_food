@@ -431,7 +431,7 @@ export const AX_DatabaseSync = {
       if (Array.isArray(usersProfiles)) {
         payload.employees = usersProfiles.map((u) => ({
           id: u.id, code: `EMP-${String(u.id).slice(-4)}`, name: u.full_name,
-          role: u.role === 'super_admin' ? 'admin' : 'staff', roleTitle: u.role || 'موظف',
+          role: (u.role === 'super_admin' || u.role === 'admin' || (typeof u.role === 'string' && u.role.includes('مدير'))) ? 'admin' : 'staff', roleTitle: u.role || 'موظف',
           phone: u.phone || '', email: u.email, warehouseId: u.branch_id || 'all',
           warehouseName: u.branch_id ? 'مخزن' : 'كافة الفروع والمخازن',
           status: u.is_active ? 'active' : 'suspended', permissions: u.permissions || {},
