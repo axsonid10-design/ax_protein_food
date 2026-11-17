@@ -139,7 +139,7 @@ export function AX_InvoicePrintModal({ invoice, isOpen, onClose }) {
 
   return (
     <>
-      <div className="ax-print-modal-backdrop fixed inset-0 z-50 flex flex-col bg-slate-950/95 backdrop-blur-md animate-fadeIn overscroll-contain">
+      <div className="ax-print-modal-backdrop fixed inset-0 z-[80] flex flex-col bg-slate-950/95 backdrop-blur-md animate-fadeIn overscroll-contain">
         <div className="ax-print-controls flex items-center justify-between px-3 sm:px-6 py-2 bg-surface-lowest/95 border-b border-outline-variant/30 text-on-surface shadow-xs print:hidden z-10 gap-2 flex-wrap">
           <div className="flex items-center gap-2">
             <div className="flex items-center gap-1.5">

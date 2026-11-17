@@ -77,7 +77,7 @@ export function AX_InvoiceDetailsModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in overscroll-contain">
+    <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in overscroll-contain">
       <div className="bg-surface-lowest border border-outline-variant/30 rounded-3xl p-6 shadow-level3 max-w-xl w-full space-y-4 max-h-[90vh] overflow-y-auto overscroll-contain">
         <div className="flex items-center justify-between border-b border-surface-container pb-3">
           <div>

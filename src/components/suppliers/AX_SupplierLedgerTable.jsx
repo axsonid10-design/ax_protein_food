@@ -3,7 +3,7 @@ import { ChevronRight, ChevronLeft, ArrowDownLeft, ArrowUpRight, Receipt, FileTe
 
 const PAGE_SIZE = 8
 
-export function AX_SupplierLedgerTable({ ledgerEntries = [] }) {
+export function AX_SupplierLedgerTable({ ledgerEntries = [], onViewInvoice }) {
   const [currentPage, setCurrentPage] = useState(1)
 
   const totalPages = Math.max(1, Math.ceil(ledgerEntries.length / PAGE_SIZE))
@@ -65,17 +65,33 @@ export function AX_SupplierLedgerTable({ ledgerEntries = [] }) {
                   </td>
                 </tr>
               ) : (
-                paginatedEntries.map((row) => (
-                  <tr key={row.id} className="h-10 hover:bg-surface-container/20">
-                    <td className="px-3 font-mono text-[11px] whitespace-nowrap text-on-surface-variant">
-                      {row.date?.split('T')[0] || row.date}
-                    </td>
-                    <td className="px-3 whitespace-nowrap">
-                      {getTypeBadge(row.type)}
-                    </td>
-                    <td className="px-4 font-bold text-on-surface truncate max-w-[240px]">
-                      {row.description}
-                    </td>
+                paginatedEntries.map((row) => {
+                  const isInvoice = row.type === 'purchase_invoice' || row.type === 'sale_invoice' || row.type === 'purchase_return' || row.type === 'sale_return' || Boolean(row.invoiceObj || row.invoiceId)
+                  return (
+                    <tr
+                      key={row.id}
+                      onClick={() => isInvoice && onViewInvoice?.(row.invoiceObj || row.invoiceId || row.id || row.reference)}
+                      className={`h-10 transition-colors ${
+                        isInvoice ? 'hover:bg-primary/10 cursor-pointer group' : 'hover:bg-surface-container/20'
+                      }`}
+                    >
+                      <td className="px-3 font-mono text-[11px] whitespace-nowrap text-on-surface-variant">
+                        {row.date?.split('T')[0] || row.date}
+                      </td>
+                      <td className="px-3 whitespace-nowrap">
+                        {getTypeBadge(row.type)}
+                      </td>
+                      <td className="px-4 font-bold text-on-surface truncate max-w-[240px]">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className={isInvoice ? 'group-hover:text-primary transition-colors' : ''}>{row.description}</span>
+                          {isInvoice && (
+                            <span className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full bg-primary/10 text-primary text-[10px] font-black border border-primary/20 group-hover:bg-primary group-hover:text-white transition-all">
+                              <FileText className="w-2.5 h-2.5" />
+                              <span>فتح الفاتورة</span>
+                            </span>
+                          )}
+                        </div>
+                      </td>
                     <td className="px-3 font-mono text-red-800 font-bold whitespace-nowrap">
                       {row.credit > 0 ? `${row.credit.toLocaleString('en-US')} ج.م` : '—'}
                     </td>
@@ -91,7 +107,8 @@ export function AX_SupplierLedgerTable({ ledgerEntries = [] }) {
                       </span>
                     </td>
                   </tr>
-                ))
+                  )
+                })
               )}
             </tbody>
           </table>

@@ -1,18 +1,8 @@
 import React, { useState, useMemo } from 'react'
-import {
-  FileSpreadsheet,
-  Printer,
-  ChevronDown,
-  ChevronUp,
-  ChevronRight,
-  ChevronLeft,
-} from 'lucide-react'
-import {
-  formatCurrency,
-  filterByDateRange,
-  exportToCsv,
-} from '../../utils/reportCalculations'
+import { FileSpreadsheet, Printer, ChevronDown, ChevronUp, ChevronRight, ChevronLeft, FileText } from 'lucide-react'
+import { formatCurrency, filterByDateRange, exportToCsv } from '../../utils/reportCalculations'
 import { AX_SearchableSelect } from '../common/AX_SearchableSelect'
+import { AX_InvoiceDetailsModal } from '../invoices/AX_InvoiceDetailsModal'
 
 export function AX_Ledger360Report({
   clients = [],
@@ -26,6 +16,7 @@ export function AX_Ledger360Report({
   const [partyType, setPartyType] = useState('client')
   const [selectedPartyId, setSelectedPartyId] = useState(() => clients[0]?.id || '')
   const [expandedRowId, setExpandedRowId] = useState(null)
+  const [selectedInvoiceForView, setSelectedInvoiceForView] = useState(null)
   const [currentPage, setCurrentPage] = useState(1)
   const pageSize = 15
 
@@ -80,6 +71,7 @@ export function AX_Ledger360Report({
         transport: Number(inv.transportCost) || 0,
         loading: Number(inv.loadingCost) || 0,
         notes: inv.paymentTerms || '',
+        invoiceObj: inv,
       })
 
       if (paid > 0) {
@@ -264,42 +256,23 @@ export function AX_Ledger360Report({
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <div className="bg-surface-lowest border border-outline-variant/30 rounded-2xl p-3.5 shadow-xs">
           <div className="text-[11px] font-bold text-on-surface-variant">رصيد أول المدة</div>
-          <div className="text-base sm:text-lg font-black text-on-surface mt-1">
-            {formatCurrency(ledgerData.initialBalance)}
-          </div>
-          <div className="text-[10px] font-bold text-on-surface-variant mt-0.5">
-            {currentParty?.phone || 'بدون هاتف'}
-          </div>
+          <div className="text-base sm:text-lg font-black text-on-surface mt-1">{formatCurrency(ledgerData.initialBalance)}</div>
+          <div className="text-[10px] font-bold text-on-surface-variant mt-0.5">{currentParty?.phone || 'بدون هاتف'}</div>
         </div>
-
         <div className="bg-surface-lowest border border-outline-variant/30 rounded-2xl p-3.5 shadow-xs">
           <div className="text-[11px] font-bold text-on-surface-variant">إجمالي حركات المدين (+)</div>
-          <div className="text-base sm:text-lg font-black text-primary mt-1">
-            {formatCurrency(ledgerData.totalDebit)}
-          </div>
-          <div className="text-[10px] font-bold text-on-surface-variant mt-0.5">
-            فواتير ومستحقات
-          </div>
+          <div className="text-base sm:text-lg font-black text-primary mt-1">{formatCurrency(ledgerData.totalDebit)}</div>
+          <div className="text-[10px] font-bold text-on-surface-variant mt-0.5">فواتير ومستحقات</div>
         </div>
-
         <div className="bg-surface-lowest border border-outline-variant/30 rounded-2xl p-3.5 shadow-xs">
           <div className="text-[11px] font-bold text-on-surface-variant">إجمالي حركات الدائن (-)</div>
-          <div className="text-base sm:text-lg font-black text-emerald-600 mt-1">
-            {formatCurrency(ledgerData.totalCredit)}
-          </div>
-          <div className="text-[10px] font-bold text-emerald-700 mt-0.5">
-            سدادات ومقبوضات
-          </div>
+          <div className="text-base sm:text-lg font-black text-emerald-600 mt-1">{formatCurrency(ledgerData.totalCredit)}</div>
+          <div className="text-[10px] font-bold text-emerald-700 mt-0.5">سدادات ومقبوضات</div>
         </div>
-
         <div className="bg-surface-lowest border border-outline-variant/30 rounded-2xl p-3.5 shadow-xs">
           <div className="text-[11px] font-bold text-on-surface-variant">الرصيد الختامي المستحق</div>
-          <div className="text-base sm:text-lg font-black text-rose-700 mt-1">
-            {formatCurrency(ledgerData.finalBalance)}
-          </div>
-          <div className="text-[10px] font-bold text-rose-700 mt-0.5">
-            صافي المديونية الحالية
-          </div>
+          <div className="text-base sm:text-lg font-black text-rose-700 mt-1">{formatCurrency(ledgerData.finalBalance)}</div>
+          <div className="text-[10px] font-bold text-rose-700 mt-0.5">صافي المديونية الحالية</div>
         </div>
       </div>
 
@@ -337,7 +310,22 @@ export function AX_Ledger360Report({
                           {tx.date}
                         </td>
                         <td className="px-3.5 font-mono font-black text-primary whitespace-nowrap">
-                          {tx.code}
+                          {tx.category === 'invoice' ? (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const found = tx.invoiceObj || invoices.find((i) => i.id === tx.id || i.code === tx.code)
+                                if (found) setSelectedInvoiceForView(found)
+                              }}
+                              className="inline-flex items-center gap-1 hover:underline cursor-pointer text-primary font-black"
+                              title="فتح الفاتورة"
+                            >
+                              <span>{tx.code}</span>
+                              <FileText className="w-2.5 h-2.5 opacity-70" />
+                            </button>
+                          ) : (
+                            tx.code
+                          )}
                         </td>
                         <td className="px-3.5 whitespace-nowrap">
                           <span
@@ -424,7 +412,21 @@ export function AX_Ledger360Report({
             paginatedTransactions.map((tx) => (
               <div key={tx.id} className="bg-surface-low/50 rounded-2xl p-3 space-y-2 border border-outline-variant/20">
                 <div className="flex items-center justify-between text-xs">
-                  <span className="font-mono font-black text-primary">{tx.code}</span>
+                  {tx.category === 'invoice' ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const found = tx.invoiceObj || invoices.find((i) => i.id === tx.id || i.code === tx.code)
+                        if (found) setSelectedInvoiceForView(found)
+                      }}
+                      className="inline-flex items-center gap-1 font-mono font-black text-primary hover:underline cursor-pointer"
+                    >
+                      <span>{tx.code}</span>
+                      <FileText className="w-2.5 h-2.5 opacity-70" />
+                    </button>
+                  ) : (
+                    <span className="font-mono font-black text-primary">{tx.code}</span>
+                  )}
                   <span className="font-mono text-[10px] text-on-surface-variant">{tx.date}</span>
                 </div>
                 <div className="text-xs font-bold text-on-surface">{tx.type} - {tx.notes}</div>
@@ -477,6 +479,14 @@ export function AX_Ledger360Report({
           </div>
         )}
       </div>
+
+      {selectedInvoiceForView && (
+        <AX_InvoiceDetailsModal
+          invoice={selectedInvoiceForView}
+          onClose={() => setSelectedInvoiceForView(null)}
+          invoices={invoices}
+        />
+      )}
     </div>
   )
 }

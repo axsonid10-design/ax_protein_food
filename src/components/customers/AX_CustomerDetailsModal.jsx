@@ -21,11 +21,13 @@ import { useBodyScrollLock } from '../../hooks/useBodyScrollLock'
 import { useAXStore } from '../../store/useAXStore'
 import { getTransformedUrl } from '../../services/imageKitService'
 import { getCustomerAdjustments } from './customerAdjustmentHelpers'
+import { AX_InvoiceDetailsModal } from '../invoices/AX_InvoiceDetailsModal'
 
 export function AX_CustomerDetailsModal({ customer, isOpen, onClose }) {
   useBodyScrollLock(isOpen)
-  const { invoices = [], cashTransactions = [] } = useAXStore()
+  const { invoices = [], cashTransactions = [], warehouses = [] } = useAXStore()
   const [selectedPhoto, setSelectedPhoto] = useState(null)
+  const [selectedInvoiceForView, setSelectedInvoiceForView] = useState(null)
   const [activeTab, setActiveTab] = useState('summary')
 
   const ledgerEntries = useMemo(() => {
@@ -69,6 +71,8 @@ export function AX_CustomerDetailsModal({ customer, isOpen, onClose }) {
       const paid = Number(inv.paidAmount || inv.cashPaid) || 0
       entries.push({
         id: inv.id,
+        invoiceId: inv.id,
+        invoiceObj: inv,
         date: inv.date || inv.createdAt || new Date().toISOString(),
         type: isReturn ? 'sale_return' : 'invoice',
         reference: inv.code || inv.id.slice(0, 8),
@@ -331,37 +335,60 @@ export function AX_CustomerDetailsModal({ customer, isOpen, onClose }) {
                       </td>
                     </tr>
                   ) : (
-                    ledgerEntries.map((row) => (
-                      <tr key={row.id} className="hover:bg-surface-container/30 transition-colors">
-                        <td className="py-2.5 px-3 font-mono text-on-surface-variant whitespace-nowrap">
-                          {row.date ? (row.type === 'balance_adjustment' ? String(row.date).replace('T', ' ').slice(0, 16) : String(row.date).split('T')[0]) : '—'}
-                        </td>
-                        <td className="py-2.5 px-3 font-bold text-on-surface">
-                          <div className="flex items-center gap-1.5">
-                            {row.debit > 0 ? (
-                              <ArrowUpRight className="w-3.5 h-3.5 text-red-700 flex-shrink-0" />
-                            ) : (
-                              <ArrowDownLeft className="w-3.5 h-3.5 text-emerald-600 flex-shrink-0" />
-                            )}
-                            <span>{row.description}</span>
-                            {row.type === 'balance_adjustment' && (
-                              <span className="px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-800 text-[10px] font-bold">
-                                تسوية معتمدة
-                              </span>
-                            )}
-                          </div>
-                        </td>
-                        <td className="py-2.5 px-3 font-mono font-bold text-red-800">
-                          {row.debit > 0 ? `${row.debit.toLocaleString('en-US')} ج.م` : '—'}
-                        </td>
-                        <td className="py-2.5 px-3 font-mono font-bold text-emerald-700">
-                          {row.credit > 0 ? `${row.credit.toLocaleString('en-US')} ج.م` : '—'}
-                        </td>
-                        <td className="py-2.5 px-3 font-mono font-black text-on-surface">
-                          {row.runningBalance.toLocaleString('en-US')} ج.م
-                        </td>
-                      </tr>
-                    ))
+                    ledgerEntries.map((row) => {
+                      const isInvoice = row.type === 'invoice' || row.type === 'sale_return' || Boolean(row.invoiceId || row.invoiceObj)
+                      const handleRowClick = () => {
+                        if (!isInvoice) return
+                        const found = (invoices || []).find((i) => i.id === row.id || i.id === row.invoiceId || i.code === row.reference) || row.invoiceObj
+                        if (found) setSelectedInvoiceForView(found)
+                      }
+
+                      return (
+                        <tr
+                          key={row.id}
+                          onClick={isInvoice ? handleRowClick : undefined}
+                          className={`transition-colors ${
+                            isInvoice
+                              ? 'hover:bg-primary/10 cursor-pointer group'
+                              : 'hover:bg-surface-container/30'
+                          }`}
+                        >
+                          <td className="py-2.5 px-3 font-mono text-on-surface-variant whitespace-nowrap">
+                            {row.date ? (row.type === 'balance_adjustment' ? String(row.date).replace('T', ' ').slice(0, 16) : String(row.date).split('T')[0]) : '—'}
+                          </td>
+                          <td className="py-2.5 px-3 font-bold text-on-surface">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              {row.debit > 0 ? (
+                                <ArrowUpRight className="w-3.5 h-3.5 text-red-700 flex-shrink-0" />
+                              ) : (
+                                <ArrowDownLeft className="w-3.5 h-3.5 text-emerald-600 flex-shrink-0" />
+                              )}
+                              <span className={isInvoice ? 'group-hover:text-primary transition-colors' : ''}>{row.description}</span>
+                              {isInvoice && (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-primary/10 text-primary text-[10px] font-black border border-primary/20 group-hover:bg-primary group-hover:text-white transition-all">
+                                  <FileText className="w-2.5 h-2.5" />
+                                  <span>فتح الفاتورة</span>
+                                </span>
+                              )}
+                              {row.type === 'balance_adjustment' && (
+                                <span className="px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-800 text-[10px] font-bold">
+                                  تسوية معتمدة
+                                </span>
+                              )}
+                            </div>
+                          </td>
+                          <td className="py-2.5 px-3 font-mono font-bold text-red-800">
+                            {row.debit > 0 ? `${row.debit.toLocaleString('en-US')} ج.م` : '—'}
+                          </td>
+                          <td className="py-2.5 px-3 font-mono font-bold text-emerald-700">
+                            {row.credit > 0 ? `${row.credit.toLocaleString('en-US')} ج.م` : '—'}
+                          </td>
+                          <td className="py-2.5 px-3 font-mono font-black text-on-surface">
+                            {row.runningBalance.toLocaleString('en-US')} ج.م
+                          </td>
+                        </tr>
+                      )
+                    })
                   )}
                 </tbody>
               </table>
@@ -420,6 +447,15 @@ export function AX_CustomerDetailsModal({ customer, isOpen, onClose }) {
               </button>
             </div>
           </div>
+        )}
+
+        {selectedInvoiceForView && (
+          <AX_InvoiceDetailsModal
+            invoice={selectedInvoiceForView}
+            onClose={() => setSelectedInvoiceForView(null)}
+            warehouses={warehouses}
+            invoices={invoices}
+          />
         )}
       </div>
     </div>

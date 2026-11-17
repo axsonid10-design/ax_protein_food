@@ -1,7 +1,6 @@
 import React, { useState, useMemo } from 'react'
-import { ChevronDown, ChevronUp, Search, Plus, Minus, Package, Layers, CheckCircle2, LayoutGrid, ListPlus } from 'lucide-react'
+import { ChevronDown, ChevronUp, Search, Plus, Minus, Package, Layers, CheckCircle2 } from 'lucide-react'
 import { formatStockPackages, roundMax3 } from '../../utils/itemUnitFormatters'
-import { AX_TransferItemsGrid } from './AX_TransferItemsGrid'
 
 export function AX_TransferCategoryAccordion({
   category,
@@ -162,14 +161,6 @@ export function AX_TransferCategoryAccordionGroup({
 }) {
   const [searchTerm, setSearchTerm] = useState('')
   const [expandedCategories, setExpandedCategories] = useState({})
-  const [viewMode, setViewMode] = useState(() => {
-    try { return localStorage.getItem('ax_transfer_view_mode') || 'grid' } catch { return 'grid' }
-  })
-
-  const handleChangeViewMode = (mode) => {
-    setViewMode(mode)
-    try { localStorage.setItem('ax_transfer_view_mode', mode) } catch {}
-  }
 
   const itemsWithAvailable = useMemo(() => {
     const stockMap = new Map()
@@ -222,72 +213,38 @@ export function AX_TransferCategoryAccordionGroup({
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center justify-between flex-wrap gap-2">
-        <span className="text-[11px] font-bold text-on-surface-variant">شكل عرض واختيار الأصناف:</span>
-        <div className="flex items-center gap-1 bg-surface-low p-0.5 rounded-full border border-outline-variant/30">
-          {[
-            ['grid', 'شبكة الكروت', LayoutGrid],
-            ['compact', 'كروت مدمجة', ListPlus],
-            ['accordion', 'أقسام منسدلة', Layers],
-          ].map(([mode, label, Icon]) => (
-            <button
-              key={mode}
-              type="button"
-              onClick={() => handleChangeViewMode(mode)}
-              className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-[11px] font-black transition-all cursor-pointer ${
-                viewMode === mode ? 'bg-primary text-white shadow-xs' : 'text-on-surface-variant hover:text-on-surface'
-              }`}
-            >
-              <Icon className="w-3 h-3" />
-              <span>{label}</span>
-            </button>
-          ))}
-        </div>
+      <div className="relative">
+        <input
+          type="text"
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          placeholder="ابحث بالاسم أو الكود لتصفية الأصناف في الأقسام..."
+          className="w-full pl-9 pr-4 py-2.5 rounded-2xl bg-surface-low border border-outline-variant/40 text-on-surface text-xs font-bold focus:border-primary focus:outline-none"
+        />
+        <Search className="w-4 h-4 text-on-surface-variant absolute left-3 top-3 pointer-events-none" />
       </div>
 
-      {viewMode === 'grid' || viewMode === 'compact' ? (
-        <AX_TransferItemsGrid
-          items={itemsWithAvailable}
-          selectedQuantities={selectedQuantities}
-          onQuantityChange={onQuantityChange}
-          layoutMode={viewMode}
-        />
+      {categoryNames.length === 0 ? (
+        <div className="p-6 text-center text-xs font-bold text-on-surface-variant bg-surface-low rounded-2xl border border-dashed border-outline-variant/40">
+          لا توجد أصناف مطابقة للبحث
+        </div>
       ) : (
-        <>
-          <div className="relative">
-            <input
-              type="text"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="ابحث بالاسم أو الكود لتصفية الأصناف في الأقسام..."
-              className="w-full pl-9 pr-4 py-2.5 rounded-2xl bg-surface-low border border-outline-variant/40 text-on-surface text-xs font-bold focus:border-primary focus:outline-none"
-            />
-            <Search className="w-4 h-4 text-on-surface-variant absolute left-3 top-3 pointer-events-none" />
-          </div>
-
-          {categoryNames.length === 0 ? (
-            <div className="p-6 text-center text-xs font-bold text-on-surface-variant bg-surface-low rounded-2xl border border-dashed border-outline-variant/40">
-              لا توجد أصناف مطابقة للبحث
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {categoryNames.map((cat) => {
-                const isAutoExpanded = Boolean(searchTerm.trim()) || Boolean(expandedCategories[cat])
-                return (
-                  <AX_TransferCategoryAccordion
-                    key={cat}
-                    category={cat}
-                    items={filteredCategories[cat]}
-                    selectedQuantities={selectedQuantities}
-                    onQuantityChange={onQuantityChange}
-                    isExpanded={isAutoExpanded}
-                    onToggleExpand={() => toggleCategory(cat)}
-                  />
-                )
-              })}
-            </div>
-          )}
-        </>
+        <div className="space-y-2">
+          {categoryNames.map((cat) => {
+            const isAutoExpanded = Boolean(searchTerm.trim()) || Boolean(expandedCategories[cat])
+            return (
+              <AX_TransferCategoryAccordion
+                key={cat}
+                category={cat}
+                items={filteredCategories[cat]}
+                selectedQuantities={selectedQuantities}
+                onQuantityChange={onQuantityChange}
+                isExpanded={isAutoExpanded}
+                onToggleExpand={() => toggleCategory(cat)}
+              />
+            )
+          })}
+        </div>
       )}
     </div>
   )

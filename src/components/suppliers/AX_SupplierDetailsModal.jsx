@@ -1,15 +1,17 @@
 import React, { useState, useMemo } from 'react'
-import { X, Building2, Printer } from 'lucide-react'
+import { X, Building2, Printer, FileText } from 'lucide-react'
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock'
 import { useAXStore } from '../../store/useAXStore'
 import { AX_SupplierLedgerTable } from './AX_SupplierLedgerTable'
 import { AX_SupplierProfileTab } from './AX_SupplierProfileTab'
 import { AX_SupplierOverpaymentCard } from './AX_SupplierOverpaymentCard'
+import { AX_InvoiceDetailsModal } from '../invoices/AX_InvoiceDetailsModal'
 
 export function AX_SupplierDetailsModal({ supplier, isOpen, onClose }) {
   useBodyScrollLock(isOpen)
-  const { invoices = [], cashTransactions = [] } = useAXStore()
+  const { invoices = [], cashTransactions = [], warehouses = [] } = useAXStore()
   const [activeTab, setActiveTab] = useState('ledger')
+  const [selectedInvoiceForView, setSelectedInvoiceForView] = useState(null)
 
   const supplierPurchases = useMemo(() => {
     if (!supplier?.id) return []
@@ -88,6 +90,8 @@ export function AX_SupplierDetailsModal({ supplier, isOpen, onClose }) {
 
       entries.push({
         id: inv.id,
+        invoiceId: inv.id,
+        invoiceObj: inv,
         date: inv.createdAt || inv.date || new Date().toISOString(),
         type: isReturn ? 'purchase_return' : 'purchase_invoice',
         reference: inv.invoiceNumber || inv.code || inv.id,
@@ -106,6 +110,8 @@ export function AX_SupplierDetailsModal({ supplier, isOpen, onClose }) {
 
       entries.push({
         id: inv.id,
+        invoiceId: inv.id,
+        invoiceObj: inv,
         date: inv.createdAt || inv.date || new Date().toISOString(),
         type: isReturn ? 'sale_return' : 'sale_invoice',
         reference: inv.invoiceNumber || inv.code || inv.id,
@@ -302,7 +308,13 @@ export function AX_SupplierDetailsModal({ supplier, isOpen, onClose }) {
         </div>
 
         {activeTab === 'ledger' && (
-          <AX_SupplierLedgerTable ledgerEntries={ledgerEntries} />
+          <AX_SupplierLedgerTable
+            ledgerEntries={ledgerEntries}
+            onViewInvoice={(inv) => {
+              const found = typeof inv === 'object' && inv?.id ? inv : (invoices.find((i) => i.id === inv || i.code === inv || i.invoiceNumber === inv))
+              if (found) setSelectedInvoiceForView(found)
+            }}
+          />
         )}
 
         {activeTab === 'purchases' && (
@@ -319,12 +331,17 @@ export function AX_SupplierDetailsModal({ supplier, isOpen, onClose }) {
                 return (
                   <div
                     key={inv.id}
-                    className="p-3 bg-surface-lowest border border-outline-variant/30 rounded-2xl flex items-center justify-between text-xs"
+                    onClick={() => setSelectedInvoiceForView(inv)}
+                    className="p-3 bg-surface-lowest border border-outline-variant/30 hover:border-primary/50 hover:bg-primary/5 rounded-2xl flex items-center justify-between text-xs transition-all cursor-pointer group"
                   >
                     <div>
                       <div className="flex items-center gap-2">
-                        <span className="font-mono font-black text-on-surface">#{inv.code || inv.invoiceNumber || inv.id.slice(0, 8)}</span>
+                        <span className="font-mono font-black text-on-surface group-hover:text-primary transition-colors">#{inv.code || inv.invoiceNumber || inv.id.slice(0, 8)}</span>
                         <span className="text-[11px] font-mono text-on-surface-variant">{inv.date}</span>
+                        <span className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full bg-primary/10 text-primary text-[10px] font-black border border-primary/20 group-hover:bg-primary group-hover:text-white transition-all">
+                          <FileText className="w-2.5 h-2.5" />
+                          <span>فتح الفاتورة</span>
+                        </span>
                       </div>
                       <span className="text-[11px] text-on-surface-variant block mt-0.5">
                         الأصناف: {inv.items ? inv.items.length : 1} صنف • {inv.paymentTerms || 'توريد'}
@@ -359,14 +376,19 @@ export function AX_SupplierDetailsModal({ supplier, isOpen, onClose }) {
                 return (
                   <div
                     key={inv.id}
-                    className="p-3 bg-surface-lowest border border-outline-variant/30 rounded-2xl flex items-center justify-between text-xs"
+                    onClick={() => setSelectedInvoiceForView(inv)}
+                    className="p-3 bg-surface-lowest border border-outline-variant/30 hover:border-primary/50 hover:bg-primary/5 rounded-2xl flex items-center justify-between text-xs transition-all cursor-pointer group"
                   >
                     <div>
                       <div className="flex items-center gap-2">
-                        <span className="font-mono font-black text-on-surface">#{inv.code || inv.invoiceNumber || inv.id.slice(0, 8)}</span>
+                        <span className="font-mono font-black text-on-surface group-hover:text-primary transition-colors">#{inv.code || inv.invoiceNumber || inv.id.slice(0, 8)}</span>
                         <span className="text-[11px] font-mono text-on-surface-variant">{inv.date}</span>
                         <span className="px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-800 text-[10px] font-bold">
                           {isRet ? 'مردود مبيعات' : 'مبيعات (مقاصة)'}
+                        </span>
+                        <span className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full bg-primary/10 text-primary text-[10px] font-black border border-primary/20 group-hover:bg-primary group-hover:text-white transition-all">
+                          <FileText className="w-2.5 h-2.5" />
+                          <span>فتح الفاتورة</span>
                         </span>
                       </div>
                       <span className="text-[11px] text-on-surface-variant block mt-0.5">
@@ -436,6 +458,15 @@ export function AX_SupplierDetailsModal({ supplier, isOpen, onClose }) {
 
         {activeTab === 'profile' && (
           <AX_SupplierProfileTab supplier={supplier} />
+        )}
+
+        {selectedInvoiceForView && (
+          <AX_InvoiceDetailsModal
+            invoice={selectedInvoiceForView}
+            onClose={() => setSelectedInvoiceForView(null)}
+            warehouses={warehouses}
+            invoices={invoices}
+          />
         )}
       </div>
     </div>

@@ -1,7 +1,8 @@
 import React, { useState } from 'react'
-import { Trash2, ChevronDown, ChevronUp, PackagePlus, LayoutGrid, ListPlus } from 'lucide-react'
+import { Trash2, ChevronDown, ChevronUp, PackagePlus, LayoutGrid, ListPlus, Layers } from 'lucide-react'
 import { AX_SearchableSelect } from '../common/AX_SearchableSelect'
 import { AX_InvoiceItemsGrid } from './AX_InvoiceItemsGrid'
+import { AX_InvoiceCategoryAccordionGroup } from './AX_InvoiceCategoryAccordion'
 import { getItemDisplayName } from '../../utils/AX_ItemNameHelper'
 import { resolveInvoiceUnitPrice, getCartonEquivalent } from '../../utils/pricingCalculations'
 import { calculateDynamicRemainingStock, getRemainingStockBadge } from './invoiceValidationHelper'
@@ -24,7 +25,20 @@ export function AX_InvoiceItemsEditor({
   expandedRowIndex,
   setExpandedRowIndex,
 }) {
-  const [inputMode, setInputMode] = useState('grid')
+  const [inputMode, setInputMode] = useState(() => {
+    try {
+      return localStorage.getItem('ax_invoice_items_input_mode') || 'categories'
+    } catch {
+      return 'categories'
+    }
+  })
+
+  const handleChangeInputMode = (mode) => {
+    setInputMode(mode)
+    try {
+      localStorage.setItem('ax_invoice_items_input_mode', mode)
+    } catch {}
+  }
 
   const getStock = (itemId) => {
     if (typeof getItemStock === 'function') return getItemStock(itemId, warehouseId)
@@ -75,22 +89,32 @@ export function AX_InvoiceItemsEditor({
 
   return (
     <div className="space-y-3 pt-2 border-t border-surface-container">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-2">
         <span className="text-xs font-black text-on-surface">إضافة بنود الفاتورة:</span>
         <div className="flex items-center gap-1 bg-surface-low p-0.5 rounded-full border border-outline-variant/30">
           <button
             type="button"
-            onClick={() => setInputMode('grid')}
+            onClick={() => handleChangeInputMode('categories')}
+            className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-[11px] font-black transition-all cursor-pointer ${
+              inputMode === 'categories' ? 'bg-primary text-white shadow-xs' : 'text-on-surface-variant hover:text-on-surface'
+            }`}
+          >
+            <Layers className="w-3 h-3" />
+            <span>أقسام الأصناف</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => handleChangeInputMode('grid')}
             className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-[11px] font-black transition-all cursor-pointer ${
               inputMode === 'grid' ? 'bg-primary text-white shadow-xs' : 'text-on-surface-variant hover:text-on-surface'
             }`}
           >
             <LayoutGrid className="w-3 h-3" />
-            <span>شبكة الأصناف</span>
+            <span>كروت الأصناف</span>
           </button>
           <button
             type="button"
-            onClick={() => setInputMode('manual')}
+            onClick={() => handleChangeInputMode('manual')}
             className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-[11px] font-black transition-all cursor-pointer ${
               inputMode === 'manual' ? 'bg-primary text-white shadow-xs' : 'text-on-surface-variant hover:text-on-surface'
             }`}
@@ -101,7 +125,20 @@ export function AX_InvoiceItemsEditor({
         </div>
       </div>
 
-      {inputMode === 'grid' ? (
+      {inputMode === 'categories' ? (
+        <AX_InvoiceCategoryAccordionGroup
+          items={items}
+          invoiceItems={invoiceItems}
+          invType={invType}
+          warehouseId={warehouseId}
+          inventoryStock={inventoryStock}
+          getItemStock={getItemStock}
+          onAddItem={handleGridAddItem}
+          onUpdateQuantity={(idx, q) => onItemRowChange(idx, 'quantity', q)}
+          onRemoveItem={onRemoveItem}
+          onItemRowChange={onItemRowChange}
+        />
+      ) : inputMode === 'grid' ? (
         <AX_InvoiceItemsGrid
           items={items}
           invoiceItems={invoiceItems}
